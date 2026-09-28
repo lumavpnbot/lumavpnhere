@@ -1,7 +1,10 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "npm run build"
+    "buildCommand": "npm run build",
+    "watchPatterns": [
+      "backend/**"
+    ]
   },
   "deploy": {
     "startCommand": "npm start",
