@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: theme('colors.bg');
+  color: theme('colors.text-primary');
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  /* Safe-area для iPhone, чтобы нижняя навигация не залезала под home-индикатор */
+  padding-bottom: env(safe-area-inset-bottom);
+}

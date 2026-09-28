@@ -1,0 +1,2601 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUMA VPN — Техническое задание v3.0</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --card: #16161f;
+    --card-2: #1c1c28;
+    --border: #26263a;
+    --border-2: #2f2f45;
+    --text: #e8e8f0;
+    --text-dim: #8a8aa0;
+    --text-dim-2: #6a6a80;
+    --accent: #a855f7;
+    --accent-2: #6366f1;
+    --accent-3: #22d3ee;
+    --success: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    overflow-x: hidden;
+    font-size: 15px;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 700px;
+    background: radial-gradient(ellipse at top, rgba(168,85,247,0.12), transparent 60%),
+                radial-gradient(ellipse at top right, rgba(99,102,241,0.1), transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px;
+    position: relative;
+    z-index: 1;
+  }
+
+  svg.icon {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+
+  svg.icon-sm { width: 16px; height: 16px; }
+  svg.icon-lg { width: 24px; height: 24px; }
+
+  /* HERO */
+  .hero {
+    padding: 80px 0 40px;
+    text-align: center;
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 22px;
+    background: rgba(168,85,247,0.08);
+    border: 1px solid rgba(168,85,247,0.25);
+    border-radius: 100px;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 28px;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  h1 {
+    font-size: clamp(36px, 6vw, 60px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #fff 0%, #a855f7 50%, #6366f1 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero p {
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 700px;
+    margin: 0 auto 32px;
+  }
+
+  .meta-chips {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    padding: 8px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chip b { color: var(--text); font-weight: 600; }
+
+  /* TOC */
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 40px;
+  }
+
+  .toc-title {
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 8px 24px;
+  }
+
+  .toc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.15s;
+    border-bottom: 1px solid transparent;
+  }
+
+  .toc-item:hover { color: var(--accent); }
+
+  .toc-num {
+    font-size: 11px;
+    color: var(--accent);
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-weight: 600;
+    opacity: 0.7;
+  }
+
+  /* SECTIONS */
+  section {
+    padding: 40px 0;
+    position: relative;
+    z-index: 1;
+    scroll-margin-top: 20px;
+  }
+
+  .section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  h2 {
+    font-size: clamp(24px, 3.5vw, 34px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+    line-height: 1.2;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 15.5px;
+    max-width: 800px;
+    margin-bottom: 28px;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  h3 .num {
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(168,85,247,0.1);
+    border: 1px solid rgba(168,85,247,0.25);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Consolas', monospace;
+  }
+
+  h4 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h4 svg { color: var(--accent); }
+
+  /* CARDS */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+  .card {
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover { border-color: rgba(168,85,247,0.3); }
+
+  .card .icon-wrap {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: rgba(168,85,247,0.1);
+    border: 1px solid rgba(168,85,247,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    color: var(--accent);
+  }
+
+  .card p {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  /* LISTS */
+  ul.spec {
+    list-style: none;
+    margin-top: 8px;
+  }
+
+  ul.spec li {
+    position: relative;
+    padding: 8px 0 8px 24px;
+    font-size: 14px;
+    color: var(--text-dim);
+    border-bottom: 1px solid rgba(38,38,58,0.4);
+  }
+
+  ul.spec li:last-child { border-bottom: none; }
+
+  ul.spec li::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 16px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(168,85,247,0.6);
+  }
+
+  ul.spec li b { color: var(--text); font-weight: 600; }
+
+  /* TABLE */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    margin-bottom: 16px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    min-width: 620px;
+  }
+
+  th, td {
+    padding: 13px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: rgba(168,85,247,0.05);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  td { color: var(--text-dim); }
+  td b { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(168,85,247,0.02); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .badge.green { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .badge.blue { background: rgba(99,102,241,0.15); color: #818cf8; }
+  .badge.purple { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .badge.orange { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .badge.red { background: rgba(239,68,68,0.15); color: #f87171; }
+  .badge.gray { background: rgba(138,138,160,0.15); color: #a0a0b0; }
+  .badge.cyan { background: rgba(34,211,238,0.15); color: #67e8f9; }
+
+  /* ROADMAP */
+  .roadmap {
+    position: relative;
+    padding-left: 36px;
+  }
+
+  .roadmap::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 12px;
+    bottom: 12px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2), transparent);
+    border-radius: 2px;
+  }
+
+  .phase {
+    position: relative;
+    padding: 0 0 36px 20px;
+  }
+
+  .phase:last-child { padding-bottom: 0; }
+
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: -30px;
+    top: 6px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 4px rgba(168,85,247,0.15), 0 0 12px rgba(168,85,247,0.5);
+  }
+
+  .phase.completed::before {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .phase-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .phase-head h4 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 0;
+  }
+
+  .phase-date {
+    font-size: 11.5px;
+    color: var(--accent);
+    background: rgba(168,85,247,0.1);
+    border: 1px solid rgba(168,85,247,0.25);
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-weight: 600;
+  }
+
+  /* KPI */
+  .kpi {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+  }
+
+  .kpi-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    text-align: center;
+  }
+
+  .kpi-val {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+
+  .kpi-lbl {
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  /* CALLOUT */
+  .callout {
+    background: rgba(245,158,11,0.05);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-left: 3px solid var(--warn);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 18px 0;
+    font-size: 14px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .callout svg { color: var(--warn); margin-top: 2px; flex-shrink: 0; }
+  .callout b { color: var(--text); }
+
+  .callout.purple {
+    background: rgba(168,85,247,0.05);
+    border-color: rgba(168,85,247,0.2);
+    border-left-color: var(--accent);
+  }
+  .callout.purple svg { color: var(--accent); }
+
+  .callout.green {
+    background: rgba(34,197,94,0.05);
+    border-color: rgba(34,197,94,0.2);
+    border-left-color: var(--success);
+  }
+  .callout.green svg { color: var(--success); }
+
+  .callout.red {
+    background: rgba(239,68,68,0.05);
+    border-color: rgba(239,68,68,0.2);
+    border-left-color: var(--danger);
+  }
+  .callout.red svg { color: var(--danger); }
+
+  /* CODE */
+  code {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+    background: rgba(168,85,247,0.1);
+    color: #c084fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  pre {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+    color: #c084fc;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+
+  /* PERSONA */
+  .persona {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .persona-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(168,85,247,0.3), rgba(99,102,241,0.3));
+    border: 1px solid rgba(168,85,247,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .persona-info h4 { margin-bottom: 4px; }
+
+  .persona-meta {
+    font-size: 12px;
+    color: var(--text-dim-2);
+    margin-bottom: 10px;
+  }
+
+  /* METRIC ROW */
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(38,38,58,0.4);
+    font-size: 14px;
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row span:first-child { color: var(--text-dim); }
+  .metric-row span:last-child { color: var(--text); font-weight: 600; }
+
+  /* NUMBERED LIST */
+  ol.numbered {
+    list-style: none;
+    counter-reset: item;
+    margin-top: 8px;
+  }
+
+  ol.numbered > li {
+    counter-increment: item;
+    position: relative;
+    padding: 10px 0 10px 40px;
+    font-size: 14px;
+    color: var(--text-dim);
+    border-bottom: 1px solid rgba(38,38,58,0.4);
+  }
+
+  ol.numbered > li:last-child { border-bottom: none; }
+
+  ol.numbered > li::before {
+    content: counter(item, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(168,85,247,0.1);
+    border: 1px solid rgba(168,85,247,0.25);
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+  }
+
+  ol.numbered > li b { color: var(--text); }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 0;
+  }
+
+  .flow-step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .flow-step b { color: var(--text); }
+
+  .flow-arrow {
+    color: var(--accent);
+    opacity: 0.6;
+  }
+
+  /* BUDGET BOX */
+  .budget-total {
+    background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(168,85,247,0.06));
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+    margin: 20px 0;
+  }
+
+  .budget-total .amount {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #22c55e, #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  .budget-total .label {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  /* FOOTER */
+  footer {
+    padding: 60px 0 40px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+    color: var(--text-dim);
+    font-size: 13px;
+    position: relative;
+    z-index: 1;
+  }
+
+  footer b { color: var(--text); }
+
+  @media (max-width: 640px) {
+    .container { padding: 0 18px; }
+    .hero { padding: 50px 0 30px; }
+    section { padding: 28px 0; }
+    .card { padding: 18px; }
+    th, td { padding: 11px 13px; font-size: 12.5px; }
+    .kpi-val { font-size: 22px; }
+    .persona { flex-direction: column; }
+    .budget-total .amount { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="logo">
+      <span class="logo-dot"></span>
+      LUMA VPN · Документ v3.0
+    </div>
+    <h1>Техническое задание</h1>
+    <p>Полное описание сервиса VPN LUMA: продукт, архитектура, обход белых списков (Чебурнет), монетизация, реферальная программа, маркетинг и поэтапный план запуска MVP с бюджетом 1 000–2 000 ₽.</p>
+    <div class="meta-chips">
+      <span class="chip"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg> Версия <b>3.0</b></span>
+      <span class="chip"><svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg> <b>Telegram Mini App</b></span>
+      <span class="chip"><svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Бюджет: <b>1 000–2 000 ₽</b></span>
+      <span class="chip"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg> Обход белых списков</span>
+    </div>
+  </header>
+
+  <!-- TOC -->
+  <nav class="toc">
+    <div class="toc-title">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Содержание документа
+    </div>
+    <div class="toc-grid">
+      <a href="#s1" class="toc-item"><span class="toc-num">01</span> Общее описание</a>
+      <a href="#s2" class="toc-item"><span class="toc-num">02</span> Целевая аудитория</a>
+      <a href="#s3" class="toc-item"><span class="toc-num">03</span> Пользовательские сценарии</a>
+      <a href="#s4" class="toc-item"><span class="toc-num">04</span> Функционал Mini App</a>
+      <a href="#s5" class="toc-item"><span class="toc-num">05</span> Тарифы и подписки</a>
+      <a href="#s6" class="toc-item"><span class="toc-num">06</span> Платежи</a>
+      <a href="#s7" class="toc-item"><span class="toc-num">07</span> Инфраструктура</a>
+      <a href="#s8" class="toc-item"><span class="toc-num">08</span> Обход белых списков</a>
+      <a href="#s9" class="toc-item"><span class="toc-num">09</span> Реферальная программа</a>
+      <a href="#s10" class="toc-item"><span class="toc-num">10</span> Маркетинг и привлечение</a>
+      <a href="#s11" class="toc-item"><span class="toc-num">11</span> Контент-стратегия</a>
+      <a href="#s12" class="toc-item"><span class="toc-num">12</span> Технический стек</a>
+      <a href="#s13" class="toc-item"><span class="toc-num">13</span> Дизайн</a>
+      <a href="#s14" class="toc-item"><span class="toc-num">14</span> Бюджет проекта</a>
+      <a href="#s15" class="toc-item"><span class="toc-num">15</span> Roadmap</a>
+      <a href="#s16" class="toc-item"><span class="toc-num">16</span> KPI и метрики</a>
+      <a href="#s17" class="toc-item"><span class="toc-num">17</span> Риски</a>
+      <a href="#s18" class="toc-item"><span class="toc-num">18</span> Юридические аспекты</a>
+    </div>
+  </nav>
+
+  <!-- 01. OVERVIEW -->
+  <section id="s1">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg>
+      01 · Общее описание
+    </span>
+    <h2>О продукте</h2>
+    <p class="section-desc">LUMA VPN — сервис безопасного и быстрого VPN-подключения с обходом белых списков (Чебурнет), реализованный как Telegram Mini App. Мы запускаем лёгкий MVP с бюджетом 1 000–2 000 ₽, фокусом на простоту и органический рост через реферальную программу.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
+        <h4>Миссия</h4>
+        <p>Дать каждому пользователю Telegram доступ к свободному интернету за 30 секунд — даже в условиях белых списков мобильных операторов.</p>
+      </div>
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.5 7.5H22l-6 4.5 2.5 7.5L12 17l-6.5 4.5L8 14 2 9.5h7.5L12 2z"/></svg>
+        </div>
+        <h4>Видение</h4>
+        <p>Стать самым удобным VPN-сервисом для русскоязычной аудитории Telegram с обходом белых списков и минимальным порогом входа.</p>
+      </div>
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        </div>
+        <h4>Цели MVP</h4>
+        <p>500 активных пользователей за 2 месяца, 50 платных подписок, стабильный обход белых списков на всех операторах.</p>
+      </div>
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h4>Принципы</h4>
+        <p>Простота важнее фич. Обход блокировок — приоритет. Прозрачность важнее маркетинга. Органика важнее платной рекламы.</p>
+      </div>
+    </div>
+
+    <div class="callout purple">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div><b>Ключевое отличие:</b> LUMA VPN не просто «VPN», а решение для обхода белых списков мобильных операторов (Чебурнет). Это главный технический вызов и главное конкурентное преимущество.</div>
+    </div>
+  </section>
+
+  <!-- 02. AUDIENCE -->
+  <section id="s2">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      02 · Целевая аудитория
+    </span>
+    <h2>Портреты пользователей</h2>
+    <p class="section-desc">Мы выделяем четыре основных типа пользователей. Под каждого адаптируем продукт, тарифы и коммуникацию.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="persona">
+          <div class="persona-avatar">
+            <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+          </div>
+          <div class="persona-info">
+            <h4>Студент-геймер</h4>
+            <div class="persona-meta">18–22 года · Москва, СПб · бюджет 100–300 ₽/мес</div>
+            <ul class="spec">
+              <li><b>Боль:</b> игры и стриминг недоступны без VPN, мобильный интернет режет всё.</li>
+              <li><b>Задача:</b> быстрый низкий пинг для игр, доступ к Discord и YouTube.</li>
+              <li><b>Триггер:</b> цена, стабильность, обход белых списков.</li>
+              <li><b>Канал:</b> TikTok, Telegram-чаты игровых комьюнити, Reddit.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="persona">
+          <div class="persona-avatar">
+            <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+          </div>
+          <div class="persona-info">
+            <h4>Фрилансер</h4>
+            <div class="persona-meta">25–35 лет · города-миллионники · бюджет 300–800 ₽/мес</div>
+            <ul class="spec">
+              <li><b>Боль:</b> зарубежные клиенты и сервисы блокируют доступ, особенно с мобильного.</li>
+              <li><b>Задача:</b> стабильный доступ к Upwork, Behance, Figma, банкам.</li>
+              <li><b>Триггер:</b> качество связи, минимальный пинг, поддержка.</li>
+              <li><b>Канал:</b> Telegram-каналы фрилансеров, VC.ru, Habr.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="persona">
+          <div class="persona-avatar">
+            <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+          </div>
+          <div class="persona-info">
+            <h4>Путешественник</h4>
+            <div class="persona-meta">28–45 лет · крупные города · бюджет 200–500 ₽/мес</div>
+            <ul class="spec">
+              <li><b>Боль:</b> в поездках банки и сервисы требуют российский IP.</li>
+              <li><b>Задача:</b> быстрая смена локации, стабильный доступ.</li>
+              <li><b>Триггер:</b> мгновенная активация, оплата в Stars.</li>
+              <li><b>Канал:</b> Telegram-каналы про путешествия, Reels.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="persona">
+          <div class="persona-avatar">
+            <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+          </div>
+          <div class="persona-info">
+            <h4>Приватность-энтузиаст</h4>
+            <div class="persona-meta">20–40 лет · вся РФ · бюджет 500–1500 ₽/мес</div>
+            <ul class="spec">
+              <li><b>Боль:</b> беспокойство о слежке, утечках, перехвате трафика.</li>
+              <li><b>Задача:</b> no-logs VPN, открытые протоколы, шифрование.</li>
+              <li><b>Триггер:</b> репутация, прозрачность, отзывы.</li>
+              <li><b>Канал:</b> Reddit, Habr, приватные чаты.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03. USER FLOWS -->
+  <section id="s3">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      03 · Пользовательские сценарии
+    </span>
+    <h2>Ключевые пути пользователя</h2>
+    <p class="section-desc">Описываем основные пользовательские сценарии, которые определяют структуру продукта и приоритеты разработки.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h4>
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        Сценарий A: Первое знакомство (главный)
+      </h4>
+      <div class="flow">
+        <div class="flow-step"><b>1.</b> Клик по ссылке в боте</div>
+        <span class="flow-arrow"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+        <div class="flow-step"><b>2.</b> Авторизация через initData</div>
+        <span class="flow-arrow"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+        <div class="flow-step"><b>3.</b> Автоактивация 7-дневного Trial</div>
+        <span class="flow-arrow"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+        <div class="flow-step"><b>4.</b> Выбор сервера (NL)</div>
+        <span class="flow-arrow"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+        <div class="flow-step"><b>5.</b> Копирование конфига</div>
+        <span class="flow-arrow"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></svg></span>
+        <div class="flow-step"><b>6.</b> Импорт в Happ/v2rayNG</div>
+      </div>
+      <p style="font-size:13.5px;color:var(--text-dim);margin-top:8px;">Целевое время: до 90 секунд от открытия до рабочего подключения. Это ключевая метрика успеха первого экрана.</p>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Сценарий B: По реферальной ссылке
+        </h4>
+        <ol class="numbered">
+          <li>Переход по <code>t.me/LumaVPNBot?start=REF_ABC123</code></li>
+          <li>Автоматическая привязка к рефереру</li>
+          <li>Активация скидки <b>10%</b> и Trial <b>10 дней</b> вместо 7</li>
+          <li>Знакомство с продуктом, использование</li>
+          <li>Покупка со скидкой, реферер получает 30%</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          Сценарий C: Обход белых списков
+        </h4>
+        <ol class="numbered">
+          <li>Пользователь на мобильном интернете (МТС/Мегафон/Билайн).</li>
+          <li>Прямое подключение к зарубежному серверу заблокировано.</li>
+          <li>Приложение автоматически подключается через <b>туннель</b> (российский белый IP).</li>
+          <li>Туннель пробрасывает трафик на зарубежный сервер.</li>
+          <li>Пользователь получает доступ к заблокированным сайтам.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04. FUNCTIONAL -->
+  <section id="s4">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      04 · Функционал
+    </span>
+    <h2>Экраны и модули Mini App</h2>
+    <p class="section-desc">MVP состоит из 6 экранов. Каждый экран описан с требованиями по состоянию, действиям и обработке ошибок.</p>
+
+    <div class="grid grid-2">
+
+      <div class="card">
+        <h3><span class="num">4.1</span> Авторизация и онбординг</h3>
+        <ul class="spec">
+          <li>Вход через <b>Telegram WebApp initData</b> — без пароля и SMS.</li>
+          <li>Валидация <b>hash</b> initData на бэкенде по секрету бота (HMAC-SHA256).</li>
+          <li>Проверка <b>auth_date</b>: не старше 24 часов.</li>
+          <li>Создание профиля: <code>tg_id</code>, <code>username</code>, <code>avatar</code>, <code>referrer_id</code>.</li>
+          <li>При первом входе — автоматическая активация Trial 7 дней.</li>
+          <li>Состояния: <span class="badge gray">Free</span> <span class="badge blue">Trial</span> <span class="badge green">Active</span> <span class="badge red">Expired</span></li>
+          <li>Обработка ошибок: невалидный initData → экран с просьбой перезапустить.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">4.2</span> Главный экран</h3>
+        <ul class="spec">
+          <li>Кнопка <b>«Подключиться»</b> — круглая, 220×220 px, с анимацией.</li>
+          <li>Состояния кнопки: idle → connecting → connected → error.</li>
+          <li>Отображение текущего IP-адреса и локации.</li>
+          <li>Пинг до сервера в реальном времени (обновление раз в 5 сек).</li>
+          <li>Виджет статуса: остаток дней / трафика.</li>
+          <li>Индикатор режима: <span class="badge purple">Прямое подключение</span> / <span class="badge cyan">Через туннель</span>.</li>
+          <li>Быстрое переключение между серверами (2 флага сверху).</li>
+          <li>Кнопки: «Скопировать конфиг» / «Показать QR».</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">4.3</span> Выбор сервера</h3>
+        <ul class="spec">
+          <li>На старте — <b>2 локации</b>: Нидерланды и Германия.</li>
+          <li>Карточка сервера: флаг, название, пинг, загрузка в %, статус.</li>
+          <li>Авто-выбор ближайшего сервера по пингу при первом входе.</li>
+          <li>Кнопка «Обновить пинг» — ручной ping через WebSocket.</li>
+          <li>Метки: <span class="badge green">Free</span> / <span class="badge purple">Premium</span>.</li>
+          <li>Индикатор доступности обхода белых списков для каждого сервера.</li>
+          <li>Заглушка «Скоро: 8 новых локаций» для мотивации к апгрейду.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">4.4</span> Тарифы и подписка</h3>
+        <ul class="spec">
+          <li>Сравнение 3 тарифов в виде карточек (Free / Старт / Про).</li>
+          <li>Переключатель «Месяц / Год» — визуализация экономии.</li>
+          <li>Кнопка «Оформить» → выбор способа оплаты.</li>
+          <li>Активный тариф подсвечивается, дата окончания крупно.</li>
+          <li>Поле ввода промокода с проверкой на бэке.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">4.5</span> Личный кабинет</h3>
+        <ul class="spec">
+          <li>Профиль: аватар, username, tg_id, дата регистрации.</li>
+          <li>Текущая подписка: тариф, дата окончания, автопродление.</li>
+          <li>История платежей с чеками (PDF/скрин).</li>
+          <li>Управление устройствами (список HWID).</li>
+          <li>Активация промокода.</li>
+          <li>Блок «Реферальная программа» (см. раздел 09).</li>
+          <li>Кнопка «Поддержка» → чат с оператором.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">4.6</span> Получение конфига</h3>
+        <ul class="spec">
+          <li>Генерация конфига <b>VLESS + Reality</b> с транспортом <b>XHTTP</b>.</li>
+          <li>Универсальная ссылка <code>vless://...</code> + QR-код.</li>
+          <li>Кнопка «Скопировать» с haptic feedback.</li>
+          <li>Инструкция по подключению для 4 клиентов: <b>Happ</b>, <b>v2rayNG</b>, <b>Streisand</b>, <b>FoXray</b>.</li>
+          <li>Кнопка «Отправить конфиг себе в Saved Messages».</li>
+          <li>Конфиг активен, пока жива подписка (включая Free).</li>
+          <li>При истечении подписки — конфиг аннулируется, выводится экран продления.</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 05. TARIFFS -->
+  <section id="s5">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+      05 · Тарифы
+    </span>
+    <h2>Тарифная сетка</h2>
+    <p class="section-desc">Три понятных тарифа вместо сложных уровней. Бесплатный доступ с первого дня — главный канал привлечения аудитории. Обход белых списков включён во все тарифы.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Параметр</th>
+            <th>Free</th>
+            <th>Старт</th>
+            <th>Про</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Цена (мес)</b></td>
+            <td><b>0 ₽</b></td>
+            <td><b>149 ₽</b></td>
+            <td><b>249 ₽</b></td>
+          </tr>
+          <tr>
+            <td><b>Цена (год)</b></td>
+            <td>—</td>
+            <td><b>1 250 ₽</b> (≈104 ₽/мес)</td>
+            <td><b>1 990 ₽</b> (≈166 ₽/мес)</td>
+          </tr>
+          <tr>
+            <td><b>Устройств</b></td>
+            <td>1</td>
+            <td>3</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td><b>Трафик</b></td>
+            <td>5 ГБ / мес</td>
+            <td>100 ГБ / мес</td>
+            <td>Безлимит</td>
+          </tr>
+          <tr>
+            <td><b>Серверы</b></td>
+            <td>1 (NL)</td>
+            <td>Все (2)</td>
+            <td>Все (2) + приоритет</td>
+          </tr>
+          <tr>
+            <td><b>Обход белых списков</b></td>
+            <td><span class="badge green">Да</span></td>
+            <td><span class="badge green">Да</span></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>Макс. скорость</b></td>
+            <td>10 Мбит/с</td>
+            <td>100 Мбит/с</td>
+            <td>Без ограничений</td>
+          </tr>
+          <tr>
+            <td><b>Реклама</b></td>
+            <td>Да, в боте</td>
+            <td>Нет</td>
+            <td>Нет</td>
+          </tr>
+          <tr>
+            <td><b>Поддержка</b></td>
+            <td>Стандарт</td>
+            <td>Стандарт</td>
+            <td>Приоритет</td>
+          </tr>
+          <tr>
+            <td><b>Реферальный %</b></td>
+            <td>20%</td>
+            <td>30%</td>
+            <td>30%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:20px;">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+          Пробный период
+        </h4>
+        <ul class="spec">
+          <li><b>7 дней</b> бесплатно, все возможности тарифа «Старт».</li>
+          <li>Активируется автоматически при первом входе.</li>
+          <li>1 раз на пользователя (по Telegram ID).</li>
+          <li>По реферальной ссылке — <b>10 дней</b> вместо 7.</li>
+          <li>Push-напоминание за 2 дня до конца.</li>
+          <li>Промокод <b>WELCOME20</b> на первый месяц.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+          Автопродление
+        </h4>
+        <ul class="spec">
+          <li>По умолчанию <b>выключено</b> — пользователь включает сам.</li>
+          <li>При включении — скидка <b>5%</b> на все продления.</li>
+          <li>Напоминание за 3 дня до конца подписки.</li>
+          <li>Возврат в течение 3 дней, если сервис не работал.</li>
+          <li>Отмена автопродления в 1 клик из ЛК.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      <div><b>Ценовая стратегия:</b> цены на 20–30% ниже рынка. Это осознанное решение на этапе MVP для набора базы. Поднимаем цены не раньше, чем через 6 месяцев, только для новых пользователей.</div>
+    </div>
+  </section>
+
+  <!-- 06. PAYMENTS -->
+  <section id="s6">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h2"/></svg>
+      06 · Платежи
+    </span>
+    <h2>Способы оплаты и логика</h2>
+    <p class="section-desc">На старте только два способа оплаты — Telegram Stars и криптовалюта. Это минимизирует затраты на интеграции и юридические риски.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Способ</th>
+            <th>Провайдер</th>
+            <th>Зачисление</th>
+            <th>Комиссия</th>
+            <th>Мин. платёж</th>
+            <th>Этап</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Telegram Stars</b></td>
+            <td>Telegram Bot API</td>
+            <td>Мгновенно</td>
+            <td>~30%</td>
+            <td>100 ⭐ (≈150 ₽)</td>
+            <td><span class="badge green">MVP</span></td>
+          </tr>
+          <tr>
+            <td><b>USDT TRC-20</b></td>
+            <td>CryptoPay Bot</td>
+            <td>1–5 мин</td>
+            <td>1%</td>
+            <td>5 USDT (≈500 ₽)</td>
+            <td><span class="badge green">MVP</span></td>
+          </tr>
+          <tr>
+            <td><b>TON</b></td>
+            <td>CryptoPay Bot</td>
+            <td>1–5 мин</td>
+            <td>1%</td>
+            <td>1 TON</td>
+            <td><span class="badge green">MVP</span></td>
+          </tr>
+          <tr>
+            <td><b>Банковская карта РФ</b></td>
+            <td>ЮKassa / Lava</td>
+            <td>Мгновенно</td>
+            <td>3–4%</td>
+            <td>100 ₽</td>
+            <td><span class="badge gray">После 300 платных</span></td>
+          </tr>
+          <tr>
+            <td><b>СБП</b></td>
+            <td>ЮKassa</td>
+            <td>Мгновенно</td>
+            <td>0.7%</td>
+            <td>100 ₽</td>
+            <td><span class="badge gray">После 300 платных</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:20px;">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M9 12l2 2 4-4"/></svg>
+          Логика обработки платежа
+        </h4>
+        <ol class="numbered">
+          <li>Пользователь выбирает тариф и способ оплаты.</li>
+          <li>Бэкенд создаёт <b>invoice</b> с уникальным <code>order_id</code>.</li>
+          <li>Пользователь оплачивает через бота/провайдера.</li>
+          <li>Webhook от провайдера → проверка <b>HMAC-подписи</b>.</li>
+          <li>Проверка идемпотентности (защита от дублей).</li>
+          <li>Обновление подписки в БД + <b>3x-ui API</b>.</li>
+          <li>Уведомление в бот: «Подписка активирована».</li>
+          <li>Начисление реферального вознаграждения (если есть реферер).</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/><path d="M9 12l2 2 4-4"/></svg>
+          Безопасность платежей
+        </h4>
+        <ul class="spec">
+          <li>Проверка подписи всех вебхуков (HMAC-SHA256).</li>
+          <li>Идемпотентность через <code>order_id</code>.</li>
+          <li>Таймаут инвойса — 15 минут.</li>
+          <li>Проверка суммы платежа (защита от фрода).</li>
+          <li>Ручной возврат через админку (только овнер).</li>
+          <li>Полное логирование в отдельной таблице <code>payments_log</code>.</li>
+          <li>Уведомление админу в Telegram о каждой аномалии.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07. INFRA -->
+  <section id="s7">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="6" rx="1"/><rect x="2" y="15" width="20" height="6" rx="1"/><path d="M6 6h.01M6 18h.01"/></svg>
+      07 · Инфраструктура
+    </span>
+    <h2>Серверы и сеть</h2>
+    <p class="section-desc">На старте — два бюджетных VPS в Европе + один российский VPS для туннеля обхода белых списков. Этого хватает на 300–500 активных пользователей. Масштабирование — после первых 500 платных подписок.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Локация</th>
+            <th>Провайдер</th>
+            <th>Конфигурация</th>
+            <th>Протоколы</th>
+            <th>Цена</th>
+            <th>Роль</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>1</b></td>
+            <td><b>Нидерланды</b><br><span style="font-size:12px;color:var(--text-dim-2)">Амстердам</span></td>
+            <td>firstbyte.ru / Aeza</td>
+            <td>1 vCPU · 1 ГБ · 10 ГБ NVMe</td>
+            <td>VLESS + Reality + XHTTP</td>
+            <td>~75–150 ₽/мес</td>
+            <td><span class="badge green">Основной</span></td>
+          </tr>
+          <tr>
+            <td><b>2</b></td>
+            <td><b>Германия</b><br><span style="font-size:12px;color:var(--text-dim-2)">Франкфурт</span></td>
+            <td>Aeza / the.hosting</td>
+            <td>1 vCPU · 1 ГБ · 10 ГБ NVMe</td>
+            <td>VLESS + Reality + XHTTP</td>
+            <td>~150–200 ₽/мес</td>
+            <td><span class="badge blue">Резерв</span></td>
+          </tr>
+          <tr>
+            <td><b>3</b></td>
+            <td><b>Россия</b><br><span style="font-size:12px;color:var(--text-dim-2)">Туннель</span></td>
+            <td>Aeza (RU) / VK Cloud</td>
+            <td>1 vCPU · 1 ГБ · 10 ГБ NVMe</td>
+            <td>VLESS (транзит)</td>
+            <td>~150–250 ₽/мес</td>
+            <td><span class="badge cyan">Туннель</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:20px;">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Стек на сервере
+        </h4>
+        <ul class="spec">
+          <li><b>3x-ui</b> — панель управления Xray (открытая, бесплатная).</li>
+          <li><b>Xray-core</b> — движок VLESS + Reality + XHTTP.</li>
+          <li><b>Nginx</b> + Let's Encrypt (TLS 1.3).</li>
+          <li><b>Uptime Kuma</b> — мониторинг доступности.</li>
+          <li><b>Docker + Docker Compose</b> — для бэкенда и БД.</li>
+          <li>Деплой — ручной через <code>git pull</code> + <code>docker compose up</code>.</li>
+          <li>Бэкап БД — cron раз в сутки на S3-совместимое хранилище.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Антиблокировка
+        </h4>
+        <ul class="spec">
+          <li>VLESS + Reality маскируется под обычный HTTPS-трафик.</li>
+          <li>XHTTP разбивает туннель на обычные HTTP-запросы.</li>
+          <li>Основной порт — <b>443</b> (наиболее надёжный).</li>
+          <li>Резервный порт — 8443.</li>
+          <li>Собственный домен для каждого сервера.</li>
+          <li>SNI маскировка под разрешённые российские домены (см. раздел 08).</li>
+          <li>Ручная ротация при блокировке (1–2 часа).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+          План масштабирования
+        </h4>
+        <ul class="spec">
+          <li><b>0–500 юзеров:</b> 3 сервера (NL, DE + туннель RU).</li>
+          <li><b>500–1500:</b> + 2 сервера (US, FI) — бюджет 30 €/мес.</li>
+          <li><b>1500–5000:</b> + 4 сервера (UK, JP, TR, KZ) — бюджет 100 €/мес.</li>
+          <li><b>5000+:</b> переход на Marzban + Terraform-автоматизация.</li>
+          <li>Каждый новый сервер окупается при +50 подписчиках.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Мониторинг и алерты
+        </h4>
+        <ul class="spec">
+          <li>Health-check каждые 60 секунд с Uptime Kuma.</li>
+          <li>Алерты в Telegram-чат админов при падении сервера.</li>
+          <li>Проверка CPU/RAM/Disk раз в 5 минут (через node_exporter).</li>
+          <li>Проверка доступности домена из РФ (внешний сервис).</li>
+          <li>Автоматический перезапуск Xray при сбое (systemd).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout green">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+      <div><b>Бюджет инфраструктуры:</b> 400–600 ₽/мес за три VPS. Окупается при 5–7 активных подписчиках тарифа «Старт».</div>
+    </div>
+  </section>
+
+  <!-- 08. WHITE LIST BYPASS -->
+  <section id="s8">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      08 · Обход белых списков
+    </span>
+    <h2>Обход белых списков (Чебурнет)</h2>
+    <p class="section-desc">С марта 2026 года мобильные операторы России (МТС, МегаФон, Билайн, Tele2) блокируют весь трафик, кроме одобренных IP-адресов. Стандартные VPN-протоколы (OpenVPN, WireGuard) не работают. LUMA VPN использует многоуровневую архитектуру обхода.</p>
+
+    <div class="callout red">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      <div><b>Ситуация:</b> на мобильном интернете в РФ работает только трафик к «белым» IP-адресам (Яндекс, VK, Госуслуги, банки). Всё остальное режется на уровне оператора. Прямое подключение к зарубежному VPN-серверу невозможно.</div>
+    </div>
+
+    <h3 style="margin-top:28px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg>
+      8.1 Архитектура обхода: 4 уровня защиты
+    </h3>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          Уровень 0: Прямое подключение (основной)
+        </h4>
+        <ul class="spec">
+          <li>Устройство → <b>VLESS + Reality</b> → VPS в Нидерландах → Интернет.</li>
+          <li>Для DPI выглядит как обычный HTTPS к <code>www.microsoft.com</code>.</li>
+          <li>Работает на домашнем интернете и части мобильных операторов.</li>
+          <li>Максимальная скорость и минимальный пинг.</li>
+          <li>Используется по умолчанию при наличии доступа.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>
+          Уровень 1: XHTTP-транспорт
+        </h4>
+        <ul class="spec">
+          <li>Устройство → <b>VLESS + Reality + XHTTP</b> → VPS за рубежом.</li>
+          <li>XHTTP разбивает туннель на обычные HTTP/2-запросы.</li>
+          <li>Браузерные заголовки (User-Agent, Accept) — имитация веб-сёрфинга.</li>
+          <li>Reality скрывает TLS-рукопожатие, XHTTP — поведение после него.</li>
+          <li>Обходит CIDR-блокировки по IP-адресам.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 12h16"/></svg>
+          Уровень 2: Туннель через белый IP
+        </h4>
+        <ul class="spec">
+          <li>Устройство → <b>Туннель (российский белый IP)</b> → VPS за рубежом → Интернет.</li>
+          <li>Туннель — промежуточный сервер с IP из белого списка оператора.</li>
+          <li>Туннель не расшифровывает трафик, только пробрасывает его.</li>
+          <li>Используются IP Yandex Cloud, VK Cloud, Selectel, Timeweb.</li>
+          <li>Скорость ниже, но работает на всех операторах.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg>
+          Уровень 3: Резервный канал
+        </h4>
+        <ul class="spec">
+          <li>AmneziaWG (WireGuard с обфускацией) — резервный протокол.</li>
+          <li>Случайные размеры пакетов, шум перед handshake.</li>
+          <li>DPI не видит характерную сигнатуру WireGuard.</li>
+          <li>Используется, если VLESS-подходы временно недоступны.</li>
+          <li>Автоматическое переключение между уровнями.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7z"/></svg>
+      8.2 SNI-маскировка (ключевой метод)
+    </h3>
+
+    <div class="card">
+      <p style="margin-bottom:12px;">SNI (Server Name Indication) — это домен, к которому обращается пользователь. Операторы пропускают трафик к доменам из «белого списка» (Яндекс, VK, Госуслуги, банки). LUMA VPN маскирует запросы под обращение к этим доменам.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>SNI (маскировка под)</th>
+              <th>Работает на операторах</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>stats.vk-portal.net</code></td>
+              <td>МТС, Мегафон, Т2, Тмобайл, РТК, Yota</td>
+              <td><span class="badge green">Активен</span></td>
+            </tr>
+            <tr>
+              <td><code>sun6-21.userapi.com</code></td>
+              <td>МТС, Мегафон, Т2, Тмобайл, РТК, Yota</td>
+              <td><span class="badge green">Активен</span></td>
+            </tr>
+            <tr>
+              <td><code>www.kinopoisk.ru</code></td>
+              <td>Большинство операторов</td>
+              <td><span class="badge green">Активен</span></td>
+            </tr>
+            <tr>
+              <td><code>vk.com</code></td>
+              <td>Большинство операторов</td>
+              <td><span class="badge orange">Нестабилен</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="callout purple">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div><b>Важно:</b> SNI-список обновляется каждые 2 недели. Операторы постоянно меняют белые списки. Мы мониторим ситуацию и оперативно добавляем новые рабочие SNI.</div>
+    </div>
+
+    <h3 style="margin-top:32px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+      8.3 Требования к туннельному серверу
+    </h3>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Характеристики
+        </h4>
+        <ul class="spec">
+          <li>Провайдер: <b>Aeza (RU)</b>, <b>VK Cloud</b> или <b>Yandex Cloud</b>.</li>
+          <li>IP-адрес из диапазона белого списка операторов.</li>
+          <li>1 vCPU, 1 ГБ RAM, 10 ГБ NVMe.</li>
+          <li>Порт 443 (TCP) — маскировка под HTTPS.</li>
+          <li>Пропускная способность: от 100 Мбит/с.</li>
+          <li>Оплата: только рублями, карта РФ.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Ограничения
+        </h4>
+        <ul class="spec">
+          <li>Туннель не расшифровывает трафик — только транзит.</li>
+          <li>Скорость ниже прямого подключения на 20–40%.</li>
+          <li>Пинг +30–60 мс из-за дополнительного хопа.</li>
+          <li>Требуется собственный домен для туннеля.</li>
+          <li>Один туннель на 100–200 пользователей.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M9 12l2 2 4-4"/></svg>
+      8.4 Roadmap обхода белых списков
+    </h3>
+
+    <div class="roadmap">
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Этап 1 — Базовый обход (Недели 1–3)</h4>
+          <span class="phase-date">MVP</span>
+        </div>
+        <ul class="spec">
+          <li>Настройка VLESS + Reality + XHTTP на зарубежных VPS.</li>
+          <li>Ручной подбор SNI, работающих на МТС/Мегафон.</li>
+          <li>Тестирование на 3–5 устройствах с разными операторами.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Этап 2 — Туннель (Недели 4–6)</h4>
+          <span class="phase-date">Обход всех операторов</span>
+        </div>
+        <ul class="spec">
+          <li>Аренда VPS с российским белым IP (Aeza RU / VK Cloud).</li>
+          <li>Настройка каскада: устройство → туннель → зарубежный сервер.</li>
+          <li>Автоматическое переключение между прямым и туннельным режимом.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Этап 3 — Стабилизация (Месяц 2)</h4>
+          <span class="phase-date">Надёжность</span>
+        </div>
+        <ul class="spec">
+          <li>Добавление AmneziaWG как резервного протокола.</li>
+          <li>Автоматическое обновление SNI-списка (cron раз в 2 недели).</li>
+          <li>Мониторинг доступности обхода по каждому оператору.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Этап 4 — Масштабирование (Месяц 3+)</h4>
+          <span class="phase-date">Рост</span>
+        </div>
+        <ul class="spec">
+          <li>Второй туннельный сервер (другой диапазон IP).</li>
+          <li>CDN-фоллбэк через российские CDN (Yandex CDN, Selectel).</li>
+          <li>Умное переключение между туннелями по скорости.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09. REFERRAL -->
+  <section id="s9">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      09 · Реферальная программа
+    </span>
+    <h2>Приглашай друзей — зарабатывай</h2>
+    <p class="section-desc">Рефералка — главный канал органического роста LUMA на старте. Механика максимально простая, условия — честные и прозрачные, выплаты — быстрые.</p>
+
+    <div class="grid grid-3" style="margin-bottom:24px;">
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+        </div>
+        <h4>Как это работает</h4>
+        <p>Каждый пользователь получает персональную ссылку вида <code>t.me/LumaVPNBot?start=REF_XXXXXX</code> и делится ей с друзьями.</p>
+      </div>
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8M12 6v2M12 16v2"/></svg>
+        </div>
+        <h4>Что получает реферер</h4>
+        <p><b>30%</b> от каждого платежа приглашённого на внутренний баланс. Баланс можно тратить на подписку или выводить от 500 ₽.</p>
+      </div>
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7"/></svg>
+        </div>
+        <h4>Что получает приглашённый</h4>
+        <p>Скидка <b>10%</b> на первую покупку любого тарифа и <b>+3 дня</b> к пробному периоду (итого 10 дней вместо 7).</p>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+
+      <div class="card">
+        <h3><span class="num">9.1</span> Механика начисления</h3>
+        <ul class="spec">
+          <li>Реферальная ссылка генерируется автоматически при регистрации.</li>
+          <li>Приглашённый привязывается при первом запуске по ссылке.</li>
+          <li>Привязка сохраняется <b>навсегда</b>, даже если юзер вернётся позже.</li>
+          <li>Начисление — <b>30% от суммы</b> каждого платежа реферала.</li>
+          <li>Средства зачисляются на внутренний баланс мгновенно.</li>
+          <li>Холд <b>7 дней</b> — защита от фрода и возвратов.</li>
+          <li>Реферер получает уведомление в боте о каждом начислении.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">9.2</span> Уровни рефереров</h3>
+        <ul class="spec">
+          <li><b>Базовый</b> (0–4 реферала): 30% с платежей.</li>
+          <li><b>Серебро</b> (5–19): 35% + 1 месяц «Старт» в подарок.</li>
+          <li><b>Золото</b> (20–49): 40% + 1 месяц «Про» в подарок.</li>
+          <li><b>Платина</b> (50+): 45% + персональная промо-ссылка, вывод без минимума.</li>
+          <li>Уровень закрепляется навсегда — не понижается.</li>
+          <li>Итоговый % применяется ко всем будущим платежам.</li>
+          <li>Уведомление о повышении уровня — push в бот.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">9.3</span> Экран рефералки в Mini App</h3>
+        <ul class="spec">
+          <li>Большая кнопка <b>«Пригласить друга»</b> с шерингом в Telegram.</li>
+          <li>Уникальная ссылка + кнопка «Скопировать».</li>
+          <li>QR-код для офлайн-шаринга (скрин в чат).</li>
+          <li>Счётчики: приглашено / активных / доход за месяц.</li>
+          <li>Прогресс-бар до следующего уровня.</li>
+          <li>Кнопка «Вывести» (активна при балансе ≥ 500 ₽).</li>
+          <li>История начислений с детализацией по каждому рефералу.</li>
+          <li>Краткая инструкция «Как приглашать».</li>
+          <li>Топ-3 реферала месяца (с анонимизацией username).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="num">9.4</span> Антифрод и правила</h3>
+        <ul class="spec">
+          <li>Запрет приглашать самого себя (проверка по IP, device, платёжным данным).</li>
+          <li>Запрет массового фрода (боты, фейк-аккаунты, накрутка).</li>
+          <li>При выявлении фрода — блокировка баланса и аккаунта без предупреждения.</li>
+          <li>Холд 7 дней на все начисления.</li>
+          <li>Вывод — только на USDT TRC-20 или карту РФ.</li>
+          <li>Минимальная сумма вывода — 500 ₽.</li>
+          <li>Максимум 1 вывод в 7 дней.</li>
+          <li>Обработка вывода — в течение 24 часов вручную.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="callout purple">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div><b>Почему 30% и уровни:</b> при среднем чеке 149 ₽ вознаграждение реферера — 45 ₽. Это дешевле платной рекламы (CAC 30–80 ₽), плюс приходят «прогретые» пользователи по рекомендации. Уровни стимулируют долгосрочных амбассадоров.</div>
+    </div>
+
+    <div class="grid" style="margin-top:20px;">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+          Прогноз метрик рефералки
+        </h4>
+        <div class="metric-row"><span>Доля регистраций по реф-ссылкам</span><span>30%+</span></div>
+        <div class="metric-row"><span>Средний реферер приводит</span><span>2.5 юзера</span></div>
+        <div class="metric-row"><span>Конверсия приглашённых в платных</span><span>12%</span></div>
+        <div class="metric-row"><span>Доля топ-10% рефереров в базе</span><span>60%</span></div>
+        <div class="metric-row"><span>Средний доход активного реферера</span><span>450 ₽/мес</span></div>
+      </div>
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Схема БД для рефералки
+        </h4>
+        <pre>referrals
+├─ id            BIGSERIAL PK
+├─ referrer_id   BIGINT FK
+├─ referred_id   BIGINT FK (unique)
+├─ created_at    TIMESTAMP
+└─ level_at_time SMALLINT
+
+referral_payouts
+├─ id            BIGSERIAL PK
+├─ referrer_id   BIGINT FK
+├─ payment_id    BIGINT FK
+├─ amount        DECIMAL(10,2)
+├─ status        ENUM('hold','paid','cancelled')
+├─ payout_after  TIMESTAMP
+└─ created_at    TIMESTAMP</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. MARKETING -->
+  <section id="s10">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+      10 · Маркетинг
+    </span>
+    <h2>Привлечение клиентов</h2>
+    <p class="section-desc">У нас нет бюджета на крупные рекламные кампании, поэтому делаем ставку на комбинацию бесплатных и малобюджетных каналов. Основной фокус — органика и рефералка.</p>
+
+    <h3 style="margin-top:24px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+      10.1 Каналы привлечения (по приоритету)
+    </h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Канал</th>
+            <th>Бюджет / мес</th>
+            <th>Ожидаемый CAC</th>
+            <th>Объём / мес</th>
+            <th>Сложность</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>1</b></td>
+            <td><b>Реферальная программа</b></td>
+            <td>0 ₽ (30% с платежей)</td>
+            <td>~45 ₽</td>
+            <td>100–300 рег.</td>
+            <td><span class="badge green">Низкая</span></td>
+          </tr>
+          <tr>
+            <td><b>2</b></td>
+            <td><b>Telegram-каналы (тематические)</b></td>
+            <td>0–3 000 ₽</td>
+            <td>40–70 ₽</td>
+            <td>100–300 рег.</td>
+            <td><span class="badge orange">Средняя</span></td>
+          </tr>
+          <tr>
+            <td><b>3</b></td>
+            <td><b>Партнёрства с ботами</b></td>
+            <td>0 ₽ (обмен трафиком)</td>
+            <td>10–30 ₽</td>
+            <td>50–200 рег.</td>
+            <td><span class="badge green">Низкая</span></td>
+          </tr>
+          <tr>
+            <td><b>4</b></td>
+            <td><b>VC.ru / Habr (статьи)</b></td>
+            <td>0 ₽</td>
+            <td>30–60 ₽</td>
+            <td>50–300 рег.</td>
+            <td><span class="badge green">Низкая</span></td>
+          </tr>
+          <tr>
+            <td><b>5</b></td>
+            <td><b>Reddit / форумы</b></td>
+            <td>0 ₽</td>
+            <td>0–20 ₽</td>
+            <td>20–100 рег.</td>
+            <td><span class="badge red">Высокая</span></td>
+          </tr>
+          <tr>
+            <td><b>6</b></td>
+            <td><b>TikTok / Reels (шортсы)</b></td>
+            <td>0–5 000 ₽</td>
+            <td>40–90 ₽</td>
+            <td>100–500 рег.</td>
+            <td><span class="badge red">Высокая</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout red">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      <div><b>Важно:</b> с 1 сентября 2025 года в РФ запрещена реклама VPN-сервисов. Продвижение должно быть нативным: через полезный контент, кейсы, обзоры, а не прямую рекламу.</div>
+    </div>
+
+    <h3 style="margin-top:32px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7z"/></svg>
+      10.2 Детально по каналам
+    </h3>
+
+    <div class="grid grid-2">
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8v8H8z"/></svg>
+          Telegram-каналы
+        </h4>
+        <ul class="spec">
+          <li>Тематики: технологии, VPN, приватность, фриланс, крипта, игры.</li>
+          <li>Оптимальный охват: <b>5 000 – 50 000</b> подписчиков.</li>
+          <li>Цена поста: <b>500–5 000 ₽</b> в зависимости от охвата.</li>
+          <li>Формат: нативная интеграция + промокод на 20% скидку.</li>
+          <li>Обязательно: UTM-метка на каждый канал, чтобы считать ROI.</li>
+          <li>Тест: первые 3 канала с бюджетом 3 000 ₽ — замер конверсии.</li>
+          <li>Масштабирование: только каналы с CAC &lt; 80 ₽.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Партнёрства с ботами
+        </h4>
+        <ul class="spec">
+          <li>Обмен трафиком с не-конкурентными Telegram-ботами.</li>
+          <li>Кандидаты: крипто-боты, антидетект, новостные, гороскопы.</li>
+          <li>Формат: взаимные рекомендации в боте после действия.</li>
+          <li>Стоимость: 0 ₽ (обмен трафиком) или 2 000 ₽/мес.</li>
+          <li>Ожидаемый результат: 50–200 регистраций/мес.</li>
+          <li>Целевые 5–7 партнёров к концу первого квартала.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Контент-маркетинг
+        </h4>
+        <ul class="spec">
+          <li>Публикации в <b>VC.ru</b>: «Как мы запустили VPN за 2000 ₽».</li>
+          <li>Статьи в <b>Habr</b>: технические разборы обхода белых списков.</li>
+          <li>Посты в <b>Пикабу</b>: истории про приватность.</li>
+          <li>Ответы в <b>Reddit</b>: r/ruvpn, r/privacy, r/russia.</li>
+          <li>Публикация на <b>DTF</b> и <b>Telegraph</b>.</li>
+          <li>SEO-лендинг на домене <code>luma-vpn.io</code>.</li>
+          <li>Ключевые запросы: «обход белых списков», «VPN для Telegram», «VPN МТС».</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          TikTok / Reels / Shorts
+        </h4>
+        <ul class="spec">
+          <li>Формат: 15–30 секунд, вертикальное видео.</li>
+          <li>Темы: «Как обойти белые списки», «VPN за 30 секунд», «Мой опыт».</li>
+          <li>Тренды: подстраиваемся под популярные звуки и мемы.</li>
+          <li>Частота: 2–3 ролика в неделю.</li>
+          <li>Бюджет: 0 ₽ (снимаем сами) + 2 000 ₽ на продвижение.</li>
+          <li>Ожидаемый охват: 10 000–50 000 просмотров/мес.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M20 12v10H4V12M2 7h20v5H2zM12 22V7"/></svg>
+      10.3 Промо-акции на старте
+    </h3>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <h4>Запуск: первые 100</h4>
+        <ul class="spec">
+          <li>Скидка <b>50%</b> на первый месяц тарифа «Старт».</li>
+          <li>Промокод <b>LAUNCH50</b>.</li>
+          <li>Действует до конца первого месяца.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Приведи 3 друзей</h4>
+        <ul class="spec">
+          <li><b>Месяц «Старт» бесплатно</b> за 3 активных реферала.</li>
+          <li>Рефералы должны оформить платную подписку.</li>
+          <li>Бонус начисляется автоматически.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Юзер-ревью</h4>
+        <ul class="spec">
+          <li>Оставь отзыв → <b>неделя бесплатно</b>.</li>
+          <li>Оставить можно в Telegram-канале или Reddit.</li>
+          <li>Проверяем уникальность отзыва.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. CONTENT -->
+  <section id="s11">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>
+      11 · Контент-стратегия
+    </span>
+    <h2>Что публикуем и как</h2>
+    <p class="section-desc">Контент — способ удержать пользователя и создать доверие к бренду. Основные площадки — Telegram-канал, бот и внешние платформы.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+          Telegram-канал (главный)
+        </h4>
+        <ul class="spec">
+          <li>Частота: <b>3 поста в неделю</b> (Пн / Ср / Пт).</li>
+          <li>Рубрики: новости приватности, кейсы, лайфхаки, анонсы.</li>
+          <li>Формат: короткие посты (до 500 знаков) + 1 длинный раз в неделю.</li>
+          <li>Вовлечение: опросы, вопросы, конкурсы, репосты.</li>
+          <li>Кросспост: Twitter/X, VC.ru (адаптированный формат).</li>
+          <li>Цель первого месяца: <b>300 подписчиков</b>.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          Внешние площадки
+        </h4>
+        <ul class="spec">
+          <li><b>VC.ru</b> — 1 развёрнутая статья в месяц.</li>
+          <li><b>Habr</b> — технический разбор раз в 2 месяца.</li>
+          <li><b>Reddit</b> — ежедневное участие в обсуждениях.</li>
+          <li><b>Пикабу</b> — 1 история в месяц.</li>
+          <li><b>DTF</b> — 1 пост в месяц (молодёжная аудитория).</li>
+          <li><b>YouTube Shorts / Reels</b> — 2 ролика в неделю.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20 15.3 15.3 0 010-20z"/></svg>
+          Тематические рубрики
+        </h4>
+        <ul class="spec">
+          <li><b>#Обход</b> — как работает обход белых списков.</li>
+          <li><b>#Приватность</b> — новости о слежке, утечках, законах.</li>
+          <li><b>#Гайды</b> — как настроить VPN на разных устройствах.</li>
+          <li><b>#Кейсы</b> — истории реальных пользователей.</li>
+          <li><b>#Техно</b> — разборы протоколов, сравнения.</li>
+          <li><b>#Промо</b> — акции и промокоды (не чаще 1 раза в неделю).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg>
+          Контент в боте
+        </h4>
+        <ul class="spec">
+          <li>Welcome-сообщение с объяснением ценности.</li>
+          <li>Автоматические подсказки по использованию.</li>
+          <li>Push-напоминания (не чаще 2 раз в неделю).</li>
+          <li>Обучающие мини-гайды по настройке клиентов.</li>
+          <li>Новостная рассылка (opt-in).</li>
+          <li>Поздравления с акциями и важными событиями.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12. TECH STACK -->
+  <section id="s12">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      12 · Технологии
+    </span>
+    <h2>Технический стек</h2>
+    <p class="section-desc">На старте используем только проверенные и простые технологии. Никаких «модных» фреймворков ради хайпа — только то, что реально нужно MVP.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <h4>Frontend</h4>
+        <ul class="spec">
+          <li><b>React 18</b> + TypeScript</li>
+          <li><b>Vite</b> — сборщик</li>
+          <li><b>Zustand</b> — стейт-менеджмент</li>
+          <li><b>Tailwind CSS</b> — стилизация</li>
+          <li><b>Framer Motion</b> — анимации</li>
+          <li><b>@twa-dev/sdk</b> — Telegram WebApp SDK</li>
+          <li><b>qrcode.react</b> — генерация QR</li>
+          <li><b>react-router-dom</b> — роутинг (hash-режим)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
+        </div>
+        <h4>Backend</h4>
+        <ul class="spec">
+          <li><b>Node.js 20</b> + Fastify</li>
+          <li><b>TypeScript</b> везде</li>
+          <li><b>PostgreSQL 15</b> — основная БД</li>
+          <li><b>Redis</b> — кэш, сессии, очереди</li>
+          <li><b>BullMQ</b> — очереди задач</li>
+          <li><b>node-cron</b> — регулярные задачи</li>
+          <li><b>Prisma ORM</b> — работа с БД</li>
+          <li><b>Axios</b> — HTTP-запросы к 3x-ui API</li>
+          <li><b>zod</b> — валидация входных данных</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+        </div>
+        <h4>DevOps</h4>
+        <ul class="spec">
+          <li><b>Docker</b> + Docker Compose</li>
+          <li>Хостинг бэкенда: <b>Aeza RU</b> (~150 ₽/мес)</li>
+          <li>Деплой: ручной через <code>git pull</code></li>
+          <li>Reverse-proxy: <b>Nginx</b></li>
+          <li>TLS: <b>Let's Encrypt</b> (certbot)</li>
+          <li>Бэкапы БД: <b>cron + S3</b> (Backblaze B2)</li>
+          <li>Мониторинг: <b>Uptime Kuma</b></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="icon-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg>
+        </div>
+        <h4>VPN-инфраструктура</h4>
+        <ul class="spec">
+          <li><b>Xray-core</b> — VPN-движок</li>
+          <li><b>3x-ui</b> — панель управления</li>
+          <li><b>VLESS + Reality + XHTTP</b> — основной протокол</li>
+          <li><b>AmneziaWG</b> — резервный протокол</li>
+          <li>Транспорт: <b>TCP</b> (порт 443)</li>
+          <li>SNI-маскировка под российские домены</li>
+          <li>Туннель через российский VPS с белым IP</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13. DESIGN -->
+  <section id="s13">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 22a10 10 0 110-20 10 10 0 010 20z"/></svg>
+      13 · Дизайн
+    </span>
+    <h2>UI / UX гайдлайн</h2>
+    <p class="section-desc">Дизайн должен быть чистым и минималистичным. Пользователь открывает Mini App на 30 секунд — не должен отвлекаться на лишнее.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>Цветовая палитра</h4>
+        <ul class="spec">
+          <li><b>Основной:</b> #A855F7 (фиолетовый)</li>
+          <li><b>Акцент:</b> #6366F1 (индиго)</li>
+          <li><b>Фон:</b> #0A0A0F (тёмный)</li>
+          <li><b>Поверхность:</b> #16161F</li>
+          <li><b>Успех:</b> #22C55E</li>
+          <li><b>Ошибка:</b> #EF4444</li>
+          <li><b>Предупреждение:</b> #F59E0B</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>Типографика</h4>
+        <ul class="spec">
+          <li><b>Шрифт:</b> Inter (fallback: SF Pro, system-ui)</li>
+          <li><b>Заголовки:</b> 700–800, letter-spacing −2%</li>
+          <li><b>Основной текст:</b> 400–500, line-height 1.5</li>
+          <li><b>Минимальный кегль:</b> 13px</li>
+          <li><b>Иерархия:</b> h1 32px / h2 24px / h3 18px / body 15px</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>Компоненты</h4>
+        <ul class="spec">
+          <li>Скругления: 12–16 px (карточки), 100 px (кнопки-пилюли)</li>
+          <li>Высота кнопок: 48–56 px</li>
+          <li>Тактильная отдача (HapticFeedback) на все основные действия</li>
+          <li>Анимации: 200–300 мс, ease-out</li>
+          <li>Safe-area для iPhone (env(safe-area-inset-bottom))</li>
+          <li>Skeleton-экраны при загрузке</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>Локализация</h4>
+        <ul class="spec">
+          <li><b>MVP:</b> только RU</li>
+          <li><b>V1.1:</b> +EN (после 1000 юзеров)</li>
+          <li><b>V1.2:</b> +TR, +KZ (по спросу)</li>
+          <li>Все тексты — через i18n (JSON-файлы)</li>
+          <li>Даты — в локальном формате пользователя</li>
+          <li>Часовые пояса на бэке — UTC+0</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14. BUDGET -->
+  <section id="s14">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8M12 6v2M12 16v2"/></svg>
+      14 · Бюджет проекта
+    </span>
+    <h2>Бюджет создания VPN</h2>
+    <p class="section-desc">Общий бюджет на запуск MVP — от 1 000 до 2 000 ₽. Этого достаточно для аренды трёх VPS и покупки домена на первый месяц. Всё остальное — ручная работа и бесплатные инструменты.</p>
+
+    <div class="budget-total">
+      <div class="amount">1 000 – 2 000 ₽</div>
+      <div class="label">Общий бюджет на первый месяц (инфраструктура + домен)</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Статья расходов</th>
+            <th>Провайдер</th>
+            <th>Стоимость / мес</th>
+            <th>Обязательно?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>VPS #1 — Нидерланды</b></td>
+            <td>firstbyte.ru</td>
+            <td><b>~75–150 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>VPS #2 — Германия</b></td>
+            <td>Aeza / the.hosting</td>
+            <td><b>~150–200 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>VPS #3 — Туннель (RU)</b></td>
+            <td>Aeza RU / VK Cloud</td>
+            <td><b>~150–250 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>Домен</b></td>
+            <td>Namecheap / Cloudflare</td>
+            <td><b>~50–100 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>VPS для бэкенда</b></td>
+            <td>Aeza RU</td>
+            <td><b>~150 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>SSL-сертификат</b></td>
+            <td>Let's Encrypt</td>
+            <td><b>0 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>Мониторинг</b></td>
+            <td>Uptime Kuma (self-hosted)</td>
+            <td><b>0 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+          <tr>
+            <td><b>Панель 3x-ui</b></td>
+            <td>Open Source</td>
+            <td><b>0 ₽</b></td>
+            <td><span class="badge green">Да</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout green">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+      <div><b>Итого:</b> 1 075–1 900 ₽ в месяц за полный стек инфраструктуры. Окупается при 8–13 активных подписчиках тарифа «Старт» (149 ₽/мес). При 50 подписчиках выручка составляет 7 450 ₽/мес, что даёт чистую прибыль около 5 500–6 400 ₽/мес.</div>
+    </div>
+
+    <h3 style="margin-top:28px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+      Что НЕ входит в бюджет (делаем сами)
+    </h3>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <h4>Разработка</h4>
+        <ul class="spec">
+          <li>Frontend Mini App — 1 разработчик</li>
+          <li>Backend API — 1 разработчик</li>
+          <li>Настройка серверов — вручную</li>
+          <li>Стоимость: <b>0 ₽</b> (свои силы)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Дизайн</h4>
+        <ul class="spec">
+          <li>UI-дизайн — Figma (бесплатно)</li>
+          <li>Иконки — Lucide / Feather</li>
+          <li>Шрифты — Inter (Google Fonts)</li>
+          <li>Стоимость: <b>0 ₽</b></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Маркетинг</h4>
+        <ul class="spec">
+          <li>Рефералка — органический рост</li>
+          <li>Контент — пишем сами</li>
+          <li>Партнёрства — обмен трафиком</li>
+          <li>Бюджет: <b>0 ₽</b> на старте</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15. ROADMAP -->
+  <section id="s15">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      15 · Roadmap
+    </span>
+    <h2>Дорожная карта разработки</h2>
+    <p class="section-desc">Реалистичный план для команды из 1–2 разработчиков. Полный цикл до публичного релиза — 6 недель. Без перегрузки и жёстких дедлайнов.</p>
+
+    <div class="roadmap">
+
+      <div class="phase completed">
+        <div class="phase-head">
+          <h4>Неделя 1 — Подготовка инфраструктуры</h4>
+          <span class="phase-date">Старт · Бюджет: 500–700 ₽</span>
+        </div>
+        <ul class="spec">
+          <li>Регистрация Telegram-бота через @BotFather.</li>
+          <li>Покупка домена <code>luma-vpn.io</code> или аналога (~50–100 ₽).</li>
+          <li>Аренда двух VPS: firstbyte.ru (NL) + Aeza (DE).</li>
+          <li>Установка 3x-ui + Xray на оба сервера.</li>
+          <li>Настройка VLESS + Reality + XHTTP на порту 443.</li>
+          <li>Проверка конфигов вручную в Happ.</li>
+          <li>Настройка доменов и TLS-сертификатов.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Неделя 2–3 — Backend и авторизация</h4>
+          <span class="phase-date">Ядро</span>
+        </div>
+        <ul class="spec">
+          <li>Развёртывание PostgreSQL + Redis на VPS (Aeza RU).</li>
+          <li>Схема БД: users, subscriptions, payments, referrals.</li>
+          <li>API авторизации через Telegram initData.</li>
+          <li>Эндпоинты: /me, /servers, /subscription, /config.</li>
+          <li>Интеграция с 3x-ui API для создания юзеров.</li>
+          <li>Генерация VLESS-конфигов и QR-кодов.</li>
+          <li>Логика Trial (автоактивация 7 дней).</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Неделя 4 — Frontend Mini App</h4>
+          <span class="phase-date">UI</span>
+        </div>
+        <ul class="spec">
+          <li>Инициализация React + Vite + Tailwind.</li>
+          <li>Экран авторизации и главный экран.</li>
+          <li>Экран выбора сервера (2 локации).</li>
+          <li>Экран конфига с кнопкой «Скопировать» и QR.</li>
+          <li>Экран личного кабинета.</li>
+          <li>Подключение Telegram WebApp SDK.</li>
+          <li>Настройка анимаций и haptic feedback.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Неделя 5 — Платежи и реферальная программа</h4>
+          <span class="phase-date">Монетизация</span>
+        </div>
+        <ul class="spec">
+          <li>Интеграция Telegram Stars через Bot API.</li>
+          <li>Подключение CryptoPay (USDT TRC-20 + TON).</li>
+          <li>Логика тарифов Free / Старт / Про.</li>
+          <li>Автовыдача подписки после оплаты.</li>
+          <li>Реферальная система: ссылки, начисления, баланс.</li>
+          <li>Экран рефералки в Mini App.</li>
+          <li>Промокоды (базовая логика).</li>
+          <li>Антифрод-проверки.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Неделя 6 — Обход белых списков и тестирование</h4>
+          <span class="phase-date">Ключевая фича · Бюджет: 500–700 ₽</span>
+        </div>
+        <ul class="spec">
+          <li>Аренда туннельного VPS (Aeza RU / VK Cloud).</li>
+          <li>Настройка каскада: устройство → туннель → зарубежный сервер.</li>
+          <li>Подбор и тестирование SNI для МТС / Мегафон / Билайн.</li>
+          <li>Автоматическое переключение между прямым и туннельным режимом.</li>
+          <li>Тестирование на 5 устройствах с разными операторами.</li>
+          <li>Фикс багов по фидбеку тестеров.</li>
+          <li>Настройка Uptime Kuma + алертов в Telegram.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Месяц 2 — Мягкий запуск и рост</h4>
+          <span class="phase-date">Post-launch</span>
+        </div>
+        <ul class="spec">
+          <li>Публичный анонс в Telegram-канале.</li>
+          <li>Публикация Mini App через @BotFather.</li>
+          <li>Запуск первой рекламной кампании (2 000 ₽ на тест).</li>
+          <li>Мониторинг метрик: DAU, конверсия, retention.</li>
+          <li>Добавление AmneziaWG как резервного протокола.</li>
+          <li>Запуск контент-маркетинга (VC.ru, Habr).</li>
+          <li>Работа с первыми микро-инфлюенсерами.</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <h4>Месяц 3–4 — Стабилизация и масштабирование</h4>
+          <span class="phase-date">Рост</span>
+        </div>
+        <ul class="spec">
+          <li>Расширение до 4–6 серверов.</li>
+          <li>Второй туннельный сервер (другой диапазон IP).</li>
+          <li>Автоматическое обновление SNI-списка (cron).</li>
+          <li>Партнёрская программа для блогеров.</li>
+          <li>Внедрение системы аналитики (PostHog / Umami).</li>
+          <li>Локализация на EN.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="callout purple">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div><b>Гибкость важнее сроков:</b> если что-то не успеваем — переносим на следующий этап. Лучше запустить рабочий продукт на неделю позже, чем сырой вовремя. Roadmap — это ориентир, а не жёсткий контракт.</div>
+    </div>
+  </section>
+
+  <!-- 16. KPI -->
+  <section id="s16">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+      16 · KPI
+    </span>
+    <h2>Метрики и цели</h2>
+    <p class="section-desc">Реалистичные цели для стартапа с минимальным бюджетом. Основной канал роста — реферальная программа и органика.</p>
+
+    <h3>Через 3 месяца после запуска</h3>
+    <div class="kpi">
+      <div class="kpi-item">
+        <div class="kpi-val">1 000</div>
+        <div class="kpi-lbl">Пользователей всего</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">500</div>
+        <div class="kpi-lbl">Активных (MAU)</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">8%</div>
+        <div class="kpi-lbl">Конверсия в платных</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">40%</div>
+        <div class="kpi-lbl">Retention (30 дней)</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">30%</div>
+        <div class="kpi-lbl">Реферальных рег.</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">&lt; 100 ₽</div>
+        <div class="kpi-lbl">CAC</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">90%</div>
+        <div class="kpi-lbl">Успешный обход на мобильных</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">99%</div>
+        <div class="kpi-lbl">Uptime серверов</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px;">Через 6 месяцев</h3>
+    <div class="kpi">
+      <div class="kpi-item">
+        <div class="kpi-val">5 000</div>
+        <div class="kpi-lbl">Пользователей</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">400</div>
+        <div class="kpi-lbl">Платных подписок</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">60 000 ₽</div>
+        <div class="kpi-lbl">MRR</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">6</div>
+        <div class="kpi-lbl">Серверов</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">95%</div>
+        <div class="kpi-lbl">Успешный обход</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-val">50%</div>
+        <div class="kpi-lbl">Retention (90 дней)</div>
+      </div>
+    </div>
+
+    <div class="callout green" style="margin-top:24px;">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+      <div><b>Что считаем успехом MVP:</b> 500 активных пользователей, 50 платных подписок, стабильный обход белых списков на всех основных операторах и окупаемость инфраструктуры.</div>
+    </div>
+  </section>
+
+  <!-- 17. RISKS -->
+  <section id="s17">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      17 · Риски
+    </span>
+    <h2>Риски и их минимизация</h2>
+    <p class="section-desc">Честно описываем основные риски проекта и заранее продумываем способы их минимизации.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Риск</th>
+            <th>Вероятность</th>
+            <th>Влияние</th>
+            <th>Минимизация</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Блокировка домена РКН</b></td>
+            <td><span class="badge orange">Средняя</span></td>
+            <td><span class="badge red">Высокое</span></td>
+            <td>Резервные домены, ротация, VLESS + Reality</td>
+          </tr>
+          <tr>
+            <td><b>Блокировка IP-адресов серверов</b></td>
+            <td><span class="badge orange">Средняя</span></td>
+            <td><span class="badge red">Высокое</span></td>
+            <td>Второй сервер уже в резерве, быстрая ротация</td>
+          </tr>
+          <tr>
+            <td><b>SNI перестаёт работать</b></td>
+            <td><span class="badge red">Высокая</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Мониторинг SNI, обновление раз в 2 недели</td>
+          </tr>
+          <tr>
+            <td><b>Отсутствие роста пользователей</b></td>
+            <td><span class="badge orange">Средняя</span></td>
+            <td><span class="badge red">Высокое</span></td>
+            <td>Активный маркетинг, рефералка, промо-акции</td>
+          </tr>
+          <tr>
+            <td><b>Уход пользователей после Trial</b></td>
+            <td><span class="badge red">Высокая</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Push-напоминания, промокоды, работа над retention</td>
+          </tr>
+          <tr>
+            <td><b>Фрод в реферальной программе</b></td>
+            <td><span class="badge orange">Средняя</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Антифрод-проверки, холд 7 дней, ручная модерация</td>
+          </tr>
+          <tr>
+            <td><b>Недостаток бюджета на серверы</b></td>
+            <td><span class="badge green">Низкая</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Начать с 3 дешёвых VPS, окупаемость с 8 подписок</td>
+          </tr>
+          <tr>
+            <td><b>Юридические претензии</b></td>
+            <td><span class="badge green">Низкая</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Офшорная регистрация, публичная оферта</td>
+          </tr>
+          <tr>
+            <td><b>Технические сбои серверов</b></td>
+            <td><span class="badge orange">Средняя</span></td>
+            <td><span class="badge orange">Среднее</span></td>
+            <td>Мониторинг, алерты, автоперезапуск через systemd</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 18. LEGAL -->
+  <section id="s18">
+    <span class="section-label">
+      <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 3v18M3 9l9-6 9 6M3 9l4 8h10l4-8"/></svg>
+      18 · Юридические аспекты
+    </span>
+    <h2>Правовая база</h2>
+    <p class="section-desc">Сервис работает в серой зоне законодательства РФ, поэтому важно правильно оформить юридическую обвязку и минимизировать риски.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Обязательные документы
+        </h4>
+        <ul class="spec">
+          <li>Публичная оферта (услуги VPN-подключения).</li>
+          <li>Политика конфиденциальности (GDPR-совместимая).</li>
+          <li>Условия возврата средств.</li>
+          <li>Правила реферальной программы.</li>
+          <li>Правила использования сервиса (запрет на криминал).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20 15.3 15.3 0 010-20z"/></svg>
+          Юрисдикция
+        </h4>
+        <ul class="spec">
+          <li>Регистрация компании: <b>Кипр</b> или <b>ОАЭ</b>.</li>
+          <li>Стоимость регистрации: от 1 500 €.</li>
+          <li>Альтернатива на старте: <b>ИП в РФ</b> (проще, но рискованнее).</li>
+          <li>Платёжный провайдер — европейский или крипто-процессинг.</li>
+          <li>Домен — регистрация через Namecheap или Cloudflare.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2l9 4.5v7c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10v-7L12 2z"/></svg>
+          Защита данных
+        </h4>
+        <ul class="spec">
+          <li>No-logs политика — не храним историю трафика.</li>
+          <li>Не логируем IP-адреса подключений.</li>
+          <li>Храним только: tg_id, username, дату регистрации.</li>
+          <li>Пароли — Argon2 (только для админки).</li>
+          <li>Бэкапы БД — зашифрованы, на отдельном S3.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+          Возрастные ограничения
+        </h4>
+        <ul class="spec">
+          <li>Сервис доступен только пользователям <b>18+</b>.</li>
+          <li>Подтверждение возраста через Telegram-бот.</li>
+          <li>Запрет на использование для криминальной деятельности.</li>
+          <li>Право заблокировать аккаунт за нарушение правил.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="container">
+    <b>LUMA VPN</b> · Техническое задание v3.0 · Telegram Mini App<br>
+    Документ подготовлен для внутреннего использования. Все данные конфиденциальны.<br>
+    <span style="opacity:0.5;font-size:11px;display:inline-block;margin-top:8px;">Последнее обновление: 2025 · Статус: Draft</span>
+  </div>
+</footer>
+
+</body>
+</html>

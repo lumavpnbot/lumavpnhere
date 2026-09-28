@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionPlan {
+  free
+  start
+  pro
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  expired
+}
+
+// 'yookassa' присутствует в enum'е заранее — провайдер будет выключен
+// на уровне payments-registry, пока сокомандник не подключит эквайринг.
+enum PaymentMethod {
+  stars
+  crypto_usdt
+  crypto_ton
+  yookassa_card
+  yookassa_sbp
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum PayoutStatus {
+  hold
+  paid
+  cancelled
+}
+
+model User {
+  id            BigInt   @id @default(autoincrement())
+  tgId          BigInt   @unique @map("tg_id")
+  username      String?
+  avatarUrl     String?  @map("avatar_url")
+  referrerId    BigInt?  @map("referrer_id")
+  referralLevel Int      @default(0) @map("referral_level") // 0 базовый,1 серебро,2 золото,3 платина
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  subscriptions Subscription[]
+  payments      Payment[]
+  devices       Device[]
+
+  referredBy      Referral? @relation("ReferredUser")
+  referralsMade   Referral[] @relation("ReferrerUser")
+  payoutsReceived ReferralPayout[]
+
+  @@map("users")
+}
+
+model Subscription {
+  id        BigInt              @id @default(autoincrement())
+  userId    BigInt              @map("user_id")
+  plan      SubscriptionPlan
+  status    SubscriptionStatus
+  startedAt DateTime            @default(now()) @map("started_at")
+  expiresAt DateTime            @map("expires_at")
+  autoRenew Boolean             @default(false) @map("auto_renew")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id           BigInt        @id @default(autoincrement())
+  userId       BigInt        @map("user_id")
+  orderId      String        @unique @map("order_id")
+  method       PaymentMethod
+  amountRub    Decimal       @map("amount_rub") @db.Decimal(10, 2)
+  status       PaymentStatus @default(pending)
+  planPurchased SubscriptionPlan? @map("plan_purchased")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  paidAt       DateTime?     @map("paid_at")
+
+  user           User             @relation(fields: [userId], references: [id])
+  referralPayout ReferralPayout?
+
+  @@index([userId])
+  @@map("payments")
+}
+
+// Отдельный лог для всех событий платежей и аномалий — на него завязаны
+// алерты админу (см. раздел 6 ТЗ).
+model PaymentLog {
+  id        BigInt   @id @default(autoincrement())
+  orderId   String   @map("order_id")
+  event     String
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payments_log")
+}
+
+model Referral {
+  id           BigInt   @id @default(autoincrement())
+  referrerId   BigInt   @map("referrer_id")
+  referredId   BigInt   @unique @map("referred_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  levelAtTime  Int      @map("level_at_time")
+
+  referrer User @relation("ReferrerUser", fields: [referrerId], references: [id])
+  referred User @relation("ReferredUser", fields: [referredId], references: [id])
+
+  @@map("referrals")
+}
+
+model ReferralPayout {
+  id          BigInt       @id @default(autoincrement())
+  referrerId  BigInt       @map("referrer_id")
+  paymentId   BigInt       @unique @map("payment_id")
+  amountRub   Decimal      @map("amount_rub") @db.Decimal(10, 2)
+  status      PayoutStatus @default(hold)
+  payoutAfter DateTime     @map("payout_after") // холд 7 дней
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  referrer User    @relation(fields: [referrerId], references: [id])
+  payment  Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("referral_payouts")
+}
+
+// Сервер VPN-инфраструктуры. Пока сокомандник не поднял реальные VPS,
+// строки сюда добавляются вручную/через мок — панель работает через
+// абстракцию PanelProvider (см. src/panel).
+model Server {
+  id          BigInt   @id @default(autoincrement())
+  location    String
+  host        String
+  panelUrl    String?  @map("panel_url")
+  isTunnel    Boolean  @default(false) @map("is_tunnel") // сервер обхода белых списков
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("servers")
+}
+
+model Device {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt   @map("user_id")
+  hwid       String
+  label      String?
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, hwid])
+  @@map("devices")
+}
