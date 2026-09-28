@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -b",
-    "start": "node dist/server.js",
+    "build": "npm run typecheck",
+    "start": "tsx src/server.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "panel:check": "tsx scripts/panel-check.ts",
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -17,12 +19,12 @@
     "fastify": "^5.1.0",
     "ioredis": "^5.4.1",
     "node-cron": "^3.0.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "prisma": "^5.22.0",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
 }

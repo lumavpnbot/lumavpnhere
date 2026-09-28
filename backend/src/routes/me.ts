@@ -1,45 +1,45 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
+import type { PanelProvider } from '@/panel'
+import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
+import { subscriptionUrl } from './subscription'
 
-const TRIAL_DAYS = 7
-
-/** /me — профиль + подписка текущего пользователя. Создаёт юзера и trial при первом входе (ТЗ 4.1). */
-export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient) {
+/** /me: профиль и подписка. При первом входе создаёт пользователя и выдаёт trial (ТЗ 4.1). */
+export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient, panel: PanelProvider, vpn: VpnService, env: NodeJS.ProcessEnv) {
   app.get('/me', { preHandler: app.authenticate }, async (request) => {
     const { tgId, username } = request.tgUser!
 
     let user = await prisma.user.findUnique({ where: { tgId } })
     if (!user) {
       user = await prisma.user.create({ data: { tgId, username } })
-      await prisma.subscription.create({
-        data: {
-          userId: user.id,
-          plan: 'start',
-          status: 'trial',
-          expiresAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
-        },
-      })
+      // TODO: viaReferral из start_param (ref_<id>), когда будет обработчик /start в боте.
+      await vpn.startTrial(user, false).catch((err) => request.log.error({ err }, 'trial provisioning failed'))
     }
 
     const subscription = await prisma.subscription.findFirst({
       where: { userId: user.id },
       orderBy: { expiresAt: 'desc' },
     })
-    const devicesUsed = await prisma.device.count({ where: { userId: user.id } })
+    const client = await panel.getClient(Number(tgId)).catch(() => null)
+    const limits = subscription ? PLAN_LIMITS[subscription.plan] : null
+    const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
 
     return {
       profile: {
         tgId: Number(user.tgId),
         username: user.username,
-        avatarUrl: user.avatarUrl,
-        devicesUsed,
-        devicesLimit: subscription?.plan === 'pro' ? 5 : subscription?.plan === 'start' ? 3 : 1,
-        referralBalance: 0, // TODO: сумма paid-выплат referral_payouts за вычетом выводов
+        registeredAt: user.createdAt,
+        devicesLimit: limits?.devices ?? 0,
+        balance: 0, // TODO: баланс из операций
       },
       subscription: subscription && {
-        status: subscription.status,
-        plan: subscription.plan,
+        status: active ? subscription.status : 'expired',
+        plan: subscription.plan === 'free' ? null : subscription.plan,
+        startedAt: subscription.startedAt,
         expiresAt: subscription.expiresAt,
+        trafficUsedGb: client?.trafficUsedGb ?? 0,
+        trafficLimitGb: limits?.trafficGb ?? null,
+        subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
       },
     }
   })

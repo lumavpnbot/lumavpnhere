@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient } from '@prisma/client'
 import type { createPaymentRegistry } from '@/payments/registry'
+import type { VpnService } from '@/services/vpn'
 
 const createInvoiceSchema = z.object({
   method: z.enum(['stars', 'crypto_usdt', 'crypto_ton', 'yookassa_card', 'yookassa_sbp']),
@@ -18,6 +19,7 @@ export function registerPaymentRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
   payments: ReturnType<typeof createPaymentRegistry>,
+  vpn: VpnService,
 ) {
   // Список включённых способов оплаты — фронт рисует только то, что реально работает.
   app.get('/payments/methods', async () => ({
@@ -37,13 +39,20 @@ export function registerPaymentRoutes(
     const orderId = `lynk_${user.id}_${Date.now()}`
 
     await prisma.payment.create({
-      data: { userId: user.id, orderId, method: body.method, amountRub, planPurchased: body.plan },
+      data: {
+        userId: user.id,
+        orderId,
+        method: body.method,
+        amountRub,
+        planPurchased: body.plan,
+        periodDays: body.period === 'year' ? 365 : 30,
+      },
     })
 
     const invoice = await provider.createInvoice({
       orderId,
       amountRub,
-      description: `LynkVPN — ${body.plan === 'pro' ? 'Про' : 'Старт'} (${body.period === 'year' ? '12 мес' : '1 мес'})`,
+      description: `LynkVPN: ${body.plan === 'pro' ? 'Премиум' : 'Старт'} (${body.period === 'year' ? '12 мес' : '1 мес'})`,
       tgUserId: tgId,
     })
 
@@ -73,10 +82,13 @@ export function registerPaymentRoutes(
     const payment = await prisma.payment.findUnique({ where: { orderId: event.orderId } })
     if (!payment || payment.status === 'paid') return reply.send({ ok: true })
 
+    // Сначала выдаём VPN, потом помечаем платёж: если панель упала, вебхук повторится.
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: payment.userId } })
+    const plan = payment.planPurchased ?? 'start'
+    await vpn.activate(user, plan, payment.periodDays, 'active')
     await prisma.payment.update({ where: { orderId: event.orderId }, data: { status: 'paid', paidAt: new Date() } })
 
-    // TODO: активировать/продлить подписку (Subscription), выдать конфиг через PanelProvider,
-    // начислить реферальное вознаграждение с холдом 7 дней (ReferralPayout).
+    // TODO: реферальное начисление 30% с холдом 7 дней (ReferralPayout).
 
     return reply.send({ ok: true })
   })

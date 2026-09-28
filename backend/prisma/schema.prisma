@@ -49,6 +49,9 @@ model User {
   avatarUrl     String?  @map("avatar_url")
   referrerId    BigInt?  @map("referrer_id")
   referralLevel Int      @default(0) @map("referral_level") // 0 базовый,1 серебро,2 золото,3 платина
+  // Секрет в публичной ссылке подписки https://<домен>/sub/<subToken>. Можно перевыпустить.
+  subToken      String   @unique @default(uuid()) @map("sub_token")
+  trialUsed     Boolean  @default(false) @map("trial_used")
   createdAt     DateTime @default(now()) @map("created_at")
 
   subscriptions Subscription[]
@@ -85,6 +88,7 @@ model Payment {
   amountRub    Decimal       @map("amount_rub") @db.Decimal(10, 2)
   status       PaymentStatus @default(pending)
   planPurchased SubscriptionPlan? @map("plan_purchased")
+  periodDays   Int           @default(30) @map("period_days")
   createdAt    DateTime      @default(now()) @map("created_at")
   paidAt       DateTime?     @map("paid_at")
 
