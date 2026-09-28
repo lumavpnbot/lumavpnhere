@@ -5,13 +5,13 @@ import { useT } from '@/i18n'
 import { useGoBack } from '@/lib/navigation'
 import { haptic, nativeBack } from '@/lib/telegram'
 import { useAppStore } from '@/store/useAppStore'
-import { LangButton } from './LangSwitch'
-import { ChevronLeft, ChevronRight } from './icons'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { BellIcon, ChevronLeft, ChevronRight } from './icons'
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <img src={mark} alt="" className="h-6 w-6 select-none" draggable={false} />
+      <img src={mark} alt="" className={`${compact ? 'h-8 w-8' : 'h-6 w-6'} select-none`} draggable={false} />
       {!compact && <span className="wordmark text-[17px]">{BRAND}</span>}
     </div>
   )
@@ -44,14 +44,16 @@ export function useDisplayName() {
 }
 
 /**
- * Верхняя строка. Главная: аватар слева, справа язык + бренд.
- * Остальные экраны: слева запасная «Назад» (только вне Telegram, внутри
- * работает нативная BackButton), справа бренд.
+ * Верхняя строка. Главная: аватар и ник слева. Остальные экраны: слева
+ * запасная «Назад» (только вне Telegram, внутри работает нативная BackButton).
+ * Справа всегда колокольчик уведомлений и лого (без названия).
  */
 export function TopBar({ home = false }: { home?: boolean }) {
   const t = useT()
   const goBack = useGoBack()
   const name = useDisplayName()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   return (
     <header className="mb-6 flex h-11 items-center justify-between gap-3">
@@ -59,10 +61,7 @@ export function TopBar({ home = false }: { home?: boolean }) {
         {home ? (
           <div className="flex min-w-0 items-center gap-3">
             <Avatar />
-            <div className="min-w-0 leading-tight">
-              <div className="truncate text-[12px] text-dim">{t('common.welcome')}</div>
-              <div className="truncate text-[15px] font-semibold">{name}</div>
-            </div>
+            <div className="truncate text-[16px] font-semibold">{name}</div>
           </div>
         ) : !nativeBack ? (
           <button onClick={goBack} className="btn-glass !h-10 !px-3 !text-[14px]">
@@ -71,9 +70,20 @@ export function TopBar({ home = false }: { home?: boolean }) {
           </button>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2.5">
-        {home && <LangButton />}
-        <Brand />
+      <div className="flex shrink-0 items-center gap-3">
+        {pathname !== '/account/notifications' && (
+          <button
+            onClick={() => {
+              haptic('light')
+              navigate('/account/notifications')
+            }}
+            className="btn-glass !h-10 !w-10 !px-0"
+            aria-label={t('account.notifications')}
+          >
+            <BellIcon className="h-[19px] w-[19px]" />
+          </button>
+        )}
+        <Brand compact />
       </div>
     </header>
   )

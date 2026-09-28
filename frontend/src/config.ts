@@ -4,10 +4,9 @@ export const APP_VERSION = '0.3.0'
 // TODO: поставить реальный юзернейм бота (без @) через VITE_BOT_USERNAME.
 export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'LynkVPNBot'
 
-// TODO: реальные ссылки на поддержку и канал.
 export const LINKS = {
-  support: `https://t.me/${BOT_USERNAME}`,
-  channel: 'https://t.me/',
+  support: 'https://t.me/lynkvpnsupportbot',
+  channel: 'https://t.me/lumaVPN_service',
 }
 
 export const PRICES_RUB = {

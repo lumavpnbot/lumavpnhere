@@ -30,10 +30,10 @@ for (const lang of ['ru', 'en']) {
     if (lang === 'ru') await page.screenshot({ path: `shots/${lang}-${name}-full.png`, fullPage: true })
   }
 
-  // Шторка выбора языка на главной.
-  await page.goto(BASE + '#/')
+  // Шторка выбора языка в настройках аккаунта.
+  await page.goto(BASE + '#/account')
   await page.waitForTimeout(700)
-  await page.getByLabel('language').click()
+  await page.getByText(lang === 'ru' ? 'Язык' : 'Language', { exact: true }).first().click()
   await page.waitForTimeout(700)
   await page.screenshot({ path: `shots/${lang}-lang-sheet.png` })
 
