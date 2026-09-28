@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PlanId } from '@/config'
+import { DEFAULT_LIVE, type CountryCode, type PlanId } from '@/config'
 import type { Lang } from '@/i18n'
 import { getTelegramUser } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
@@ -15,6 +15,8 @@ export interface Subscription {
   trafficUsedGb: number
   trafficLimitGb: number | null // null = безлимит
   subscriptionUrl: string | null
+  /** https-страница бэкенда, которая открывает happ://add/... во внешнем браузере. */
+  happUrl?: string | null
 }
 
 export interface Device {
@@ -61,6 +63,7 @@ interface AppState {
   subscription: Subscription
   devices: Device[]
   transactions: Transaction[]
+  liveCountries: CountryCode[]
   prefs: NotificationPrefs
   demo: boolean
   loaded: boolean
@@ -154,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   subscription: EMPTY_SUB,
   devices: [],
   transactions: [],
+  liveCountries: DEFAULT_LIVE,
   prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
   loaded: false,
@@ -180,6 +184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         subscription: Partial<Subscription> | null
         devices?: Device[]
         transactions?: Transaction[]
+        countries?: CountryCode[]
       }>('/me')
       const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
       set((s) => ({
@@ -188,6 +193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         subscription: { ...EMPTY_SUB, ...(me.subscription ?? {}) },
         devices: me.devices ?? [],
         transactions: me.transactions ?? [],
+        liveCountries: me.countries?.length ? me.countries : s.liveCountries,
         loaded: true,
       }))
     } catch (err) {

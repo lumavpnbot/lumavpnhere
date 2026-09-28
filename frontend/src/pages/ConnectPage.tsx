@@ -12,6 +12,7 @@ export default function ConnectPage() {
   const t = useT()
   const navigate = useNavigate()
   const subUrl = useAppStore((s) => s.subscription.subscriptionUrl)
+  const happUrl = useAppStore((s) => s.subscription.happUrl)
   const [copied, setCopied] = useState(false)
   const isAndroid = tg?.platform === 'android'
   const app = CLIENT_APP.name
@@ -57,7 +58,7 @@ export default function ConnectPage() {
           </Step>
 
           <Step n={2} title={t('connect.s2')} text={t('connect.s2text', { app })}>
-            <button onClick={() => openExternal(CLIENT_APP.deeplink(subUrl))} className="btn-glass-strong mt-4 w-full">
+            <button onClick={() => openExternal(happUrl ?? CLIENT_APP.deeplink(subUrl))} className="btn-glass-strong mt-4 w-full">
               <LinkIcon className="h-5 w-5" />
               {t('connect.open', { app })}
             </button>

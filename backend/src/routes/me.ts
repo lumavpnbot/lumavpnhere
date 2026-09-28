@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
 import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
-import { subscriptionUrl } from './subscription'
+import { happOpenUrl, subscriptionUrl } from './subscription'
 
 function adminIds(env: NodeJS.ProcessEnv) {
   return new Set(
@@ -43,6 +43,7 @@ export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient, pan
     const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
 
     return {
+      countries: panel.countries,
       profile: {
         tgId: Number(user.tgId),
         username: user.username,
@@ -60,6 +61,7 @@ export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient, pan
         trafficUsedGb: client?.trafficUsedGb ?? 0,
         trafficLimitGb: limits?.trafficGb ?? null,
         subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
+        happUrl: active ? happOpenUrl(env, user.subToken) : null,
       },
     }
   })

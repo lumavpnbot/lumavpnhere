@@ -9,8 +9,8 @@ export interface PanelClient {
   trafficLimitGb: number | null // null = безлимит
   deviceLimit: number | null // null = без ограничения
   devicesCount: number
-  /** Ссылка подписки у самой панели (http). Пользователю её не отдаём, проксируем через /sub/:token. */
-  upstreamSubscriptionUrl: string | null
+  /** Ссылки подписки у самих панелей (http), по одной на страну. Пользователю не отдаём, склеиваем в /sub/:token. */
+  upstreamSubscriptionUrls: string[]
 }
 
 export interface ProvisionParams {
@@ -26,7 +26,9 @@ export interface ProvisionParams {
  * панель внутри: H1 (боевая), 3x-ui (запасной вариант) или мок.
  */
 export interface PanelProvider {
-  readonly kind: 'h1' | '3xui' | 'mock'
+  readonly kind: 'h1' | 'multi' | 'mock'
+  /** Коды стран, на которых выдаётся доступ (для списка серверов в Mini App). */
+  readonly countries: string[]
   /** Создать клиента или обновить существующего (срок, лимиты) и включить его. */
   provision(params: ProvisionParams): Promise<PanelClient>
   getClient(tgId: number): Promise<PanelClient | null>

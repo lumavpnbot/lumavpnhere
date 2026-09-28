@@ -1,25 +1,61 @@
 import type { PanelProvider } from './types'
 import { createMockPanelProvider } from './mockPanelProvider'
 import { createH1PanelProvider } from './h1PanelProvider'
+import { createMultiPanelProvider } from './multiPanelProvider'
+
+const list = (v?: string) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+
+interface PanelEnvEntry {
+  country: string
+  url: string
+  token: string
+  tags?: string
+}
 
 /**
- * PANEL_MODE=h1   боевой режим, H1 Panel (нужны H1_PANEL_URL, H1_PANEL_TOKEN; инбаунды по H1_INBOUND_TAGS)
- * PANEL_MODE=mock разработка без сервера
+ * PANEL_MODE=h1 боевой режим.
+ *
+ * Несколько стран: переменная H1_PANELS со списком JSON, первая страна главная:
+ *   [{"country":"fi","url":"http://fi3.h1cloud.net:25589/api","token":"...","tags":"fi-tcp"},
+ *    {"country":"de","url":"http://de1.h1cloud.net:XXXXX/api","token":"...","tags":"de-tcp"}]
+ *
+ * Одна страна (старый вариант): H1_PANEL_URL, H1_PANEL_TOKEN, H1_INBOUND_TAGS, H1_COUNTRY.
+ *
+ * PANEL_MODE=mock разработка без сервера.
  */
 export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
-  if (env.PANEL_MODE === 'h1') {
-    const baseUrl = env.H1_PANEL_URL ?? ''
-    const token = env.H1_PANEL_TOKEN ?? ''
-    const list = (v?: string) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    if (!baseUrl || !token) throw new Error('PANEL_MODE=h1: задайте H1_PANEL_URL и H1_PANEL_TOKEN')
-    return createH1PanelProvider({
-      baseUrl,
-      token,
-      inboundIds: list(env.H1_INBOUND_IDS),
-      inboundTags: list(env.H1_INBOUND_TAGS),
-    })
+  if (env.PANEL_MODE !== 'h1') return createMockPanelProvider()
+
+  let entries: PanelEnvEntry[]
+  if (env.H1_PANELS) {
+    try {
+      entries = JSON.parse(env.H1_PANELS) as PanelEnvEntry[]
+    } catch {
+      throw new Error('H1_PANELS: не удалось разобрать JSON')
+    }
+  } else {
+    entries = [
+      {
+        country: env.H1_COUNTRY ?? 'fi',
+        url: env.H1_PANEL_URL ?? '',
+        token: env.H1_PANEL_TOKEN ?? '',
+        tags: env.H1_INBOUND_TAGS,
+      },
+    ]
   }
-  return createMockPanelProvider()
+
+  const panels = entries.map((e) => {
+    if (!e.url || !e.token) throw new Error(`H1 (${e.country}): нужны url и token`)
+    return createH1PanelProvider({
+      baseUrl: e.url,
+      token: e.token,
+      country: e.country,
+      inboundIds: [],
+      inboundTags: list(e.tags),
+    })
+  })
+
+  return panels.length === 1 ? panels[0] : createMultiPanelProvider(panels)
 }
 
 export { clientName } from './types'

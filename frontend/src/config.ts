@@ -22,19 +22,16 @@ export type PlanId = (typeof PLANS)[number]['id']
 
 export const REFERRAL = { percent: 30, minPayout: 500 }
 
-export type CountryCode = 'nl' | 'de' | 'fi' | 'us' | 'gb' | 'tr' | 'kz' | 'jp'
+export type CountryCode = 'fi' | 'nl' | 'de' | 'se' | 'pl' | 'us' | 'gb' | 'tr' | 'kz' | 'jp'
 
-// Из ТЗ: на старте NL и DE, дальше по мере роста (раздел 7, план масштабирования).
-export const COUNTRIES: { code: CountryCode; cityKey?: 'city.ams' | 'city.fra'; live: boolean }[] = [
-  { code: 'nl', cityKey: 'city.ams', live: true },
-  { code: 'de', cityKey: 'city.fra', live: true },
-  { code: 'fi', live: false },
-  { code: 'us', live: false },
-  { code: 'gb', live: false },
-  { code: 'tr', live: false },
-  { code: 'kz', live: false },
-  { code: 'jp', live: false },
-]
+/*
+ * Все страны, которые показываем. Какие из них реально работают, приходит
+ * с бэкенда (/me → countries, по списку панелей в H1_PANELS). Остальные «Скоро».
+ */
+export const COUNTRIES: CountryCode[] = ['fi', 'nl', 'de', 'se', 'pl', 'us', 'gb', 'tr', 'kz', 'jp']
+
+/** Что показать, пока бэкенд не ответил или в демо-режиме. */
+export const DEFAULT_LIVE: CountryCode[] = ['fi']
 
 // Клиент, через который пользователь подключается (ссылки проверены).
 export const CLIENT_APP = {
@@ -42,6 +39,6 @@ export const CLIENT_APP = {
   ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
   android: 'https://play.google.com/store/apps/details?id=com.happproxy',
   site: 'https://www.happ.su/main',
-  /** Импорт подписки в один тап. */
+  /** Импорт подписки в один тап (работает вне Telegram; внутри Mini App используем happUrl с бэкенда). */
   deeplink: (subUrl: string) => `happ://add/${subUrl}`,
 }

@@ -34,6 +34,8 @@ export interface H1Config {
   /** Явные id инбаундов. Если пусто, ищем по inboundTags, а если и их нет, берём все. */
   inboundIds: string[]
   inboundTags?: string[]
+  /** Код страны сервера (fi, de, nl…), для списка серверов в Mini App. */
+  country?: string
   timeoutMs?: number
 }
 
@@ -112,7 +114,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
       trafficLimitGb: c.traffic_limit_gb ? c.traffic_limit_gb : null,
       deviceLimit: c.device_limit ? c.device_limit : null,
       devicesCount: c.devices_count ?? 0,
-      upstreamSubscriptionUrl: upstream,
+      upstreamSubscriptionUrls: upstream ? [upstream] : [],
     }
   }
 
@@ -123,6 +125,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
 
   return {
     kind: 'h1',
+    countries: cfg.country ? [cfg.country] : [],
     getClient,
 
     async describe() {

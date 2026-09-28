@@ -32,8 +32,9 @@ export default function HomePage() {
     navigate(path)
   }
 
-  const live = COUNTRIES.filter((c) => c.live)
-  const soon = COUNTRIES.filter((c) => !c.live)
+  const liveCodes = useAppStore((s) => s.liveCountries)
+  const live = COUNTRIES.filter((c) => liveCodes.includes(c))
+  const soon = COUNTRIES.filter((c) => !liveCodes.includes(c))
 
   return (
     <>
@@ -150,13 +151,12 @@ export default function HomePage() {
       >
         <div className="glass overflow-hidden">
           {live.map((c, i) => (
-            <div key={c.code}>
+            <div key={c}>
               {i > 0 && <Divider />}
               <div className="flex items-center gap-3.5 px-4 py-3.5">
-                <Flag code={c.code} size={36} />
+                <Flag code={c} size={36} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-medium">{t(`country.${c.code}` as TKey)}</div>
-                  {c.cityKey && <div className="text-[13px] text-faint">{t(c.cityKey)}</div>}
+                  <div className="text-[15px] font-medium">{t(`country.${c}` as TKey)}</div>
                 </div>
                 <StatusPill tone="ok">{t('common.available')}</StatusPill>
               </div>
@@ -167,9 +167,9 @@ export default function HomePage() {
             <div className="mb-3 text-[13px] text-faint">{t('home.soonTitle')}</div>
             <div className="flex flex-wrap gap-2">
               {soon.map((c) => (
-                <span key={c.code} className="inline-flex items-center gap-2 rounded-pill bg-white/[0.05] py-1 pl-1 pr-3 text-[13px] text-dim">
-                  <Flag code={c.code} size={22} />
-                  {t(`country.${c.code}` as TKey)}
+                <span key={c} className="inline-flex items-center gap-2 rounded-pill bg-white/[0.05] py-1 pl-1 pr-3 text-[13px] text-dim">
+                  <Flag code={c} size={22} />
+                  {t(`country.${c}` as TKey)}
                 </span>
               ))}
             </div>

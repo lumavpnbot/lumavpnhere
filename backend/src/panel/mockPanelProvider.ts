@@ -7,6 +7,7 @@ export function createMockPanelProvider(): PanelProvider {
 
   return {
     kind: 'mock',
+    countries: [],
     async provision({ tgId, expiresAt, trafficLimitGb, deviceLimit }) {
       const prev = clients.get(tgId)
       const c: PanelClient = {
@@ -18,7 +19,7 @@ export function createMockPanelProvider(): PanelProvider {
         trafficLimitGb,
         deviceLimit,
         devicesCount: prev?.devicesCount ?? 0,
-        upstreamSubscriptionUrl: null,
+        upstreamSubscriptionUrls: [],
       }
       clients.set(tgId, c)
       return c
