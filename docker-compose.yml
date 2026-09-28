@@ -6,9 +6,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: luma
-      POSTGRES_PASSWORD: luma
-      POSTGRES_DB: luma_vpn
+      POSTGRES_USER: lynk
+      POSTGRES_PASSWORD: lynk
+      POSTGRES_DB: lynk_vpn
     ports:
       - '5432:5432'
     volumes:

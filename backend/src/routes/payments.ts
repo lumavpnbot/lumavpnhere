@@ -34,7 +34,7 @@ export function registerPaymentRoutes(
     const { tgId } = request.tgUser!
     const user = await prisma.user.findUniqueOrThrow({ where: { tgId } })
     const amountRub = PRICES_RUB[body.plan][body.period]
-    const orderId = `luma_${user.id}_${Date.now()}`
+    const orderId = `lynk_${user.id}_${Date.now()}`
 
     await prisma.payment.create({
       data: { userId: user.id, orderId, method: body.method, amountRub, planPurchased: body.plan },
@@ -43,7 +43,7 @@ export function registerPaymentRoutes(
     const invoice = await provider.createInvoice({
       orderId,
       amountRub,
-      description: `Luma VPN — ${body.plan === 'pro' ? 'Про' : 'Старт'} (${body.period === 'year' ? '12 мес' : '1 мес'})`,
+      description: `LynkVPN — ${body.plan === 'pro' ? 'Про' : 'Старт'} (${body.period === 'year' ? '12 мес' : '1 мес'})`,
       tgUserId: tgId,
     })
 

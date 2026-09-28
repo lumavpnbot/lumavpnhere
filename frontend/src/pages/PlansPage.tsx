@@ -1,82 +1,123 @@
 import { useState } from 'react'
+import { PageTitle, Section, TopBar } from '@/components/ui'
+import { CheckIcon } from '@/components/icons'
+import { PLANS, PRICES_RUB, type PlanId } from '@/config'
+import { formatRub } from '@/lib/format'
+import { haptic, notify } from '@/lib/telegram'
+import { apiEnabled } from '@/lib/api'
 
 type Period = 'month' | 'year'
-// Способы оплаты, доступные сейчас (Stars, CryptoBot). ЮKassa (карта/СБП)
-// появится, когда её подключит сокомандник — тогда просто добавляем сюда
-// пункт 'card' | 'sbp', бэкенд к этому уже готов (см. backend/src/payments).
-type PaymentMethod = 'stars' | 'crypto'
+// ЮKassa (карта/СБП) появится, когда её подключит сокомандник — бэкенд
+// уже отдаёт список методов через GET /payments/methods.
+type Method = 'stars' | 'crypto_usdt'
 
-const PLANS = [
-  { id: 'free', name: 'Free', priceMonth: 0, priceYear: null, devices: 1, traffic: '5 ГБ/мес' },
-  { id: 'start', name: 'Старт', priceMonth: 149, priceYear: 1250, devices: 3, traffic: '100 ГБ/мес' },
-  { id: 'pro', name: 'Про', priceMonth: 249, priceYear: 1990, devices: 5, traffic: 'Безлимит' },
-] as const
+const METHODS: { id: Method; label: string }[] = [
+  { id: 'stars', label: '⭐ Telegram Stars' },
+  { id: 'crypto_usdt', label: 'Крипто · USDT / TON' },
+]
 
 export default function PlansPage() {
   const [period, setPeriod] = useState<Period>('month')
-  const [method, setMethod] = useState<PaymentMethod>('stars')
+  const [planId, setPlanId] = useState<PlanId>('pro')
+  const [method, setMethod] = useState<Method>('stars')
+
+  const price = PRICES_RUB[planId][period]
+
+  const pay = () => {
+    haptic('medium')
+    if (!apiEnabled) {
+      notify('Оплата заработает, когда подключим бэкенд. Сейчас это демо.')
+      return
+    }
+    // TODO: POST /payments/invoice → открыть invoice (Stars: tg.openInvoice, крипто: ссылка CryptoBot)
+  }
 
   return (
-    <div className="px-5 pt-6">
-      <h1 className="mb-4 text-xl font-bold">Тарифы</h1>
+    <>
+      <TopBar />
+      <PageTitle title="Тарифы" subtitle="Один тариф — все ваши устройства. Отменить можно в любой момент." />
 
-      <div className="mb-5 flex gap-2 rounded-pill border border-border bg-surface p-1">
+      <div className="glass flex !rounded-pill p-1">
         {(['month', 'year'] as const).map((p) => (
           <button
             key={p}
-            onClick={() => setPeriod(p)}
-            className={`flex-1 rounded-pill py-2 text-sm font-medium ${
-              period === p ? 'bg-accent text-bg' : 'text-text-dim'
+            onClick={() => {
+              haptic('select')
+              setPeriod(p)
+            }}
+            className={`relative flex-1 rounded-pill py-2.5 text-[14px] font-medium transition-colors ${
+              period === p ? 'bg-white/[0.14] text-fg' : 'text-dim'
             }`}
           >
             {p === 'month' ? 'Месяц' : 'Год'}
+            {p === 'year' && <span className="ml-1.5 text-[12px] text-ok">−30%</span>}
           </button>
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div className="mt-4 space-y-3">
         {PLANS.map((plan) => {
-          const price = period === 'month' ? plan.priceMonth : plan.priceYear ?? plan.priceMonth * 12
+          const selected = plan.id === planId
+          const p = PRICES_RUB[plan.id][period]
           return (
-            <div key={plan.id} className="rounded-card border border-border bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold">{plan.name}</div>
-                <div className="font-semibold">{price === 0 ? 'Бесплатно' : `${price} ₽`}</div>
+            <button
+              key={plan.id}
+              onClick={() => {
+                haptic('select')
+                setPlanId(plan.id)
+              }}
+              className={`glass w-full p-5 text-left transition-[background] ${selected ? 'glass-hero' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[20px] font-semibold">{plan.name}</div>
+                  <div className="mt-1 text-[13px] text-dim">
+                    {plan.devices} устройств · {plan.traffic}
+                  </div>
+                </div>
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    selected ? 'bg-white text-ink' : 'bg-white/[0.08]'
+                  }`}
+                >
+                  {selected && <CheckIcon className="h-4 w-4" strokeWidth={2.4} />}
+                </span>
               </div>
-              <div className="mt-1 text-xs text-text-dim">
-                {plan.devices} устройств · {plan.traffic}
+              <div className="mt-4 flex items-baseline gap-1.5">
+                <span className="text-[26px] font-bold tabular-nums tracking-[-0.02em]">{formatRub(p)}</span>
+                <span className="text-[13px] text-faint">/ {period === 'month' ? 'месяц' : 'год'}</span>
               </div>
-              {plan.id !== 'free' && (
-                <button className="mt-3 w-full rounded-pill bg-accent py-2.5 text-sm font-semibold text-bg">
-                  Оформить
-                </button>
+              {period === 'year' && (
+                <div className="mt-1 text-[12px] text-faint">≈ {formatRub(Math.round(p / 12))} в месяц</div>
               )}
-            </div>
+            </button>
           )
         })}
       </div>
 
-      <div className="mt-6">
-        <div className="mb-2 text-sm text-text-dim">Способ оплаты</div>
-        <div className="flex gap-2">
-          {(
-            [
-              { id: 'stars', label: '⭐ Telegram Stars' },
-              { id: 'crypto', label: '₮ Крипто' },
-            ] as const
-          ).map((m) => (
+      <Section title="Способ оплаты">
+        <div className="flex flex-wrap gap-2">
+          {METHODS.map((m) => (
             <button
               key={m.id}
-              onClick={() => setMethod(m.id)}
-              className={`flex-1 rounded-pill border py-2.5 text-sm ${
-                method === m.id ? 'border-accent text-accent' : 'border-border text-text-dim'
-              }`}
+              data-active={method === m.id}
+              onClick={() => {
+                haptic('select')
+                setMethod(m.id)
+              }}
+              className="chip"
             >
               {m.label}
             </button>
           ))}
         </div>
-      </div>
-    </div>
+        <p className="mt-3 px-1 text-[12px] text-faint">Карта и СБП появятся позже.</p>
+      </Section>
+
+      <button onClick={pay} className="btn-glass-strong mt-7 w-full">
+        Оплатить {formatRub(price)}
+      </button>
+      <p className="mt-3 text-center text-[12px] text-faint">Новым пользователям — 7 дней бесплатно</p>
+    </>
   )
 }

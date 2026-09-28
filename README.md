@@ -1,11 +1,11 @@
-# Luma VPN
+# LynkVPN
 
 VPN-сервис в формате Telegram Mini App. Монорепо: `frontend/` (Mini App) + `backend/` (API).
 
 ## Структура
 
 ```
-luma-vpn/
+lynkvpn/
 ├── frontend/    React + Vite + TS + Tailwind + Zustand — Telegram Mini App
 ├── backend/     Node + Fastify + TS + Prisma + PostgreSQL — API
 └── docs/        ТЗ и справочные материалы

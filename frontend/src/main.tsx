@@ -5,8 +5,7 @@ import App from './App'
 import './styles/index.css'
 import { initTelegram } from './lib/telegram'
 
-// Telegram Mini App должен сообщить клиенту, что готов, до первой отрисовки —
-// иначе часть API (initData, тема, haptics) может быть недоступна.
+// ready()/expand()/fullscreen — до первой отрисовки, чтобы не было «прыжка» вёрстки.
 initTelegram()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

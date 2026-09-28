@@ -1,7 +1,7 @@
 {
-  "name": "luma-vpn-frontend",
+  "name": "lynk-vpn-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,6 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@twa-dev/sdk": "^7.10.1",
     "framer-motion": "^11.11.17",
     "qrcode.react": "^4.1.0",
     "react": "^18.3.1",

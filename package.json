@@ -1,5 +1,5 @@
 {
-  "name": "luma-vpn",
+  "name": "lynk-vpn",
   "private": true,
   "workspaces": [
     "frontend",
