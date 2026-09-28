@@ -25,7 +25,7 @@ export function createMultiPanelProvider(panels: PanelProvider[], log: (msg: str
       const results = await each((p) => p.provision(params), 'provision')
       const first = results[0]
       if (first.status === 'rejected') throw first.reason
-      const ok = results.filter((r): r is PromiseFulfilledResult<PanelClient> => r.status === 'fulfilled').map((r) => r.value)
+      const ok: PanelClient[] = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
       return { ...first.value, upstreamSubscriptionUrls: ok.flatMap((c) => c.upstreamSubscriptionUrls) }
     },
 

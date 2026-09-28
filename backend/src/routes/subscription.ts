@@ -49,7 +49,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         }),
       ),
     )
-    const ok = responses.filter((r): r is PromiseFulfilledResult<{ headers: Headers; body: Buffer }> => r.status === 'fulfilled').map((r) => r.value)
+    const ok = responses.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
     if (!ok.length) return reply.code(502).send('upstream error')
 
     for (const h of PASS_HEADERS) {
