@@ -8,7 +8,14 @@ import type { PanelClient, PanelProvider } from './types'
  * Первая панель главная: по ней считаем срок, трафик и устройства.
  * Если какая-то страна недоступна, выдача на остальных не ломается.
  */
-export function createMultiPanelProvider(panels: PanelProvider[], log: (msg: string) => void = console.warn): PanelProvider {
+export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: string) => void = console.warn): PanelProvider {
+  // Последняя ошибка по каждой стране, видна в /health (без секретов, только текст ошибки).
+  const lastErrors: Record<string, { at: string; error: string }> = {}
+  const log = (msg: string) => {
+    logFn(msg)
+    const m = /^\[panel ([^\]]+)\] (.*)$/.exec(msg)
+    if (m) lastErrors[m[1]] = { at: new Date().toISOString(), error: m[2] }
+  }
   async function each<T>(fn: (p: PanelProvider) => Promise<T>, what: string) {
     const results = await Promise.allSettled(panels.map(fn))
     results.forEach((r, i) => {
@@ -74,7 +81,7 @@ export function createMultiPanelProvider(panels: PanelProvider[], log: (msg: str
           out[p.countries[0] ?? String(i)] = p.describe ? await p.describe().catch((e: Error) => ({ error: e.message })) : null
         }),
       )
-      return out
+      return { panels: out, lastErrors }
     },
   }
 }

@@ -37,6 +37,21 @@ function FlagSvg({ code }: { code: FlagCode }) {
       return <Stripes colors={['#111111', '#DD0000', '#FFCE00']} />
     case 'ru':
       return <Stripes colors={['#FFFFFF', '#0039A6', '#D52B1E']} />
+    case 'pl':
+      return (
+        <svg viewBox="0 0 30 30" className="block h-full w-full">
+          <rect width="30" height="15" fill="#FFFFFF" />
+          <rect y="15" width="30" height="15" fill="#DC143C" />
+        </svg>
+      )
+    case 'se':
+      return (
+        <svg viewBox="0 0 30 30" className="block h-full w-full">
+          <rect width="30" height="30" fill="#006AA7" />
+          <rect x="8" width="6" height="30" fill="#FECC00" />
+          <rect y="12" width="30" height="6" fill="#FECC00" />
+        </svg>
+      )
     case 'fi':
       return (
         <svg viewBox="0 0 30 30" className="block h-full w-full">
