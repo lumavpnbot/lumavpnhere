@@ -4,20 +4,26 @@ import { haptic, nativeBack } from './telegram'
 
 export const TAB_PATHS = ['/', '/plans', '/devices', '/referrals', '/account']
 
+// Родитель для вложенных экранов: Back ведёт туда, даже если истории нет.
+const PARENT: Record<string, string> = {
+  '/connect': '/devices',
+  '/balance': '/',
+  '/account/notifications': '/account',
+  '/account/logins': '/account',
+}
+
 /**
  * Поведение «Назад» как в elix/CallLedger:
- *  - главная → кнопки нет (Telegram показывает Close);
- *  - другие вкладки → на главную;
- *  - вложенные экраны (/connect и т.п.) → на шаг назад.
+ *  главная: кнопки нет (Telegram показывает Close);
+ *  другие вкладки: на главную;
+ *  вложенные экраны: на родительский экран.
  */
 export function useGoBack() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   return useCallback(() => {
     haptic('light')
-    if (TAB_PATHS.includes(pathname)) navigate('/', { replace: true })
-    else if (window.history.state && window.history.state.idx > 0) navigate(-1)
-    else navigate('/', { replace: true })
+    navigate(PARENT[pathname] ?? '/', { replace: true })
   }, [navigate, pathname])
 }
 

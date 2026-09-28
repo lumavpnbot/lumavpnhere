@@ -1,29 +1,35 @@
-export function ruPlural(n: number, one: string, few: string, many: string) {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return one
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
-  return many
+import { plural, type Lang } from '@/i18n'
+
+const MONTHS: Record<Lang, string[]> = {
+  ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 }
 
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
-
-export function formatDate(iso: string) {
+export function formatDate(iso: string, lang: Lang) {
   const d = new Date(iso)
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+  return lang === 'en'
+    ? `${MONTHS.en[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
+    : `${d.getDate()} ${MONTHS.ru[d.getMonth()]} ${d.getFullYear()}`
 }
 
-export function formatRub(n: number) {
-  return `${n.toLocaleString('ru-RU')} ₽`
+export function formatRub(n: number, signed = false) {
+  const sign = signed && n > 0 ? '+' : n < 0 ? '−' : ''
+  return `${sign}${Math.abs(n).toLocaleString('ru-RU')} ₽`
 }
 
-export function timeAgo(iso: string) {
+export function timeAgo(iso: string, lang: Lang) {
   const diff = Date.now() - new Date(iso).getTime()
   const min = Math.round(diff / 60000)
-  if (min < 2) return 'только что'
-  if (min < 60) return `${min} ${ruPlural(min, 'минуту', 'минуты', 'минут')} назад`
+  if (min < 2) return lang === 'en' ? 'just now' : 'только что'
+  if (min < 60) return lang === 'en' ? `${min} min ago` : `${min} ${plural(lang, min, { ru: ['минуту', 'минуты', 'минут'], en: ['', ''] })} назад`
   const h = Math.round(min / 60)
-  if (h < 24) return `${h} ${ruPlural(h, 'час', 'часа', 'часов')} назад`
+  if (h < 24) return lang === 'en' ? `${h} h ago` : `${h} ${plural(lang, h, { ru: ['час', 'часа', 'часов'], en: ['', ''] })} назад`
   const d = Math.round(h / 24)
-  return `${d} ${ruPlural(d, 'день', 'дня', 'дней')} назад`
+  return lang === 'en'
+    ? `${d} ${plural(lang, d, { ru: ['', '', ''], en: ['day', 'days'] })} ago`
+    : `${d} ${plural(lang, d, { ru: ['день', 'дня', 'дней'], en: ['', ''] })} назад`
+}
+
+export function daysWord(lang: Lang, n: number) {
+  return plural(lang, n, { ru: ['день', 'дня', 'дней'], en: ['day', 'days'] })
 }

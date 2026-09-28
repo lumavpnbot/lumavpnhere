@@ -2,21 +2,26 @@ import { useState } from 'react'
 import { PageTitle, Section, TopBar } from '@/components/ui'
 import { CheckIcon } from '@/components/icons'
 import { PLANS, PRICES_RUB, type PlanId } from '@/config'
+import { useT, type TKey } from '@/i18n'
 import { formatRub } from '@/lib/format'
 import { haptic, notify } from '@/lib/telegram'
 import { apiEnabled } from '@/lib/api'
+import { useAppStore } from '@/store/useAppStore'
 
 type Period = 'month' | 'year'
-// ЮKassa (карта/СБП) появится, когда её подключит сокомандник — бэкенд
+// ЮKassa (карта/СБП) появится, когда её подключит сокомандник: бэкенд
 // уже отдаёт список методов через GET /payments/methods.
-type Method = 'stars' | 'crypto_usdt'
+type Method = 'stars' | 'crypto_usdt' | 'balance'
 
-const METHODS: { id: Method; label: string }[] = [
-  { id: 'stars', label: '⭐ Telegram Stars' },
-  { id: 'crypto_usdt', label: 'Крипто · USDT / TON' },
+const METHODS: { id: Method; label: TKey }[] = [
+  { id: 'stars', label: 'plans.stars' },
+  { id: 'crypto_usdt', label: 'plans.crypto' },
+  { id: 'balance', label: 'plans.balance' },
 ]
 
 export default function PlansPage() {
+  const t = useT()
+  const balance = useAppStore((s) => s.profile.balance)
   const [period, setPeriod] = useState<Period>('month')
   const [planId, setPlanId] = useState<PlanId>('pro')
   const [method, setMethod] = useState<Method>('stars')
@@ -26,18 +31,23 @@ export default function PlansPage() {
   const pay = () => {
     haptic('medium')
     if (!apiEnabled) {
-      notify('Оплата заработает, когда подключим бэкенд. Сейчас это демо.')
+      notify(t('common.demoPay'))
       return
     }
-    // TODO: POST /payments/invoice → открыть invoice (Stars: tg.openInvoice, крипто: ссылка CryptoBot)
+    // TODO: POST /payments/invoice, затем Stars через tg.openInvoice, крипто через ссылку CryptoBot
   }
 
   return (
     <>
       <TopBar />
-      <PageTitle title="Тарифы" subtitle="Один тариф — все ваши устройства. Отменить можно в любой момент." />
+      <PageTitle title={t('plans.title')} subtitle={t('plans.subtitle')} />
 
-      <div className="glass flex !rounded-pill p-1">
+      <div className="glass relative grid grid-cols-2 !rounded-pill p-1">
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-pill bg-white/[0.14] transition-transform duration-300"
+          style={{ transform: `translateX(${period === 'year' ? '100%' : '0'})`, transitionTimingFunction: 'var(--ease)' }}
+        />
         {(['month', 'year'] as const).map((p) => (
           <button
             key={p}
@@ -45,11 +55,9 @@ export default function PlansPage() {
               haptic('select')
               setPeriod(p)
             }}
-            className={`relative flex-1 rounded-pill py-2.5 text-[14px] font-medium transition-colors ${
-              period === p ? 'bg-white/[0.14] text-fg' : 'text-dim'
-            }`}
+            className={`relative z-10 py-2.5 text-[14px] font-medium transition-colors ${period === p ? 'text-fg' : 'text-dim'}`}
           >
-            {p === 'month' ? 'Месяц' : 'Год'}
+            {p === 'month' ? t('plans.month') : t('plans.year')}
             {p === 'year' && <span className="ml-1.5 text-[12px] text-ok">−30%</span>}
           </button>
         ))}
@@ -66,18 +74,18 @@ export default function PlansPage() {
                 haptic('select')
                 setPlanId(plan.id)
               }}
-              className={`glass w-full p-5 text-left transition-[background] ${selected ? 'glass-hero' : ''}`}
+              className={`glass press w-full p-5 text-left ${selected ? 'glass-hero' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[20px] font-semibold">{plan.name}</div>
+                  <div className="text-[20px] font-semibold">{t(plan.nameKey)}</div>
                   <div className="mt-1 text-[13px] text-dim">
-                    {plan.devices} устройств · {plan.traffic}
+                    {t('plans.devices', { n: plan.devices })}, {t(plan.trafficKey).toLowerCase()}
                   </div>
                 </div>
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
-                    selected ? 'bg-white text-ink' : 'bg-white/[0.08]'
+                    selected ? 'bg-white text-[#0b0b0d]' : 'bg-white/[0.08]'
                   }`}
                 >
                   {selected && <CheckIcon className="h-4 w-4" strokeWidth={2.4} />}
@@ -85,17 +93,17 @@ export default function PlansPage() {
               </div>
               <div className="mt-4 flex items-baseline gap-1.5">
                 <span className="text-[26px] font-bold tabular-nums tracking-[-0.02em]">{formatRub(p)}</span>
-                <span className="text-[13px] text-faint">/ {period === 'month' ? 'месяц' : 'год'}</span>
+                <span className="text-[13px] text-faint">/ {period === 'month' ? t('plans.perMonth') : t('plans.perYear')}</span>
               </div>
               {period === 'year' && (
-                <div className="mt-1 text-[12px] text-faint">≈ {formatRub(Math.round(p / 12))} в месяц</div>
+                <div className="mt-1 text-[12px] text-faint">{t('plans.approx', { amount: formatRub(Math.round(p / 12)) })}</div>
               )}
             </button>
           )
         })}
       </div>
 
-      <Section title="Способ оплаты">
+      <Section title={t('plans.method')}>
         <div className="flex flex-wrap gap-2">
           {METHODS.map((m) => (
             <button
@@ -107,17 +115,22 @@ export default function PlansPage() {
               }}
               className="chip"
             >
-              {m.label}
+              {t(m.label)}
+              {m.id === 'balance' && <span className="text-faint">{formatRub(balance)}</span>}
             </button>
           ))}
         </div>
-        <p className="mt-3 px-1 text-[12px] text-faint">Карта и СБП появятся позже.</p>
+        <p className="mt-3 px-1 text-[12px] text-faint">{t('plans.later')}</p>
       </Section>
 
-      <button onClick={pay} className="btn-glass-strong mt-7 w-full">
-        Оплатить {formatRub(price)}
+      <button
+        onClick={pay}
+        disabled={method === 'balance' && balance < price}
+        className="btn-glass-strong mt-7 w-full"
+      >
+        {t('plans.pay', { amount: formatRub(price) })}
       </button>
-      <p className="mt-3 text-center text-[12px] text-faint">Новым пользователям — 7 дней бесплатно</p>
+      <p className="mt-3 text-center text-[12px] text-faint">{t('plans.trialNote')}</p>
     </>
   )
 }

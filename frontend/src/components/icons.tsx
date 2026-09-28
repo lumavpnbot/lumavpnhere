@@ -139,3 +139,66 @@ export const WalletIcon = (p: P) => (
     <path d="M16 13.5h1.5" />
   </Base>
 )
+export const ChevronDown = (p: P) => (
+  <Base {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Base>
+)
+export const BellIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15z" />
+    <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+  </Base>
+)
+export const MailIcon = (p: P) => (
+  <Base {...p}>
+    <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+    <path d="m4.5 7 7.5 6 7.5-6" />
+  </Base>
+)
+export const TelegramIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M20.5 4.5 3.5 11.2c-.8.3-.8 1.4 0 1.7l4 1.4 1.6 5c.2.7 1.1.9 1.6.4l2.4-2.3 4.2 3.1c.6.4 1.4.1 1.6-.6L21.9 5.8c.2-.9-.6-1.6-1.4-1.3z" />
+    <path d="m7.5 14.3 9-6.3-6.4 7.4" />
+  </Base>
+)
+export const MinusIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M5 12h14" />
+  </Base>
+)
+export const ArrowDownLeft = (p: P) => (
+  <Base {...p}>
+    <path d="M17 7 7 17M7 9v8h8" />
+  </Base>
+)
+export const ArrowUpRight = (p: P) => (
+  <Base {...p}>
+    <path d="M7 17 17 7M9 7h8v8" />
+  </Base>
+)
+export const GiftIcon = (p: P) => (
+  <Base {...p}>
+    <rect x="4" y="9" width="16" height="11" rx="1.5" />
+    <path d="M3 9h18M12 9v11M12 9c-1.5-3.5-5-4-5-1.5S10 9 12 9zm0 0c1.5-3.5 5-4 5-1.5S14 9 12 9z" />
+  </Base>
+)
+export const PercentIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M18 6 6 18" />
+    <circle cx="7.5" cy="7.5" r="2.2" />
+    <circle cx="16.5" cy="16.5" r="2.2" />
+  </Base>
+)
+export const SparkIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M12 3.5c.6 4.2 2.3 5.9 6.5 6.5-4.2.6-5.9 2.3-6.5 6.5-.6-4.2-2.3-5.9-6.5-6.5 4.2-.6 5.9-2.3 6.5-6.5z" />
+    <path d="M18.5 16.5c.2 1.5.8 2.1 2.3 2.3-1.5.2-2.1.8-2.3 2.3-.2-1.5-.8-2.1-2.3-2.3 1.5-.2 2.1-.8 2.3-2.3z" />
+  </Base>
+)
+export const LanguageIcon = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.3 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.3-3.5-8.5S9.7 5.9 12 3.5z" />
+  </Base>
+)

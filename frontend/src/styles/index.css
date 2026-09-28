@@ -4,14 +4,14 @@
 
 /*
  * Safe-area. В fullscreen-режиме Telegram (Bot API 8.0+) сам кладёт на <html>:
- *   --tg-safe-area-inset-*          — чёлка / home-индикатор устройства
- *   --tg-content-safe-area-inset-*  — зона нативных кнопок Telegram (Back/Close, ⋯)
+ *   --tg-safe-area-inset-*          чёлка / home-индикатор устройства
+ *   --tg-content-safe-area-inset-*  зона нативных кнопок Telegram (Back/Close, ⋯)
  * Контент должен начинаться ниже обеих, иначе шапка наедет на кнопки Telegram.
- * Вне fullscreen (и в обычном браузере) переменных нет — фолбэк на env()/0.
  */
 :root {
   --safe-top: calc(var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
   --safe-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
   color-scheme: dark;
 }
 
@@ -23,7 +23,7 @@ body,
 
 body {
   margin: 0;
-  background: #030304;
+  background: #050506;
   color: theme('colors.fg');
   font-family: theme('fontFamily.sans');
   -webkit-font-smoothing: antialiased;
@@ -31,145 +31,108 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* ───────────── Переливающийся монохромный фон ───────────── */
-
+/* ───────────── Фон: плавный «дорогой» градиент ─────────────
+ * Только мягкие радиальные градиенты с длинным затуханием (много стопов),
+ * без конусов и полос — у них резкие кромки. Два слоя, двигаются одним
+ * transform: браузер не перерисовывает градиенты, только сдвигает готовые
+ * текстуры. Зерно поверх гасит бэндинг на тёмных градиентах.
+ */
 .ambient {
   position: fixed;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: #030304;
+  background:
+    radial-gradient(140% 90% at 50% -10%, #1b1b1f 0%, #0d0d10 45%, #050506 80%);
 }
 
-/* Анимируется только transform — не перерисовывает градиенты каждый кадр. */
-.ambient__blob {
+.ambient__layer {
   position: absolute;
-  border-radius: 50%;
+  inset: -30%;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
-.ambient__blob--a {
-  width: 120vmax;
-  height: 120vmax;
-  top: -58vmax;
-  left: -48vmax;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.26), rgba(210, 210, 220, 0.09) 45%, transparent 72%);
-  animation: ambient-a 28s ease-in-out infinite alternate;
+.ambient__layer--a {
+  background:
+    radial-gradient(38% 32% at 22% 18%,
+      rgba(236, 236, 242, 0.22) 0%,
+      rgba(236, 236, 242, 0.16) 18%,
+      rgba(236, 236, 242, 0.09) 38%,
+      rgba(236, 236, 242, 0.035) 60%,
+      rgba(236, 236, 242, 0.01) 78%,
+      transparent 100%),
+    radial-gradient(34% 30% at 82% 62%,
+      rgba(160, 160, 172, 0.2) 0%,
+      rgba(160, 160, 172, 0.13) 22%,
+      rgba(160, 160, 172, 0.06) 45%,
+      rgba(160, 160, 172, 0.02) 70%,
+      transparent 100%);
+  animation: ambient-a 38s var(--ease) infinite alternate;
 }
 
-.ambient__blob--b {
-  width: 115vmax;
-  height: 115vmax;
-  bottom: -58vmax;
-  right: -52vmax;
-  background: radial-gradient(closest-side, rgba(195, 195, 208, 0.21), rgba(130, 130, 142, 0.07) 45%, transparent 72%);
-  animation: ambient-b 34s ease-in-out infinite alternate;
-}
-
-.ambient__blob--c {
-  width: 75vmax;
-  height: 75vmax;
-  top: 22%;
-  left: 18%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.1), transparent 70%);
-  animation: ambient-c 24s ease-in-out infinite alternate;
-}
-
-/* Диагональная серебряная «волна», как градиент на лого — медленно проходит по экрану. */
-.ambient__streak {
-  position: absolute;
-  top: 10%;
-  left: -100vmax;
-  width: 220vmax;
-  height: 38vmax;
-  background: linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.075) 45%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.075) 55%, transparent 80%);
-  transform: rotate(-28deg);
-  animation: ambient-streak 22s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-@keyframes ambient-streak {
-  from { transform: rotate(-28deg) translate3d(-25vmax, 0, 0); }
-  to   { transform: rotate(-28deg) translate3d(35vmax, 18vmax, 0); }
-}
-
-/* Медленно вращающийся «металлический» блик — даёт перелив, как у лого. */
-.ambient__sheen {
-  position: absolute;
-  inset: -60%;
-  background: conic-gradient(
-    from 0deg at 50% 50%,
-    transparent 0deg,
-    rgba(255, 255, 255, 0.09) 35deg,
-    transparent 80deg,
-    rgba(190, 190, 205, 0.07) 170deg,
-    transparent 225deg,
-    rgba(255, 255, 255, 0.1) 295deg,
-    transparent 360deg
-  );
-  -webkit-mask: radial-gradient(circle at 50% 45%, #000 18%, transparent 62%);
-  mask: radial-gradient(circle at 50% 45%, #000 18%, transparent 62%);
-  animation: ambient-spin 70s linear infinite;
-  will-change: transform;
+.ambient__layer--b {
+  background:
+    radial-gradient(30% 26% at 70% 20%,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.08) 25%,
+      rgba(255, 255, 255, 0.035) 50%,
+      rgba(255, 255, 255, 0.01) 75%,
+      transparent 100%),
+    radial-gradient(40% 30% at 25% 80%,
+      rgba(120, 120, 130, 0.18) 0%,
+      rgba(120, 120, 130, 0.11) 25%,
+      rgba(120, 120, 130, 0.05) 50%,
+      rgba(120, 120, 130, 0.015) 75%,
+      transparent 100%);
+  animation: ambient-b 46s var(--ease) infinite alternate;
 }
 
 .ambient__grain {
   position: absolute;
   inset: 0;
-  opacity: 0.07;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-}
-
-.ambient__vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(130% 85% at 50% 0%, transparent 45%, rgba(0, 0, 0, 0.6) 100%);
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 @keyframes ambient-a {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(14vmax, 10vmax, 0) scale(1.08); }
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(6%, 5%, 0) scale(1.06); }
+  100% { transform: translate3d(-4%, 8%, 0) scale(1.02); }
 }
 @keyframes ambient-b {
-  from { transform: translate3d(0, 0, 0) scale(1.05); }
-  to   { transform: translate3d(-16vmax, -12vmax, 0) scale(0.95); }
-}
-@keyframes ambient-c {
-  from { transform: translate3d(-8vmax, 6vmax, 0); }
-  to   { transform: translate3d(10vmax, -8vmax, 0); }
-}
-@keyframes ambient-spin {
-  to { transform: rotate(360deg); }
+  0%   { transform: translate3d(0, 0, 0) scale(1.04); }
+  50%  { transform: translate3d(-7%, -4%, 0) scale(1); }
+  100% { transform: translate3d(5%, -7%, 0) scale(1.07); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient__blob,
-  .ambient__streak,
-  .ambient__sheen {
+  .ambient__layer {
     animation: none;
   }
 }
 
-/* ───────────── Стекло ───────────── */
+/* ───────────── Компоненты ───────────── */
 
 @layer components {
-  /* Полупрозрачная карточка с тонкой «подсвеченной сверху» окантовкой.
-     Окантовка — через ::before с mask-composite, чтобы не трогать фон карточки. */
+  /*
+   * Карточка без backdrop-filter: размытие под каждой карточкой поверх
+   * движущегося фона пересчитывалось каждый кадр и давало лаги.
+   * Полупрозрачный градиент на мягком фоне смотрится так же.
+   */
   .glass {
     position: relative;
     border-radius: theme('borderRadius.card');
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
-    backdrop-filter: blur(18px) saturate(140%);
-    box-shadow: 0 10px 40px -18px rgba(0, 0, 0, 0.7);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.03));
+    box-shadow: 0 10px 36px -20px rgba(0, 0, 0, 0.8);
   }
 
   .glass::before,
   .btn-glass::before,
   .btn-glass-strong::before,
-  .chip::before {
+  .chip::before,
+  .tile::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -177,10 +140,10 @@ body {
     padding: 1px;
     background: linear-gradient(
       160deg,
-      rgba(255, 255, 255, 0.34),
+      rgba(255, 255, 255, 0.3),
       rgba(255, 255, 255, 0.07) 38%,
       rgba(255, 255, 255, 0.03) 62%,
-      rgba(255, 255, 255, 0.16)
+      rgba(255, 255, 255, 0.14)
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
@@ -188,21 +151,41 @@ body {
     pointer-events: none;
   }
 
-  /* Таб-бар плотнее обычного стекла: контент под ним не должен читаться. */
-  .glass-nav {
-    background: linear-gradient(180deg, rgba(28, 28, 32, 0.78), rgba(12, 12, 14, 0.86));
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    backdrop-filter: blur(24px) saturate(160%);
-    box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.8);
-  }
-
   .glass-hero {
     background:
-      radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.12), transparent 55%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+      radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.13), transparent 60%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
   }
 
-  /* Кнопки — всегда полупрозрачные. strong — чуть светлее, для главного действия. */
+  /* Акцентная сноска «Наше отличие»: ярче обычного стекла, с серебряным краем. */
+  .edge-card {
+    background:
+      radial-gradient(90% 120% at 100% 0%, rgba(255, 255, 255, 0.2), transparent 55%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.025) 65%);
+    box-shadow: 0 18px 50px -24px rgba(255, 255, 255, 0.18);
+  }
+
+  .edge-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0.3));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Размытие оставлено только там, где оно реально нужно: таб-бар и шторка. */
+  .glass-nav {
+    background: linear-gradient(180deg, rgba(30, 30, 34, 0.82), rgba(14, 14, 16, 0.9));
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    backdrop-filter: blur(20px) saturate(150%);
+    box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.85);
+  }
+
   .btn-glass,
   .btn-glass-strong {
     position: relative;
@@ -216,26 +199,25 @@ body {
     font-size: 15px;
     font-weight: 600;
     color: theme('colors.fg');
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
-    backdrop-filter: blur(16px) saturate(150%);
-    transition: transform 160ms ease-out, background 200ms ease-out, opacity 200ms;
+    white-space: nowrap;
+    transition: transform 160ms var(--ease), background-color 200ms, opacity 200ms;
     user-select: none;
   }
 
   .btn-glass {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.07);
   }
 
   .btn-glass-strong {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.1));
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.11));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.25),
-      0 8px 28px -12px rgba(255, 255, 255, 0.25);
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 8px 26px -14px rgba(255, 255, 255, 0.35);
   }
 
   .btn-glass:active,
-  .btn-glass-strong:active {
+  .btn-glass-strong:active,
+  .press:active {
     transform: scale(0.975);
   }
 
@@ -245,11 +227,29 @@ body {
     transform: none;
   }
 
+  .press {
+    transition: transform 160ms var(--ease), background-color 200ms;
+  }
+
+  /* Квадратная «плитка» под иконку. */
+  .tile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    color: theme('colors.fg');
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+  }
+
   .chip {
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     height: 40px;
     padding: 0 16px;
     border-radius: theme('borderRadius.pill');
@@ -257,12 +257,12 @@ body {
     font-weight: 500;
     color: theme('colors.dim');
     background: rgba(255, 255, 255, 0.04);
-    transition: background 200ms, color 200ms;
+    transition: background-color 200ms, color 200ms;
   }
 
   .chip[data-active='true'] {
     color: theme('colors.fg');
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .label {
@@ -273,17 +273,43 @@ body {
     color: #8b8b94;
   }
 
+  .field {
+    width: 100%;
+    height: 52px;
+    padding: 0 18px;
+    border-radius: 16px;
+    font-size: 16px;
+    color: theme('colors.fg');
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    outline: none;
+    transition: border-color 200ms, background-color 200ms;
+  }
+
+  .field:focus {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .field::placeholder {
+    color: theme('colors.faint');
+  }
+
   .page {
     position: relative;
     z-index: 1;
-    padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 112px);
+    padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 118px);
     max-width: 560px;
     margin: 0 auto;
   }
 
+  .page--nested {
+    padding-bottom: calc(var(--safe-bottom) + 32px);
+  }
+
   .wordmark {
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     background: linear-gradient(180deg, #ffffff 0%, #b9b9c2 100%);
     -webkit-background-clip: text;
     background-clip: text;

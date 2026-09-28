@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import type { PlanId } from '@/config'
+import type { Lang } from '@/i18n'
 import { getTelegramUser } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
+import { load, loadString, save } from '@/lib/storage'
 
 export type SubscriptionStatus = 'none' | 'trial' | 'active' | 'expired'
 
@@ -22,23 +24,50 @@ export interface Device {
   lastSeenAt: string
 }
 
+export interface Transaction {
+  id: string
+  kind: 'topup' | 'referral' | 'purchase'
+  amount: number // ₽, со знаком
+  plan?: PlanId
+  at: string
+}
+
 export interface Profile {
   tgId: number | null
   username: string | null
   firstName: string | null
   photoUrl: string | null
+  registeredAt: string | null
+  email: string | null
   devicesLimit: number
-  referralBalance: number
+  balance: number
   referralsCount: number
+  referralsActive: number
+  referralEarned: number
+}
+
+export interface NotificationPrefs {
+  expiry: boolean
+  expiryDays: number
+  traffic: boolean
+  trafficAt: number
+  news: boolean
+  promo: boolean
 }
 
 interface AppState {
+  lang: Lang
   profile: Profile
   subscription: Subscription
   devices: Device[]
+  transactions: Transaction[]
+  prefs: NotificationPrefs
   demo: boolean
   loaded: boolean
   bootstrap: () => Promise<void>
+  setLang: (lang: Lang) => void
+  setPrefs: (patch: Partial<NotificationPrefs>) => void
+  setEmail: (email: string) => void
 }
 
 const DAY = 24 * 60 * 60 * 1000
@@ -53,25 +82,21 @@ const EMPTY_SUB: Subscription = {
   subscriptionUrl: null,
 }
 
-// Демо-данные — пока бэкенд не задеплоен, чтобы было видно все состояния UI.
-function demoState(): Pick<AppState, 'subscription' | 'devices'> & { profilePatch: Partial<Profile> } {
-  const now = Date.now()
-  return {
-    subscription: {
-      status: 'active',
-      plan: 'pro',
-      startedAt: new Date(now - 7 * DAY).toISOString(),
-      expiresAt: new Date(now + 23 * DAY).toISOString(),
-      trafficUsedGb: 0,
-      trafficLimitGb: null,
-      subscriptionUrl: 'https://sub.lynkvpn.example/demo',
-    },
-    devices: [
-      { id: 'd1', label: 'iPhone', platform: 'iOS', lastSeenAt: new Date(now - 12 * 60 * 1000).toISOString() },
-      { id: 'd2', label: 'MacBook', platform: 'macOS', lastSeenAt: new Date(now - 2 * DAY).toISOString() },
-    ],
-    profilePatch: { devicesLimit: 5, referralBalance: 180, referralsCount: 3 },
-  }
+const DEFAULT_PREFS: NotificationPrefs = {
+  expiry: true,
+  expiryDays: 3,
+  traffic: true,
+  trafficAt: 80,
+  news: true,
+  promo: false,
+}
+
+function initialLang(): Lang {
+  const saved = loadString('lynk.lang')
+  if (saved === 'ru' || saved === 'en') return saved
+  const tgLang = getTelegramUser()?.language_code
+  const nav = tgLang || navigator.language || 'ru'
+  return nav.toLowerCase().startsWith('ru') ? 'ru' : 'en'
 }
 
 function profileFromTelegram(): Profile {
@@ -81,16 +106,54 @@ function profileFromTelegram(): Profile {
     username: u?.username ?? null,
     firstName: u?.first_name ?? null,
     photoUrl: u?.photo_url ?? null,
+    registeredAt: null,
+    email: loadString('lynk.email'),
     devicesLimit: 5,
-    referralBalance: 0,
+    balance: 0,
     referralsCount: 0,
+    referralsActive: 0,
+    referralEarned: 0,
+  }
+}
+
+// Демо-данные, пока бэкенд не задеплоен: видно все состояния интерфейса.
+function demo(now = Date.now()) {
+  return {
+    subscription: {
+      status: 'active',
+      plan: 'pro',
+      startedAt: new Date(now - 7 * DAY).toISOString(),
+      expiresAt: new Date(now + 23 * DAY).toISOString(),
+      trafficUsedGb: 0,
+      trafficLimitGb: null,
+      subscriptionUrl: 'https://sub.lynkvpn.example/demo',
+    } satisfies Subscription,
+    devices: [
+      { id: 'd1', label: 'iPhone', platform: 'iOS', lastSeenAt: new Date(now - 12 * 60 * 1000).toISOString() },
+      { id: 'd2', label: 'MacBook', platform: 'macOS', lastSeenAt: new Date(now - 2 * DAY).toISOString() },
+    ] satisfies Device[],
+    transactions: [
+      { id: 't3', kind: 'referral', amount: 75, at: new Date(now - 1 * DAY).toISOString() },
+      { id: 't2', kind: 'purchase', amount: -249, plan: 'pro', at: new Date(now - 7 * DAY).toISOString() },
+      { id: 't1', kind: 'topup', amount: 354, at: new Date(now - 7 * DAY - 3600e3).toISOString() },
+    ] satisfies Transaction[],
+    profile: {
+      registeredAt: new Date(now - 7 * DAY).toISOString(),
+      balance: 180,
+      referralsCount: 3,
+      referralsActive: 1,
+      referralEarned: 75,
+    } satisfies Partial<Profile>,
   }
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
+  lang: initialLang(),
   profile: profileFromTelegram(),
   subscription: EMPTY_SUB,
   devices: [],
+  transactions: [],
+  prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
   loaded: false,
 
@@ -98,28 +161,54 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().loaded) return
 
     if (!apiEnabled) {
-      const d = demoState()
+      const d = demo()
       set((s) => ({
         subscription: d.subscription,
         devices: d.devices,
-        profile: { ...s.profile, ...d.profilePatch },
+        transactions: d.transactions,
+        profile: { ...s.profile, ...d.profile },
         loaded: true,
       }))
       return
     }
 
     try {
-      const me = await api.get<{ profile: Partial<Profile>; subscription: Partial<Subscription> | null; devices?: Device[] }>('/me')
+      const me = await api.get<{
+        profile: Partial<Profile>
+        subscription: Partial<Subscription> | null
+        devices?: Device[]
+        transactions?: Transaction[]
+      }>('/me')
       set((s) => ({
         profile: { ...s.profile, ...me.profile },
         subscription: { ...EMPTY_SUB, ...(me.subscription ?? {}) },
         devices: me.devices ?? [],
+        transactions: me.transactions ?? [],
         loaded: true,
       }))
     } catch (err) {
       console.warn('[api] /me failed', err)
       set({ loaded: true })
     }
+  },
+
+  setLang: (lang) => {
+    save('lynk.lang', lang)
+    document.documentElement.lang = lang
+    set({ lang })
+  },
+
+  // TODO: синхронизировать с бэкендом (PATCH /me/notifications), бот читает оттуда.
+  setPrefs: (patch) => {
+    const prefs = { ...get().prefs, ...patch }
+    save('lynk.prefs', prefs)
+    set({ prefs })
+  },
+
+  // TODO: реальная привязка через POST /auth/email/start + /auth/email/verify.
+  setEmail: (email) => {
+    save('lynk.email', email)
+    set((s) => ({ profile: { ...s.profile, email } }))
   },
 }))
 
