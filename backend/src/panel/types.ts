@@ -33,6 +33,8 @@ export interface PanelProvider {
   /** Отключить без удаления: ссылка перестаёт работать, данные остаются. */
   disable(tgId: number): Promise<void>
   remove(tgId: number): Promise<void>
+  /** Диагностика для /health: что видно на панели. */
+  describe?(): Promise<unknown>
 }
 
 export function clientName(tgId: number) {

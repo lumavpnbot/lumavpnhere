@@ -31,8 +31,17 @@ interface H1Client {
 export interface H1Config {
   baseUrl: string // например http://fi3.h1cloud.net:25589/api
   token: string
+  /** Явные id инбаундов. Если пусто, ищем по inboundTags, а если и их нет, берём все. */
   inboundIds: string[]
+  inboundTags?: string[]
   timeoutMs?: number
+}
+
+interface H1Inbound {
+  id?: string | number
+  tag?: string
+  remark?: string
+  port?: number
 }
 
 export class H1ApiError extends Error {
@@ -65,6 +74,27 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     return data
   }
 
+  let resolvedInbounds: string[] | null = cfg.inboundIds.length ? cfg.inboundIds : null
+
+  async function listInbounds(): Promise<H1Inbound[]> {
+    const data = (await call<unknown>('GET', '/inbounds')) as unknown
+    if (Array.isArray(data)) return data as H1Inbound[]
+    const d = data as Record<string, unknown> | null
+    const list = d && (d.inbounds ?? d.items ?? d.data)
+    return Array.isArray(list) ? (list as H1Inbound[]) : []
+  }
+
+  async function inboundIds(): Promise<string[]> {
+    if (resolvedInbounds) return resolvedInbounds
+    const all = await listInbounds()
+    const tags = cfg.inboundTags ?? []
+    const picked = tags.length ? all.filter((i) => tags.includes(String(i.tag ?? i.remark ?? ''))) : all
+    const ids = picked.map((i) => String(i.id ?? '')).filter(Boolean)
+    if (!ids.length) throw new Error(`H1: не нашёл инбаунды ${tags.join(',') || '(любые)'} в /api/inbounds`)
+    resolvedInbounds = ids
+    return ids
+  }
+
   function unwrap(data: unknown): H1Client | null {
     if (!data || typeof data !== 'object') return null
     const d = data as { client?: H1Client } & H1Client
@@ -95,6 +125,14 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     kind: 'h1',
     getClient,
 
+    async describe() {
+      const all = await listInbounds()
+      return {
+        inbounds: all.map((i) => ({ id: i.id, tag: i.tag ?? i.remark, port: i.port })),
+        using: await inboundIds().catch((e: Error) => e.message),
+      }
+    },
+
     async provision({ tgId, expiresAt, trafficLimitGb, deviceLimit }: ProvisionParams) {
       const name = clientName(tgId)
       const limits = {
@@ -107,7 +145,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
       if (existing) {
         await call('PATCH', `/clients/${encodeURIComponent(name)}`, { ...limits, enable: true })
       } else {
-        await call('POST', '/clients', { name, ...limits, inbound_ids: cfg.inboundIds, manual: true })
+        await call('POST', '/clients', { name, ...limits, inbound_ids: await inboundIds(), manual: true })
       }
 
       const fresh = await getClient(tgId)

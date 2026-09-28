@@ -30,7 +30,10 @@ registerMeRoutes(app, prisma, panel, vpn, env)
 registerPaymentRoutes(app, prisma, payments, vpn)
 registerSubscriptionRoutes(app, prisma, panel, env)
 
-app.get('/health', async () => ({ ok: true, panel: panel.kind }))
+app.get('/health', async () => {
+  const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null
+  return { ok: true, panel: panel.kind, panelInfo }
+})
 
 // Раз в 10 минут отключаем на панели истёкшие подписки.
 setInterval(() => {
