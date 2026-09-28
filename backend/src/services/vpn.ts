@@ -41,8 +41,24 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider) {
     })
   }
 
+  /**
+   * Команда проекта (ADMIN_TELEGRAM_IDS): постоянный «Премиум» без оплаты.
+   * Срок ставим на 10 лет вперёд и продлеваем, если осталось меньше года.
+   */
+  async function ensureAdmin(user: User) {
+    const current = await prisma.subscription.findFirst({
+      where: { userId: user.id, plan: 'pro', status: 'active' },
+      orderBy: { expiresAt: 'desc' },
+    })
+    if (current && current.expiresAt.getTime() - Date.now() > 365 * DAY) return current
+    const expiresAt = new Date(Date.now() + 10 * 365 * DAY)
+    await panel.provision({ tgId: Number(user.tgId), expiresAt, trafficLimitGb: null, deviceLimit: null })
+    return prisma.subscription.create({ data: { userId: user.id, plan: 'pro', status: 'active', expiresAt } })
+  }
+
   return {
     activate,
+    ensureAdmin,
 
     async startTrial(user: User, viaReferral: boolean) {
       if (user.trialUsed) return null
