@@ -15,13 +15,14 @@ const ru = {
 
   'common.back': 'Назад',
   'common.guest': 'Гость',
-  'common.welcome': 'С возвращением',
+  'common.welcome': 'Привет',
   'common.copy': 'Скопировать',
   'common.copied': 'Скопировано',
   'common.share': 'Поделиться',
   'common.soon': 'Скоро',
   'common.available': 'Доступно',
   'common.connected': 'Подключён',
+  'common.notSet': 'Не указано',
   'common.demo': 'Демо-данные: бэкенд ещё не подключён',
   'common.demoPay': 'Оплата заработает, когда подключим бэкенд. Сейчас это демо.',
 
@@ -32,7 +33,7 @@ const ru = {
   'plan.start': 'Старт',
   'plan.pro': 'Премиум',
   'plan.startTraffic': '100 ГБ в месяц',
-  'plan.proTraffic': 'Безлимитный трафик',
+  'plan.proTraffic': 'безлимитный трафик',
 
   'home.subscription': 'Подписка',
   'home.active': 'Активна',
@@ -193,13 +194,14 @@ const en: Record<Key, string> = {
 
   'common.back': 'Back',
   'common.guest': 'Guest',
-  'common.welcome': 'Welcome back',
+  'common.welcome': 'Hi there',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
   'common.share': 'Share',
   'common.soon': 'Soon',
   'common.available': 'Available',
   'common.connected': 'Connected',
+  'common.notSet': 'Not set',
   'common.demo': 'Demo data: backend is not connected yet',
   'common.demoPay': 'Payments will work once the backend is connected. This is a demo.',
 
@@ -210,7 +212,7 @@ const en: Record<Key, string> = {
   'plan.start': 'Start',
   'plan.pro': 'Premium',
   'plan.startTraffic': '100 GB per month',
-  'plan.proTraffic': 'Unlimited traffic',
+  'plan.proTraffic': 'unlimited traffic',
 
   'home.subscription': 'Subscription',
   'home.active': 'Active',

@@ -49,7 +49,7 @@ export default function LoginsPage() {
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-medium">Telegram</div>
-            <div className="truncate text-[13px] text-faint tabular-nums">{profile.tgId ?? '·'}</div>
+            <div className="truncate text-[13px] text-faint tabular-nums">{profile.tgId ?? t('common.notSet')}</div>
           </div>
           <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ok">
             <span className="h-1.5 w-1.5 rounded-full bg-ok" />

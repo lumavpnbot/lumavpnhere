@@ -229,14 +229,14 @@ function InfoCard({
   onClick: () => void
 }) {
   return (
-    <button onClick={onClick} className="glass press flex flex-col p-4 text-left">
+    <button onClick={onClick} className="glass press flex min-w-0 flex-col p-4 text-left">
       <span className="flex w-full items-center justify-between">
         <span className="text-[13px] text-dim">{title}</span>
         <ChevronRight className="h-4 w-4 text-faint" />
       </span>
-      <span className="mt-3 flex items-center gap-3">
+      <span className="mt-3 flex w-full min-w-0 items-center gap-3">
         <span className="tile">{icon}</span>
-        <span className="min-w-0">
+        <span className="min-w-0 flex-1">
           <span className="block truncate text-[20px] font-semibold leading-tight tabular-nums">{value}</span>
           {sub && <span className="block truncate text-[12px] text-faint">{sub}</span>}
         </span>

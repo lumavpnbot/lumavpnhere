@@ -80,7 +80,7 @@ export default function PlansPage() {
                 <div>
                   <div className="text-[20px] font-semibold">{t(plan.nameKey)}</div>
                   <div className="mt-1 text-[13px] text-dim">
-                    {t('plans.devices', { n: plan.devices })}, {t(plan.trafficKey).toLowerCase()}
+                    {t('plans.devices', { n: plan.devices })}, {t(plan.trafficKey)}
                   </div>
                 </div>
                 <span

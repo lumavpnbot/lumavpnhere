@@ -39,10 +39,10 @@ export default function AccountPage() {
 
       <Section title={t('account.info')}>
         <div className="glass divide-y divide-white/[0.06] px-4">
-          <Row label={t('account.tgId')} value={profile.tgId ? String(profile.tgId) : '·'} />
-          <Row label={t('account.username')} value={profile.username ? `@${profile.username}` : '·'} />
-          <Row label={t('account.name')} value={profile.firstName ?? '·'} />
-          <Row label={t('account.registered')} value={profile.registeredAt ? formatDate(profile.registeredAt, lang) : '·'} />
+          <Row label={t('account.tgId')} value={profile.tgId ? String(profile.tgId) : t('common.notSet')} />
+          <Row label={t('account.username')} value={profile.username ? `@${profile.username}` : t('common.notSet')} />
+          <Row label={t('account.name')} value={profile.firstName ?? t('common.notSet')} />
+          <Row label={t('account.registered')} value={profile.registeredAt ? formatDate(profile.registeredAt, lang) : t('common.notSet')} />
         </div>
       </Section>
 
