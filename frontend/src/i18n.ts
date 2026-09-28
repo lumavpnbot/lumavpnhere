@@ -25,6 +25,7 @@ const ru = {
   'common.notSet': 'Не указано',
   'common.demo': 'Демо-данные: бэкенд ещё не подключён',
   'common.demoPay': 'Оплата заработает, когда подключим бэкенд. Сейчас это демо.',
+  'common.loadError': 'Не удалось загрузить данные',
 
   'lang.title': 'Язык',
   'lang.ru': 'Русский',
@@ -204,6 +205,7 @@ const en: Record<Key, string> = {
   'common.notSet': 'Not set',
   'common.demo': 'Demo data: backend is not connected yet',
   'common.demoPay': 'Payments will work once the backend is connected. This is a demo.',
+  'common.loadError': 'Could not load data',
 
   'lang.title': 'Language',
   'lang.ru': 'Русский',

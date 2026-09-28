@@ -35,6 +35,9 @@ jobs:
 
       - run: npm install
       - run: npm run build
+        env:
+          # Адрес бэкенда на Railway. Пусто = демо-режим.
+          VITE_API_URL: https://lynk-vpn-backend-production.up.railway.app
 
       - uses: actions/upload-pages-artifact@v3
         with:

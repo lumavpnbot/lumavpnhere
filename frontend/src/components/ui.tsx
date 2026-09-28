@@ -161,6 +161,13 @@ export function StatusPill({ tone, children }: { tone: 'ok' | 'warn' | 'bad' | '
 export function DemoBadge() {
   const t = useT()
   const demo = useAppStore((s) => s.demo)
+  const error = useAppStore((s) => s.error)
+  if (error)
+    return (
+      <div className="mb-4 rounded-2xl bg-bad/10 px-4 py-3 text-[13px] leading-snug text-bad">
+        {t('common.loadError')}: {error}
+      </div>
+    )
   if (!demo) return null
   return (
     <div className="mb-4 flex justify-center">

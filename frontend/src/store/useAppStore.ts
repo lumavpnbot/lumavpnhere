@@ -64,6 +64,7 @@ interface AppState {
   prefs: NotificationPrefs
   demo: boolean
   loaded: boolean
+  error: string | null
   bootstrap: () => Promise<void>
   setLang: (lang: Lang) => void
   setPrefs: (patch: Partial<NotificationPrefs>) => void
@@ -156,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
   loaded: false,
+  error: null,
 
   bootstrap: async () => {
     if (get().loaded) return
@@ -188,7 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }))
     } catch (err) {
       console.warn('[api] /me failed', err)
-      set({ loaded: true })
+      set({ loaded: true, error: err instanceof Error ? err.message : String(err) })
     }
   },
 
