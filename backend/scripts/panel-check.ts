@@ -23,3 +23,5 @@ async function get(path: string) {
 
 await get('/inbounds')
 await get('/clients')
+
+export {}
