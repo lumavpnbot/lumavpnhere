@@ -50,7 +50,7 @@ export default function ConnectPage() {
                 {isAndroid ? 'Google Play' : 'App Store'}
               </button>
               <button onClick={() => openExternal(CLIENT_APP.site)} className="btn-glass !h-11 !text-[14px]">
-                Другие платформы
+                Все платформы
               </button>
             </div>
           </Step>

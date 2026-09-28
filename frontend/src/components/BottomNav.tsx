@@ -19,10 +19,10 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 px-4"
+      className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ink via-ink/80 to-transparent px-4 pt-6"
       style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}
     >
-      <div className="glass mx-auto flex max-w-[528px] items-stretch justify-between !rounded-pill p-1.5">
+      <div className="glass glass-nav mx-auto flex max-w-[528px] items-stretch justify-between !rounded-pill p-1.5">
         {TABS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

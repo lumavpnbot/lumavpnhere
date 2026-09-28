@@ -50,20 +50,20 @@ body {
 }
 
 .ambient__blob--a {
-  width: 130vmax;
-  height: 130vmax;
-  top: -70vmax;
-  left: -55vmax;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.17), rgba(210, 210, 220, 0.06) 45%, transparent 72%);
+  width: 120vmax;
+  height: 120vmax;
+  top: -58vmax;
+  left: -48vmax;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.26), rgba(210, 210, 220, 0.09) 45%, transparent 72%);
   animation: ambient-a 28s ease-in-out infinite alternate;
 }
 
 .ambient__blob--b {
-  width: 120vmax;
-  height: 120vmax;
-  bottom: -70vmax;
-  right: -60vmax;
-  background: radial-gradient(closest-side, rgba(180, 180, 192, 0.15), rgba(120, 120, 132, 0.05) 45%, transparent 72%);
+  width: 115vmax;
+  height: 115vmax;
+  bottom: -58vmax;
+  right: -52vmax;
+  background: radial-gradient(closest-side, rgba(195, 195, 208, 0.21), rgba(130, 130, 142, 0.07) 45%, transparent 72%);
   animation: ambient-b 34s ease-in-out infinite alternate;
 }
 
@@ -72,8 +72,26 @@ body {
   height: 75vmax;
   top: 22%;
   left: 18%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.07), transparent 70%);
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.1), transparent 70%);
   animation: ambient-c 24s ease-in-out infinite alternate;
+}
+
+/* Диагональная серебряная «волна», как градиент на лого — медленно проходит по экрану. */
+.ambient__streak {
+  position: absolute;
+  top: 10%;
+  left: -100vmax;
+  width: 220vmax;
+  height: 38vmax;
+  background: linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.075) 45%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.075) 55%, transparent 80%);
+  transform: rotate(-28deg);
+  animation: ambient-streak 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes ambient-streak {
+  from { transform: rotate(-28deg) translate3d(-25vmax, 0, 0); }
+  to   { transform: rotate(-28deg) translate3d(35vmax, 18vmax, 0); }
 }
 
 /* Медленно вращающийся «металлический» блик — даёт перелив, как у лого. */
@@ -83,11 +101,11 @@ body {
   background: conic-gradient(
     from 0deg at 50% 50%,
     transparent 0deg,
-    rgba(255, 255, 255, 0.055) 35deg,
+    rgba(255, 255, 255, 0.09) 35deg,
     transparent 80deg,
-    rgba(190, 190, 205, 0.045) 170deg,
+    rgba(190, 190, 205, 0.07) 170deg,
     transparent 225deg,
-    rgba(255, 255, 255, 0.06) 295deg,
+    rgba(255, 255, 255, 0.1) 295deg,
     transparent 360deg
   );
   -webkit-mask: radial-gradient(circle at 50% 45%, #000 18%, transparent 62%);
@@ -128,6 +146,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .ambient__blob,
+  .ambient__streak,
   .ambient__sheen {
     animation: none;
   }
@@ -167,6 +186,14 @@ body {
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
+  }
+
+  /* Таб-бар плотнее обычного стекла: контент под ним не должен читаться. */
+  .glass-nav {
+    background: linear-gradient(180deg, rgba(28, 28, 32, 0.78), rgba(12, 12, 14, 0.86));
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.8);
   }
 
   .glass-hero {

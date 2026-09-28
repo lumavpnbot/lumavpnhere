@@ -5,6 +5,7 @@ export default function AmbientBackground() {
       <div className="ambient__blob ambient__blob--a" />
       <div className="ambient__blob ambient__blob--b" />
       <div className="ambient__blob ambient__blob--c" />
+      <div className="ambient__streak" />
       <div className="ambient__sheen" />
       <div className="ambient__grain" />
       <div className="ambient__vignette" />

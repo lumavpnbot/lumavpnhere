@@ -94,7 +94,7 @@ function Mini({ value, label }: { value: string; label: string }) {
   return (
     <div className="rounded-2xl bg-white/[0.05] px-2 py-3">
       <div className="text-[16px] font-semibold tabular-nums">{value}</div>
-      <div className="mt-0.5 text-[11px] text-faint">{label}</div>
+      <div className="mt-0.5 text-[11px] text-dim">{label}</div>
     </div>
   )
 }
