@@ -33,6 +33,28 @@ export function createMultiPanelProvider(panels: PanelProvider[], log: (msg: str
       const results = await each((p) => p.getClient(tgId), 'getClient')
       const main = results[0].status === 'fulfilled' ? results[0].value : null
       if (!main) return null
+
+      // Новая страна добавлена позже, чем пользователь получил доступ: досоздаём
+      // клиента на ней с тем же сроком и лимитами, что на главной панели.
+      if (main.enabled && main.expiresAt && main.expiresAt > new Date()) {
+        await Promise.all(
+          results.map(async (r, i) => {
+            if (i === 0 || (r.status === 'fulfilled' && r.value)) return
+            try {
+              const c = await panels[i].provision({
+                tgId,
+                expiresAt: main.expiresAt!,
+                trafficLimitGb: main.trafficLimitGb,
+                deviceLimit: main.deviceLimit,
+              })
+              results[i] = { status: 'fulfilled', value: c }
+            } catch (e) {
+              log(`[panel ${panels[i].countries.join(',')}] backfill: ${(e as Error).message}`)
+            }
+          }),
+        )
+      }
+
       const urls = results.flatMap((r) => (r.status === 'fulfilled' && r.value?.enabled ? r.value.upstreamSubscriptionUrls : []))
       return { ...main, upstreamSubscriptionUrls: urls }
     },
