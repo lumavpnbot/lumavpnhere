@@ -149,7 +149,13 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
       const existing = await getClient(tgId)
       if (existing) {
         // set_days: срок заново от сегодня (days в PATCH прибавил бы к текущему).
-        await call('PATCH', `/clients/${encodeURIComponent(name)}`, { ...limits, set_days: days, enable: true })
+        // inbound_ids передаём всегда: так новые инбаунды (например hysteria2) добавятся и старым клиентам.
+        await call('PATCH', `/clients/${encodeURIComponent(name)}`, {
+          ...limits,
+          set_days: days,
+          enable: true,
+          inbound_ids: await inboundIds(),
+        })
       } else {
         await call('POST', '/clients', { name, days, ...limits, inbound_ids: await inboundIds(), manual: true })
       }

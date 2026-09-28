@@ -50,7 +50,11 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider) {
       where: { userId: user.id, plan: 'pro', status: 'active' },
       orderBy: { expiresAt: 'desc' },
     })
-    if (current && current.expiresAt.getTime() - Date.now() > 60 * DAY) return current
+    if (current && current.expiresAt.getTime() - Date.now() > 60 * DAY) {
+      // Срок большой, но инбаунды могли добавиться: обновляем клиента на панели с тем же сроком.
+      await panel.provision({ tgId: Number(user.tgId), expiresAt: current.expiresAt, trafficLimitGb: null, deviceLimit: null })
+      return current
+    }
     const expiresAt = new Date(Date.now() + 365 * DAY)
     await panel.provision({ tgId: Number(user.tgId), expiresAt, trafficLimitGb: null, deviceLimit: null })
     return prisma.subscription.create({ data: { userId: user.id, plan: 'pro', status: 'active', expiresAt } })
