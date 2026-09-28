@@ -38,6 +38,7 @@ jobs:
         env:
           # Адрес бэкенда на Railway. Пусто = демо-режим.
           VITE_API_URL: https://lynk-vpn-backend-production.up.railway.app
+          VITE_BOT_USERNAME: vpnlynkbot
 
       - uses: actions/upload-pages-artifact@v3
         with:

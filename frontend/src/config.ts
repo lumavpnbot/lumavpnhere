@@ -1,8 +1,7 @@
 export const BRAND = 'LynkVPN'
 export const APP_VERSION = '0.3.0'
 
-// TODO: поставить реальный юзернейм бота (без @) через VITE_BOT_USERNAME.
-export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'LynkVPNBot'
+export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'vpnlynkbot'
 
 export const LINKS = {
   support: 'https://t.me/lynkvpnsupportbot',

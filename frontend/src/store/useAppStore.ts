@@ -181,7 +181,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         devices?: Device[]
         transactions?: Transaction[]
       }>('/me')
+      const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
       set((s) => ({
+        error: provisionError ? `panel: ${provisionError}` : null,
         profile: { ...s.profile, ...me.profile },
         subscription: { ...EMPTY_SUB, ...(me.subscription ?? {}) },
         devices: me.devices ?? [],

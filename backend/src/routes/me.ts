@@ -25,7 +25,14 @@ export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient, pan
       // TODO: viaReferral из start_param (ref_<id>), когда будет обработчик /start в боте.
       if (!isAdmin) await vpn.startTrial(user, false).catch((err) => request.log.error({ err }, 'trial provisioning failed'))
     }
-    if (isAdmin) await vpn.ensureAdmin(user).catch((err) => request.log.error({ err }, 'admin provisioning failed'))
+    // Для команды показываем ошибку выдачи прямо в приложении: так проще отлаживать панель.
+    let provisionError: string | null = null
+    if (isAdmin) {
+      await vpn.ensureAdmin(user).catch((err: Error) => {
+        request.log.error({ err }, 'admin provisioning failed')
+        provisionError = err.message
+      })
+    }
 
     const subscription = await prisma.subscription.findFirst({
       where: { userId: user.id },
@@ -42,6 +49,7 @@ export function registerMeRoutes(app: FastifyInstance, prisma: PrismaClient, pan
         registeredAt: user.createdAt,
         devicesLimit: isAdmin ? 99 : limits?.devices ?? 0,
         isAdmin,
+        provisionError,
         balance: 0, // TODO: баланс из операций
       },
       subscription: subscription && {
