@@ -270,7 +270,7 @@ body {
     font-weight: 500;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: theme('colors.faint');
+    color: #8b8b94;
   }
 
   .page {

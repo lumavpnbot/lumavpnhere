@@ -44,13 +44,13 @@ export default function ConnectPage() {
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button
                 onClick={() => openExternal(isAndroid ? CLIENT_APP.android : CLIENT_APP.ios)}
-                className="btn-glass !h-11 !text-[14px]"
+                className="btn-glass !h-11 !px-3 !text-[14px] whitespace-nowrap"
               >
                 <DownloadIcon className="h-4 w-4" />
                 {isAndroid ? 'Google Play' : 'App Store'}
               </button>
-              <button onClick={() => openExternal(CLIENT_APP.site)} className="btn-glass !h-11 !text-[14px]">
-                Все платформы
+              <button onClick={() => openExternal(CLIENT_APP.site)} className="btn-glass !h-11 !px-3 !text-[14px] whitespace-nowrap">
+                Другие ОС
               </button>
             </div>
           </Step>

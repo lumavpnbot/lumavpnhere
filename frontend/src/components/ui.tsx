@@ -51,7 +51,7 @@ export function TopBar({ home = false }: { home?: boolean }) {
           <div className="flex items-center gap-3">
             <Avatar />
             <div className="min-w-0 leading-tight">
-              <div className="text-[13px] text-faint">Добро пожаловать</div>
+              <div className="text-[13px] text-dim">Добро пожаловать</div>
               <div className="truncate text-[15px] font-semibold">
                 {username ? `@${username}` : firstName ?? 'Гость'}
               </div>
