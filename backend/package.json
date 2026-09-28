@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "npm run typecheck",
-    "start": "tsx src/server.ts",
+    "start": "prisma db push --skip-generate && tsx src/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "panel:check": "tsx scripts/panel-check.ts",
-    "typecheck": "prisma generate && tsc --noEmit"
+    "typecheck": "prisma generate && tsc --noEmit",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -20,11 +21,11 @@
     "ioredis": "^5.4.1",
     "node-cron": "^3.0.3",
     "zod": "^3.23.8",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
-    "prisma": "^5.22.0",
     "typescript": "^5.6.3"
   }
 }
