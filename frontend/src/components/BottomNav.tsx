@@ -1,3 +1,4 @@
+import type { SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 import { haptic } from '@/lib/telegram'
 
@@ -36,28 +37,28 @@ export default function BottomNav() {
   )
 }
 
-function HomeIcon(props: React.SVGProps<SVGSVGElement>) {
+function HomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" />
     </svg>
   )
 }
-function PlansIcon(props: React.SVGProps<SVGSVGElement>) {
+function PlansIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
     </svg>
   )
 }
-function DevicesIcon(props: React.SVGProps<SVGSVGElement>) {
+function DevicesIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <rect x="2" y="4" width="14" height="10" rx="1" /><path d="M8 20h4M18 8h4v10h-4z" />
     </svg>
   )
 }
-function ReferralsIcon(props: React.SVGProps<SVGSVGElement>) {
+function ReferralsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
@@ -65,7 +66,7 @@ function ReferralsIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
-function AccountIcon(props: React.SVGProps<SVGSVGElement>) {
+function AccountIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
