@@ -135,6 +135,8 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
 
     async provision({ tgId, expiresAt, trafficLimitGb, deviceLimit }: ProvisionParams) {
       const name = clientName(tgId)
+      // Панель требует целое days > 0 даже вместе с expires_at (иначе bad_days).
+      const days = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000))
       const limits = {
         expires_at: Math.floor(expiresAt.getTime() / 1000),
         traffic_limit_gb: trafficLimitGb ?? 0,
@@ -143,9 +145,10 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
 
       const existing = await getClient(tgId)
       if (existing) {
-        await call('PATCH', `/clients/${encodeURIComponent(name)}`, { ...limits, enable: true })
+        // set_days: срок заново от сегодня (days в PATCH прибавил бы к текущему).
+        await call('PATCH', `/clients/${encodeURIComponent(name)}`, { ...limits, set_days: days, enable: true })
       } else {
-        await call('POST', '/clients', { name, ...limits, inbound_ids: await inboundIds(), manual: true })
+        await call('POST', '/clients', { name, days, ...limits, inbound_ids: await inboundIds(), manual: true })
       }
 
       const fresh = await getClient(tgId)
