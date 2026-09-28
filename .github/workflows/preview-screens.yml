@@ -1,0 +1,43 @@
+name: Preview screenshots
+
+# Снимает скриншоты всех экранов Mini App (iPhone-размер) и кладёт их
+# в ветку `screens` — удобно проверять вёрстку без телефона.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/preview-screens.yml'
+      - 'frontend/scripts/screens.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  screens:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - run: npm install --no-save playwright@1.48.2
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          npx vite preview --port 4173 --strictPort &
+          npx --yes wait-on http://localhost:4173/
+          node scripts/screens.mjs
+      - name: Push screenshots to `screens` branch
+        run: |
+          cd shots
+          git init -q
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -qm "screens ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:screens
