@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import type { CountryCode } from '@/config'
 
-export type FlagCode = CountryCode | 'ru'
+export type FlagCode = CountryCode
 
 /**
  * Круглые флаги, нарисованные вручную в SVG (без внешних загрузок).

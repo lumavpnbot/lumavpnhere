@@ -173,6 +173,7 @@ const ru = {
   'logins.done': 'Почта привязана',
 
   'country.fi': 'Финляндия',
+  'country.ru': 'Россия',
   'country.nl': 'Нидерланды',
   'country.de': 'Германия',
   'country.se': 'Швеция',
@@ -355,6 +356,7 @@ const en: Record<Key, string> = {
   'logins.done': 'Email linked',
 
   'country.fi': 'Finland',
+  'country.ru': 'Russia',
   'country.nl': 'Netherlands',
   'country.de': 'Germany',
   'country.se': 'Sweden',

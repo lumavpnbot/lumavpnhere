@@ -22,13 +22,13 @@ export type PlanId = (typeof PLANS)[number]['id']
 
 export const REFERRAL = { percent: 30, minPayout: 500 }
 
-export type CountryCode = 'fi' | 'nl' | 'de' | 'se' | 'pl' | 'us' | 'gb' | 'tr' | 'kz' | 'jp'
+export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'us' | 'gb' | 'tr' | 'kz' | 'jp'
 
 /*
  * Все страны, которые показываем. Какие из них реально работают, приходит
  * с бэкенда (/me → countries, по списку панелей в H1_PANELS). Остальные «Скоро».
  */
-export const COUNTRIES: CountryCode[] = ['fi', 'nl', 'de', 'se', 'pl', 'us', 'gb', 'tr', 'kz', 'jp']
+export const COUNTRIES: CountryCode[] = ['fi', 'nl', 'de', 'us', 'ru', 'se', 'pl', 'gb', 'tr', 'kz', 'jp']
 
 /** Что показать, пока бэкенд не ответил или в демо-режиме. */
 export const DEFAULT_LIVE: CountryCode[] = ['fi']
