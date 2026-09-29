@@ -6,21 +6,18 @@ VPN-сервис в формате Telegram Mini App. Монорепо: `fronten
 
 ```
 lynkvpn/
-├── frontend/    React + Vite + TS + Tailwind + Zustand — Telegram Mini App
-├── backend/     Node + Fastify + TS + Prisma + PostgreSQL — API
-└── docs/        ТЗ и справочные материалы
+├── frontend/    React + Vite + TS + Tailwind + Zustand - Telegram Mini App
+└── backend/     Node + Fastify + TS + Prisma + PostgreSQL - API
 ```
 
 ## Статус проекта
 
 MVP в разработке. Ключевые решения на старте:
 
-- **Платежи:** Telegram Stars + CryptoBot (USDT TRC-20, TON) на старте. ЮKassa (СБП/карты РФ) добавляется позже отдельно — код уже спроектирован под подключение нового провайдера без переделки логики (см. `backend/src/payments`).
-- **VPN-инфраструктура:** серверы (3x-ui/Xray) поднимаются отдельно. Backend работает через адаптер `PanelProvider`, который сейчас реализован как мок — переключается на реальный 3x-ui API одной сборкой конфигурации.
+- **Платежи:** Telegram Stars + CryptoBot (USDT TRC-20, TON) на старте. ЮKassa (СБП/карты РФ) добавляется позже отдельно - код уже спроектирован под подключение нового провайдера без переделки логики (см. `backend/src/payments`).
+- **VPN-инфраструктура:** серверы на панелях H1 (VLESS). Backend работает с ними через адаптер `PanelProvider` (`backend/src/panel`), список панелей задаётся переменной `H1_PANELS`.
 - **Тарифы:** Free / Старт / Про, 7 дней trial (10 дней по рефералке).
 - **Реферальная программа:** 30% с уровнями (Серебро/Золото/Платина), холд 7 дней, вывод от 500 ₽.
-
-Подробное ТЗ — `docs/tz-v3.html`.
 
 ## Быстрый старт
 
@@ -32,4 +29,4 @@ cd frontend && npm install && npm run dev
 cd backend && npm install && npm run dev
 ```
 
-Backend требует `.env` (см. `backend/.env.example`) — подключение к PostgreSQL и Redis, токен бота.
+Backend требует `.env` (см. `backend/.env.example`) - подключение к PostgreSQL и Redis, токен бота.

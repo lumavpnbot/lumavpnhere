@@ -147,7 +147,7 @@ model Server {
   location    String
   host        String
   panelUrl    String?  @map("panel_url")
-  isTunnel    Boolean  @default(false) @map("is_tunnel") // сервер обхода белых списков
+  isTunnel    Boolean  @default(false) @map("is_tunnel") // промежуточный сервер (узел)
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
 

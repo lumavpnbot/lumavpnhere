@@ -4,7 +4,7 @@ import Flag from '@/components/Flag'
 import { LangSheet } from '@/components/LangSwitch'
 import { Avatar, Brand, DemoBadge, Divider, ListRow, PageTitle, Section, TopBar, useDisplayName } from '@/components/ui'
 import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, ShieldIcon } from '@/components/icons'
-import { APP_VERSION, BRAND, LINKS, PLANS } from '@/config'
+import { APP_VERSION, BRAND, DOCS, LINKS, PLANS } from '@/config'
 import { useLang, useT } from '@/i18n'
 import { formatDate } from '@/lib/format'
 import { openExternal } from '@/lib/telegram'
@@ -82,10 +82,9 @@ export default function AccountPage() {
           <Divider />
           <ListRow icon={<MegaphoneIcon className="h-[18px] w-[18px]" />} title={t('home.channel')} onClick={() => openExternal(LINKS.channel)} />
           <Divider />
-          {/* TODO: ссылки на документы */}
-          <ListRow icon={<DocIcon className="h-[18px] w-[18px]" />} title={t('account.terms')} />
+          <ListRow icon={<DocIcon className="h-[18px] w-[18px]" />} title={t('account.terms')} onClick={() => openExternal(DOCS.terms)} />
           <Divider />
-          <ListRow icon={<ShieldIcon className="h-[18px] w-[18px]" />} title={t('account.privacy')} />
+          <ListRow icon={<ShieldIcon className="h-[18px] w-[18px]" />} title={t('account.privacy')} onClick={() => openExternal(DOCS.privacy)} />
         </div>
       </Section>
 

@@ -8,6 +8,13 @@ export const LINKS = {
   channel: 'https://t.me/lumaVPN_service',
 }
 
+/** Документы лежат рядом с Mini App (frontend/public/*.html). */
+const pageUrl = (file: string) => new URL(file, window.location.href.split('#')[0]).href
+export const DOCS = {
+  terms: pageUrl('terms.html'),
+  privacy: pageUrl('privacy.html'),
+}
+
 export const PRICES_RUB = {
   start: { month: 149, year: 1250 },
   pro: { month: 249, year: 1990 },

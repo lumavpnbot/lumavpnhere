@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пользовательское соглашение — LYNK</title>
+<link rel="icon" type="image/png" href="./favicon.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg: #050505;
+    --silver-1: #e8e8ec;
+    --silver-3: #808088;
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-hover: rgba(255, 255, 255, 0.16);
+    --text: #e8e8ec;
+    --text-dim: #9a9aa4;
+    --text-dim-2: #6a6a74;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+    font-size: 15px;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -300px; left: 50%;
+    transform: translateX(-50%);
+    width: 1200px;
+    height: 1200px;
+    background: radial-gradient(circle, rgba(220,220,235,0.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -400px; right: -200px;
+    width: 900px;
+    height: 900px;
+    background: radial-gradient(circle, rgba(180,180,200,0.05) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 60px 24px 100px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03));
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 
+      0 8px 32px rgba(0,0,0,0.4),
+      inset 0 1px 1px rgba(255,255,255,0.18),
+      inset 0 -1px 1px rgba(0,0,0,0.2);
+    margin-bottom: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-mark::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    animation: shine 4s ease-in-out infinite;
+  }
+
+  @keyframes shine {
+    0%, 100% { left: -100%; }
+    50% { left: 100%; }
+  }
+
+  .logo-mark img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 0 8px rgba(220,220,235,0.25));
+  }
+
+  .brand-name {
+    font-size: 15px;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    font-weight: 600;
+    background: linear-gradient(180deg, #ffffff 0%, #a8a8b4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-left: 0.5em;
+    margin-bottom: 32px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 4.5vw, 42px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #b8b8c0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .updated {
+    font-size: 12.5px;
+    color: var(--text-dim-2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .glass {
+    background: linear-gradient(
+      145deg,
+      rgba(255,255,255,0.055) 0%,
+      rgba(255,255,255,0.02) 50%,
+      rgba(255,255,255,0.04) 100%
+    );
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    backdrop-filter: blur(30px) saturate(1.2);
+    -webkit-backdrop-filter: blur(30px) saturate(1.2);
+    box-shadow: 
+      0 8px 32px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.15);
+    padding: 32px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+  }
+
+  .glass::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  }
+
+  .glass:hover {
+    border-color: var(--glass-border-hover);
+  }
+
+  .section-num {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: var(--silver-3);
+    margin-bottom: 8px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+  }
+
+  h2 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 18px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  h2 .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.1);
+  }
+
+  h2 .icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--silver-1);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  h3 {
+    font-size: 15.5px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-top: 20px;
+    margin-bottom: 10px;
+  }
+
+  p {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    margin-bottom: 12px;
+  }
+
+  p b, li b {
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  a {
+    color: var(--silver-1);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    transition: border-color 0.2s;
+  }
+
+  a:hover {
+    border-bottom-color: rgba(255,255,255,0.6);
+  }
+
+  ul {
+    list-style: none;
+    margin: 12px 0 16px;
+  }
+
+  ul li {
+    position: relative;
+    padding: 8px 0 8px 26px;
+    color: var(--text-dim);
+    font-size: 14.5px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  ul li:last-child { border-bottom: none; }
+
+  ul li::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 17px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #ffffff, #808088);
+    box-shadow: 0 0 6px rgba(255,255,255,0.3);
+  }
+
+  .highlight {
+    background: linear-gradient(
+      135deg,
+      rgba(255,255,255,0.06) 0%,
+      rgba(255,255,255,0.02) 100%
+    );
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin: 16px 0;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .highlight svg {
+    width: 20px;
+    height: 20px;
+    stroke: var(--silver-1);
+    stroke-width: 2;
+    fill: none;
+    flex-shrink: 0;
+    margin-top: 2px;
+    filter: drop-shadow(0 0 4px rgba(255,255,255,0.3));
+  }
+
+  .highlight p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--silver-1);
+  }
+
+  /* FINAL ACCEPT BLOCK */
+  .accept-box {
+    background: linear-gradient(
+      145deg,
+      rgba(255,255,255,0.09) 0%,
+      rgba(255,255,255,0.03) 100%
+    );
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 18px;
+    padding: 26px 28px;
+    margin-top: 30px;
+    text-align: center;
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    box-shadow: 
+      0 8px 32px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+
+  .accept-box p {
+    color: var(--silver-1);
+    font-size: 14.5px;
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  .accept-box b {
+    color: #ffffff;
+  }
+
+  .footer {
+    text-align: center;
+    padding-top: 40px;
+    margin-top: 40px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    color: var(--text-dim-2);
+    font-size: 13px;
+  }
+
+  .footer .brand {
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #ffffff, #808088);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 40px 16px 60px; }
+    .glass { padding: 22px; border-radius: 16px; }
+    h2 { font-size: 17px; }
+    h1 { font-size: 26px; }
+    .logo-mark { width: 60px; height: 60px; }
+    .logo-mark img { width: 36px; height: 36px; }
+    .accept-box { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="container">
+
+  <header class="header">
+    <div class="logo-mark"><img src="./lynk-mark.png" alt="LYNK" width="44" height="44"></div>
+    <div class="brand-name">LYNK</div>
+    <h1>Пользовательское соглашение</h1>
+    <div class="updated">Последнее обновление: 29/09/2026</div>
+  </header>
+
+  <div class="glass">
+    <span class="section-num">01</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+      </span>
+      Общие положения
+    </h2>
+    <p><b>1.1.</b> Настоящее Пользовательское соглашение (далее — «Соглашение») регулирует порядок использования онлайн-сервиса <b>LYNK</b> (далее — «Сервис»), предоставляемого через Telegram-бота <a href="https://t.me/lynkorobot">@lynkorobot</a>.</p>
+    <p><b>1.2.</b> Используя Сервис, включая запуск бота, регистрацию, оплату услуг или получение доступа к материалам, Пользователь подтверждает, что полностью ознакомился с условиями настоящего Соглашения и принимает их в полном объёме.</p>
+    <p><b>1.3.</b> В случае несогласия с условиями Соглашения Пользователь обязан прекратить использование Сервиса.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">02</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+      </span>
+      Характер услуг
+    </h2>
+    <p><b>2.1.</b> Сервис предоставляет услуги нематериального характера — доступ к защищённым конфигурациям для шифрованного и анонимного подключения к сети Интернет.</p>
+    <p><b>2.2.</b> Сервис обеспечивает шифрование интернет-соединения и защиту передаваемых данных пользователя при работе в публичных и частных сетях.</p>
+    <p><b>2.3.</b> Пользователь осознаёт и соглашается, что ценность услуг Сервиса заключается в стабильности соединения, скорости работы, технической поддержке и регулярных обновлениях инфраструктуры.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">03</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      </span>
+      Отказ от гарантий и ответственности
+    </h2>
+    <p><b>3.1.</b> Сервис предоставляется на условиях «AS IS» («как есть»).</p>
+    <p><b>3.2.</b> Администрация не гарантирует:</p>
+    <ul>
+      <li>Соответствие Сервиса субъективным ожиданиям Пользователя</li>
+      <li>Достижение каких-либо финансовых, коммерческих или иных результатов</li>
+      <li>Бесперебойную и безошибочную работу на всех устройствах и у всех операторов связи</li>
+    </ul>
+    <p><b>3.3.</b> Администрация не несёт ответственности за:</p>
+    <ul>
+      <li>Любые прямые или косвенные убытки, включая упущенную выгоду</li>
+      <li>Последствия применения Пользователем полученных материалов</li>
+      <li>Действия или бездействие третьих лиц</li>
+      <li>Временные технические сбои и ограничения доступа</li>
+    </ul>
+    <p><b>3.4.</b> Все решения о применении материалов, рекомендаций и услуг принимаются Пользователем самостоятельно и на его риск.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">04</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      </span>
+      Законность использования
+    </h2>
+    <p><b>4.1.</b> Сервис не предназначен для поощрения, организации или содействия противоправной деятельности.</p>
+    <p><b>4.2.</b> Пользователь обязуется использовать Сервис исключительно в рамках применимого законодательства и правил третьих сторон.</p>
+    <p><b>4.3.</b> Ответственность за законность использования материалов и услуг Сервиса полностью возлагается на Пользователя.</p>
+    <p><b>4.4.</b> Пользователь обязуется не использовать Сервис для:</p>
+    <ul>
+      <li>Нарушения законов своей юрисдикции</li>
+      <li>Распространения запрещённого контента</li>
+      <li>Кибератак и иной вредоносной деятельности</li>
+      <li>Любых действий, способных причинить вред третьим лицам</li>
+    </ul>
+    <p><b>4.5.</b> Пользователь обязуется использовать Сервис только для защиты собственной информации, повышения уровня приватности и обеспечения безопасности соединения.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">05</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7z"/></svg>
+      </span>
+      Интеллектуальная собственность
+    </h2>
+    <p><b>5.1.</b> Все материалы, размещённые в Сервисе, охраняются законодательством об интеллектуальной собственности.</p>
+    <p><b>5.2.</b> Пользователю запрещается копировать, распространять, перепродавать, передавать третьим лицам или иным образом использовать материалы Сервиса без разрешения правообладателя.</p>
+    <p><b>5.3.</b> Нарушение прав интеллектуальной собственности может повлечь ограничение доступа к Сервису без компенсации.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">06</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+      </span>
+      Ограничение доступа
+    </h2>
+    <p><b>6.1.</b> Администрация вправе приостановить или ограничить доступ Пользователя к Сервису в случае:</p>
+    <ul>
+      <li>Нарушения условий настоящего Соглашения</li>
+      <li>Выявления злоупотреблений</li>
+      <li>Требований законодательства или платёжных провайдеров</li>
+    </ul>
+    <p><b>6.2.</b> Ограничение доступа не освобождает Пользователя от обязательств, возникших ранее.</p>
+    <p><b>6.3.</b> Администрация оставляет за собой право отказывать в обслуживании Пользователям, чьи действия могут создавать повышенные риски для Сервиса, платёжных провайдеров или третьих лиц.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">07</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 100 4h4a2 2 0 110 4H8M12 6v2M12 16v2"/></svg>
+      </span>
+      Платежи и возвраты
+    </h2>
+    <p><b>7.1.</b> Оплата услуг производится на условиях, указанных в Сервисе до момента оплаты.</p>
+    <p><b>7.2.</b> В связи с нематериальным характером цифровых товаров и услуг, возврат денежных средств после предоставления доступа не осуществляется, за исключением случаев, указанных ниже.</p>
+    <p><b>7.3.</b> Возврат средств возможен только если:</p>
+    <ul>
+      <li>Услуга не была оказана по технической вине Сервиса</li>
+      <li>Доступ к цифровому товару фактически не был предоставлен</li>
+    </ul>
+    <p><b>7.4.</b> Для рассмотрения вопроса о возврате Пользователь обязан обратиться в службу поддержки в течение 24 часов с момента оплаты.</p>
+    <p><b>7.5.</b> Решение о возврате принимается Администрацией индивидуально.</p>
+    <p><b>7.6.</b> Пользователь подтверждает, что обязуется не инициировать возврат платежа (chargeback) через платёжные системы без предварительного обращения в службу поддержки Сервиса.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">08</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      </span>
+      Конфиденциальность
+    </h2>
+    <p><b>8.1.</b> Администрация может собирать минимально необходимые технические данные для обеспечения работы Сервиса.</p>
+    <p><b>8.2.</b> Администрация принимает разумные меры для защиты данных, однако не гарантирует абсолютную безопасность передаваемой информации.</p>
+    <div class="highlight">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      <p><b>8.3.</b> Сервис работает по принципу <b>no-logs</b> — не хранит историю трафика и IP-адреса подключений.</p>
+    </div>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">09</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+      </span>
+      Изменение условий
+    </h2>
+    <p><b>9.1.</b> Администрация вправе вносить изменения в настоящее Соглашение.</p>
+    <p><b>9.2.</b> Актуальная версия Соглашения публикуется в Сервисе.</p>
+    <p><b>9.3.</b> Продолжение использования Сервиса означает согласие Пользователя с обновлёнными условиями.</p>
+  </div>
+
+  <div class="glass">
+    <span class="section-num">10</span>
+    <h2>
+      <span class="icon">
+        <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+      </span>
+      Контактная информация
+    </h2>
+    <p><b>10.1.</b> По всем вопросам Пользователь может обратиться в службу поддержки <a href="https://t.me/lynksubot">@lynksubot</a></p>
+  </div>
+
+  <div class="accept-box">
+    <p>Используя Сервис (в том числе запуская бота и/или вводя команду <b>/start</b>), Пользователь подтверждает, что ознакомлен с настоящим Соглашением и принимает его условия в полном объёме.</p>
+  </div>
+
+  <div class="footer">
+    <div class="brand">LYNK</div>
+    <div>Все права защищены · 2026</div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -8,16 +8,18 @@ import { registerSubscriptionRoutes } from '@/routes/subscription'
 import { createPaymentRegistry } from '@/payments/registry'
 import { createPanelProvider } from '@/panel'
 import { createVpnService } from '@/services/vpn'
+import { botIdOf, parseBotTokens } from '@/lib/telegramAuth'
 
 const env = process.env
 const app = Fastify({ logger: true })
 const prisma = new PrismaClient()
 
 await app.register(cors, { origin: true })
-registerAuth(app, env.TELEGRAM_BOT_TOKEN ?? '')
+const botTokens = parseBotTokens(env.TELEGRAM_BOT_TOKEN)
+registerAuth(app, botTokens)
 
 const payments = createPaymentRegistry({
-  TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
+  TELEGRAM_BOT_TOKEN: botTokens[0],
   CRYPTOBOT_API_TOKEN: env.CRYPTOBOT_API_TOKEN,
   YOOKASSA_SHOP_ID: env.YOOKASSA_SHOP_ID,
   YOOKASSA_SECRET_KEY: env.YOOKASSA_SECRET_KEY,
@@ -32,7 +34,8 @@ registerSubscriptionRoutes(app, prisma, panel, env)
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null
-  return { ok: true, panel: panel.kind, panelInfo }
+  // botIds: только публичная часть токенов (id бота), чтобы проверить, какой бот подключён.
+  return { ok: true, botIds: botTokens.map(botIdOf), panel: panel.kind, panelInfo }
 })
 
 // Раз в 10 минут отключаем на панели истёкшие подписки.

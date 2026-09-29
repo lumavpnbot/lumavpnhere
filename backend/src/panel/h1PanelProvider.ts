@@ -36,7 +36,7 @@ export interface H1Config {
   inboundTags?: string[]
   /** Код страны сервера (fi, de, nl…), для списка серверов в Mini App. */
   country?: string
-  /** Логические каналы H1 (main, reality, bs, wscdn). bs, судя по названию, обход белых списков. */
+  /** Логические каналы H1 (main, reality, bs, wscdn), см. документацию H1. */
   channels?: string[]
   timeoutMs?: number
 }

@@ -129,7 +129,7 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ── Наше отличие: белые списки ── */}
+      {/* ── Наше отличие: приватность ── */}
       <div className="edge-card relative mt-3 overflow-hidden rounded-card p-5">
         <img src={mark} alt="" className="pointer-events-none absolute -bottom-10 -right-8 h-44 w-44 select-none opacity-[0.08]" draggable={false} />
         <div className="flex items-center gap-2">
