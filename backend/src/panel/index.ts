@@ -10,6 +10,8 @@ interface PanelEnvEntry {
   url: string
   token: string
   tags?: string
+  /** Каналы H1 через запятую, например "main,bs". */
+  channels?: string
 }
 
 /**
@@ -52,6 +54,7 @@ export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
       country: e.country,
       inboundIds: [],
       inboundTags: list(e.tags),
+      channels: list(e.channels),
     })
   })
 

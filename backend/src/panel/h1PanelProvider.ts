@@ -36,6 +36,8 @@ export interface H1Config {
   inboundTags?: string[]
   /** Код страны сервера (fi, de, nl…), для списка серверов в Mini App. */
   country?: string
+  /** Логические каналы H1 (main, reality, bs, wscdn). bs, судя по названию, обход белых списков. */
+  channels?: string[]
   timeoutMs?: number
 }
 
@@ -155,9 +157,17 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
           set_days: days,
           enable: true,
           inbound_ids: await inboundIds(),
+          ...(cfg.channels?.length ? { channels: cfg.channels } : {}),
         })
       } else {
-        await call('POST', '/clients', { name, days, ...limits, inbound_ids: await inboundIds(), manual: true })
+        await call('POST', '/clients', {
+          name,
+          days,
+          ...limits,
+          inbound_ids: await inboundIds(),
+          manual: true,
+          ...(cfg.channels?.length ? { channels: cfg.channels } : {}),
+        })
       }
 
       const fresh = await getClient(tgId)
