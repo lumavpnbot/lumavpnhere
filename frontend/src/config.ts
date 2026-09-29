@@ -1,7 +1,7 @@
 export const BRAND = 'LynkVPN'
 export const APP_VERSION = '0.3.0'
 
-export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'vpnlynkbot'
+export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'lynkorobot'
 
 export const LINKS = {
   support: 'https://t.me/lynkvpnsupportbot',
