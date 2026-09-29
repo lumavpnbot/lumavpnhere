@@ -19,6 +19,85 @@ function decodeList(body: string): string[] {
     .filter((l) => /^[a-z0-9]+:\/\//i.test(l))
 }
 
+const COUNTRY_NAMES: Record<string, string> = {
+  fi: 'Финляндия', nl: 'Нидерланды', de: 'Германия', us: 'США', ru: 'Россия', se: 'Швеция', pl: 'Польша',
+  gb: 'Великобритания', tr: 'Турция', kz: 'Казахстан', jp: 'Япония', fr: 'Франция', ee: 'Эстония', lv: 'Латвия',
+}
+const COUNTRY_ORDER = ['fi', 'nl', 'de', 'us', 'ru', 'se', 'pl', 'gb', 'tr', 'kz', 'jp']
+const PROTO_ORDER = ['TCP', 'XHTTP', 'Hysteria', 'WS', 'gRPC']
+// Хосты H1: fi3.h1cloud.net → fi, msk2.h1cloud.net → ru.
+const HOST_ALIASES: Record<string, string> = { msk: 'ru', spb: 'ru', ams: 'nl', fra: 'de' }
+
+const flagOf = (code: string) => String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
+
+function countryFromFlag(name: string): string | null {
+  const cps = [...name].map((c) => c.codePointAt(0) ?? 0)
+  for (let i = 0; i + 1 < cps.length; i++) {
+    if (cps[i] >= 0x1f1e6 && cps[i] <= 0x1f1ff && cps[i + 1] >= 0x1f1e6 && cps[i + 1] <= 0x1f1ff) {
+      return String.fromCharCode(cps[i] - 0x1f1e6 + 97, cps[i + 1] - 0x1f1e6 + 97)
+    }
+  }
+  return null
+}
+
+function countryFromHost(host: string): string | null {
+  const m = /^([a-z]{2,3})\d*\./i.exec(host)
+  if (!m) return null
+  const k = m[1].toLowerCase()
+  return HOST_ALIASES[k] ?? (k.length === 2 ? k : null)
+}
+
+function protoOf(link: string, params: URLSearchParams): string {
+  const scheme = link.split('://')[0].toLowerCase()
+  if (scheme === 'hysteria2' || scheme === 'hy2' || scheme === 'hysteria') return 'Hysteria'
+  if (scheme === 'trojan') return 'Trojan'
+  if (scheme === 'ss') return 'Shadowsocks'
+  if (scheme === 'vmess') return 'VMess'
+  const type = (params.get('type') ?? 'tcp').toLowerCase()
+  return ({ tcp: 'TCP', raw: 'TCP', xhttp: 'XHTTP', splithttp: 'XHTTP', ws: 'WS', grpc: 'gRPC', httpupgrade: 'HTTPUpgrade' } as Record<string, string>)[type] ?? type.toUpperCase()
+}
+
+/** Переименование конфигов: «🇫🇮 Финляндия | TCP», «🇫🇮 Финляндия | Hysteria», и сортировка по стране. */
+function renameLinks(links: string[]): string[] {
+  const rows = links.map((link) => {
+    const [body, fragment = ''] = link.split('#')
+    const oldName = (() => {
+      try {
+        return decodeURIComponent(fragment)
+      } catch {
+        return fragment
+      }
+    })()
+    let host = ''
+    let params = new URLSearchParams()
+    try {
+      const u = new URL(body)
+      host = u.hostname
+      params = u.searchParams
+    } catch {
+      /* vmess:// и прочие base64-форматы: имя оставляем */
+    }
+    const country = countryFromFlag(oldName) ?? countryFromHost(host)
+    const proto = protoOf(body, params)
+    return { body, oldName, country, proto }
+  })
+  rows.sort((a, b) => {
+    const ca = a.country ? COUNTRY_ORDER.indexOf(a.country) : 99
+    const cb = b.country ? COUNTRY_ORDER.indexOf(b.country) : 99
+    if (ca !== cb) return (ca < 0 ? 98 : ca) - (cb < 0 ? 98 : cb)
+    return (PROTO_ORDER.indexOf(a.proto) + 99) % 99 - (PROTO_ORDER.indexOf(b.proto) + 99) % 99
+  })
+  const used = new Map<string, number>()
+  return rows.map((r) => {
+    if (!r.country || !COUNTRY_NAMES[r.country]) return r.oldName ? `${r.body}#${encodeURIComponent(r.oldName)}` : r.body
+    let name = `${flagOf(r.country)} ${COUNTRY_NAMES[r.country]} | ${r.proto}`
+    const n = (used.get(name) ?? 0) + 1
+    used.set(name, n)
+    if (n > 1) name += ` ${n}`
+    return `${r.body}#${encodeURIComponent(name)}`
+  })
+}
+
 /**
  * Публичная ссылка подписки: https://<наш домен>/sub/<subToken>.
  *
@@ -38,12 +117,10 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     const urls = client?.enabled ? client.upstreamSubscriptionUrls : []
     if (!urls.length) return reply.code(404).send('no active subscription')
 
-    const ua = request.headers['user-agent'] ?? BRAND
-    const single = urls.length === 1
-
+    // Берём у панелей простой список ссылок, чтобы переименовать конфиги и склеить страны.
     const responses = await Promise.allSettled(
       urls.map((u) =>
-        fetch(u, { headers: { 'User-Agent': single ? ua : PLAIN_UA }, signal: AbortSignal.timeout(10_000) }).then(async (r) => {
+        fetch(u, { headers: { 'User-Agent': PLAIN_UA }, signal: AbortSignal.timeout(10_000) }).then(async (r) => {
           if (!r.ok) throw new Error(`upstream ${r.status}`)
           return { headers: r.headers, body: Buffer.from(await r.arrayBuffer()) }
         }),
@@ -54,27 +131,25 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
 
     for (const h of PASS_HEADERS) {
       const v = ok[0].headers.get(h)
-      if (v && (single || h !== 'content-type')) reply.header(h, v)
+      if (v && h !== 'content-type') reply.header(h, v)
     }
     reply.header('profile-title', `base64:${Buffer.from(BRAND).toString('base64')}`)
     if (env.SUPPORT_URL) reply.header('support-url', env.SUPPORT_URL)
     reply.header('cache-control', 'no-store')
 
-    // Одна страна: отдаём как есть (сохраняются все возможности панели, например автовыбор).
-    if (single) return reply.send(ok[0].body)
-
-    // Несколько стран: склеиваем списки ссылок.
     // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
     // другие страны. Убираем повторы по ссылке без названия (#…).
     const seen = new Set<string>()
-    const links = ok
-      .flatMap((r) => decodeList(r.body.toString('utf8')))
-      .filter((l) => {
-        const key = l.split('#')[0]
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+    const links = renameLinks(
+      ok
+        .flatMap((r) => decodeList(r.body.toString('utf8')))
+        .filter((l) => {
+          const key = l.split('#')[0]
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        }),
+    )
     reply.header('content-type', 'text/plain; charset=utf-8')
     return reply.send(Buffer.from(links.join('\n')).toString('base64'))
   })
