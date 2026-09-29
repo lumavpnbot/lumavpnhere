@@ -4,6 +4,8 @@ export interface TelegramInitData {
   tgId: number
   username: string | null
   authDate: number
+  /** Параметр startapp из ссылки t.me/<bot>?startapp=REF_XXXX (реферал в Mini App). */
+  startParam: string | null
 }
 
 const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60 // 24 часа, требование из ТЗ 4.1
@@ -63,5 +65,5 @@ export function verifyTelegramInitData(initData: string, botToken: string): Tele
   if (!userRaw) return null
 
   const user = JSON.parse(userRaw) as { id: number; username?: string }
-  return { tgId: user.id, username: user.username ?? null, authDate }
+  return { tgId: user.id, username: user.username ?? null, authDate, startParam: params.get('start_param') }
 }

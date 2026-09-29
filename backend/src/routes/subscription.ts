@@ -93,7 +93,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     reply.header('content-type', 'text/html; charset=utf-8')
     return reply.send(`<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LynkVPN</title>
+<title>LYNK</title>
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#050506;color:#f4f4f6;font:16px/1.5 -apple-system,BlinkMacSystemFont,Inter,sans-serif}
 main{max-width:360px;padding:24px;text-align:center}
@@ -105,9 +105,6 @@ p{color:#a1a1aa}
 <a class="btn" href="${esc(deeplink)}">Открыть в Happ</a>
 </main><script>location.href=${JSON.stringify(deeplink)}</script></body></html>`)
   })
-
-  /** Страны, на которых сейчас выдаётся доступ (для списка серверов в Mini App). */
-  app.get('/servers', async () => ({ countries: panel.countries }))
 }
 
 export function subscriptionUrl(env: NodeJS.ProcessEnv, subToken: string) {

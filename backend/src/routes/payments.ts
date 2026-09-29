@@ -2,94 +2,114 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient } from '@prisma/client'
 import type { createPaymentRegistry } from '@/payments/registry'
-import type { VpnService } from '@/services/vpn'
+import { BillingError, type BillingService } from '@/services/billing'
+import { rateLimit } from '@/plugins/rateLimit'
 
-const createInvoiceSchema = z.object({
-  method: z.enum(['stars', 'crypto_usdt', 'crypto_ton', 'yookassa_card', 'yookassa_sbp']),
+const orderSchema = z.object({
   plan: z.enum(['start', 'pro']),
   period: z.enum(['month', 'year']),
+  method: z.enum(['stars', 'crypto_usdt', 'balance']),
+  promo: z.string().max(40).optional(),
+  useBalance: z.boolean().optional(),
+  autoRenew: z.boolean().optional(),
 })
 
-const PRICES_RUB: Record<'start' | 'pro', Record<'month' | 'year', number>> = {
-  start: { month: 149, year: 1250 },
-  pro: { month: 249, year: 1990 },
-}
+const quoteSchema = orderSchema.omit({ method: true, autoRenew: true })
 
 export function registerPaymentRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
   payments: ReturnType<typeof createPaymentRegistry>,
-  vpn: VpnService,
+  billing: BillingService,
 ) {
-  // Список включённых способов оплаты — фронт рисует только то, что реально работает.
+  const auth = { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }
+  const payLimit = { preHandler: [app.authenticate, rateLimit(5, 60_000, 'pay')] }
+
+  const me = async (tgId: number) => prisma.user.findUniqueOrThrow({ where: { tgId: BigInt(tgId) } })
+  const fail = (err: unknown) => {
+    if (err instanceof BillingError) return { status: 400, body: { error: err.message } }
+    throw err
+  }
+
+  // Список включённых способов оплаты: фронт показывает только то, что реально работает.
   app.get('/payments/methods', async () => ({
-    methods: payments.listEnabled().map((p) => p.id),
+    methods: [...payments.listEnabled().map((p) => p.id), 'balance'],
   }))
 
-  app.post('/payments/invoice', { preHandler: app.authenticate }, async (request, reply) => {
-    const body = createInvoiceSchema.parse(request.body)
-    const provider = payments.get(body.method)
-    if (!provider?.enabled) {
-      return reply.code(400).send({ error: `Способ оплаты ${body.method} недоступен` })
+  /** Расчёт цены с промокодом и балансом (без создания платежа). */
+  app.post('/payments/quote', auth, async (request, reply) => {
+    const body = quoteSchema.parse(request.body)
+    try {
+      return await billing.quote(await me(request.tgUser!.tgId), body.plan, body.period, body.promo, body.useBalance)
+    } catch (err) {
+      const r = fail(err)
+      return reply.code(r.status).send(r.body)
     }
-
-    const { tgId } = request.tgUser!
-    const user = await prisma.user.findUniqueOrThrow({ where: { tgId } })
-    const amountRub = PRICES_RUB[body.plan][body.period]
-    const orderId = `lynk_${user.id}_${Date.now()}`
-
-    await prisma.payment.create({
-      data: {
-        userId: user.id,
-        orderId,
-        method: body.method,
-        amountRub,
-        planPurchased: body.plan,
-        periodDays: body.period === 'year' ? 365 : 30,
-      },
-    })
-
-    const invoice = await provider.createInvoice({
-      orderId,
-      amountRub,
-      description: `LynkVPN: ${body.plan === 'pro' ? 'Премиум' : 'Старт'} (${body.period === 'year' ? '12 мес' : '1 мес'})`,
-      tgUserId: tgId,
-    })
-
-    return { orderId, payload: invoice.payload }
   })
 
-  // Вебхук для CryptoBot (и позже ЮKassa) — Stars подтверждается через апдейт бота, не сюда.
-  app.post('/payments/webhook/:method', async (request, reply) => {
-    const method = (request.params as { method: string }).method as
-      | 'crypto_usdt'
-      | 'yookassa_sbp'
+  // Совместимость с ТЗ: /promo/apply = проверка промокода и цена со скидкой.
+  app.post('/promo/apply', auth, async (request, reply) => {
+    const body = quoteSchema.parse(request.body)
+    try {
+      return await billing.quote(await me(request.tgUser!.tgId), body.plan, body.period, body.promo, body.useBalance)
+    } catch (err) {
+      const r = fail(err)
+      return reply.code(r.status).send(r.body)
+    }
+  })
 
+  app.post('/payments/invoice', payLimit, async (request, reply) => {
+    const body = orderSchema.parse(request.body)
+    try {
+      const order = await billing.createOrder({ user: await me(request.tgUser!.tgId), ...body })
+      return { orderId: order.orderId, status: order.status, payload: order.payload, quote: order.quote }
+    } catch (err) {
+      const r = fail(err)
+      return reply.code(r.status).send(r.body)
+    }
+  })
+
+  /** Статус заказа: фронт опрашивает после оплаты криптой. */
+  app.get('/payments/order/:orderId', auth, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string }
+    const user = await me(request.tgUser!.tgId)
+    const p = await prisma.payment.findUnique({ where: { orderId } })
+    if (!p || p.userId !== user.id) return reply.code(404).send({ error: 'Заказ не найден' })
+    return { orderId, status: p.status }
+  })
+
+  /** История платежей пользователя. */
+  app.get('/payments', auth, async (request) => {
+    const user = await me(request.tgUser!.tgId)
+    const rows = await prisma.payment.findMany({ where: { userId: user.id, status: { in: ['paid', 'refunded'] } }, orderBy: { createdAt: 'desc' }, take: 50 })
+    return {
+      payments: rows.map((p) => ({
+        id: p.id.toString(),
+        plan: p.planPurchased,
+        periodDays: p.periodDays,
+        method: p.method,
+        amount: Number(p.amountRub) + Number(p.balanceUsedRub),
+        status: p.status,
+        at: (p.paidAt ?? p.createdAt).toISOString(),
+      })),
+    }
+  })
+
+  // Вебхук CryptoBot (и позже ЮKassa). Stars подтверждается апдейтом бота, не сюда.
+  app.post('/payments/webhook/:method', async (request, reply) => {
+    const method = (request.params as { method: string }).method as 'crypto_usdt' | 'yookassa_sbp'
     const provider = payments.get(method)
     if (!provider) return reply.code(404).send()
 
-    const rawBody = JSON.stringify(request.body)
+    // Подпись считается по исходному телу запроса (сохраняем его в server.ts).
+    const rawBody = request.rawBody ?? JSON.stringify(request.body)
     const event = provider.verifyWebhook(request.headers as Record<string, string>, rawBody)
-
     await prisma.paymentLog.create({
-      data: { orderId: event?.orderId ?? 'unknown', event: event ? event.status : 'invalid_signature', payload: request.body as object },
+      data: { orderId: event?.orderId ?? 'unknown', event: event ? `webhook_${event.status}` : 'invalid_signature', payload: request.body as object },
     })
-
     if (!event) return reply.code(400).send({ error: 'Невалидная подпись вебхука' })
-    if (event.status !== 'paid') return reply.send({ ok: true })
-
-    // Идемпотентность: платёж уже мог быть обработан повторным вебхуком.
-    const payment = await prisma.payment.findUnique({ where: { orderId: event.orderId } })
-    if (!payment || payment.status === 'paid') return reply.send({ ok: true })
-
-    // Сначала выдаём VPN, потом помечаем платёж: если панель упала, вебхук повторится.
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: payment.userId } })
-    const plan = payment.planPurchased ?? 'start'
-    await vpn.activate(user, plan, payment.periodDays, 'active')
-    await prisma.payment.update({ where: { orderId: event.orderId }, data: { status: 'paid', paidAt: new Date() } })
-
-    // TODO: реферальное начисление 30% с холдом 7 дней (ReferralPayout).
-
+    if (event.status === 'paid') await billing.completePayment(event.orderId)
+    else await prisma.payment.updateMany({ where: { orderId: event.orderId, status: 'pending' }, data: { status: 'failed' } })
     return reply.send({ ok: true })
   })
 }

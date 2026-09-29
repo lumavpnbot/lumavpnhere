@@ -3,7 +3,7 @@ import { verifyTelegramInitDataAny } from '@/lib/telegramAuth'
 
 declare module 'fastify' {
   interface FastifyRequest {
-    tgUser?: { tgId: number; username: string | null }
+    tgUser?: { tgId: number; username: string | null; startParam: string | null }
   }
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
@@ -27,6 +27,6 @@ export function registerAuth(app: FastifyInstance, botTokens: string[]) {
       return reply.code(401).send({ error: 'Невалидная подпись initData' })
     }
 
-    request.tgUser = { tgId: verified.tgId, username: verified.username }
+    request.tgUser = { tgId: verified.tgId, username: verified.username, startParam: verified.startParam }
   })
 }

@@ -22,6 +22,7 @@ enum SubscriptionStatus {
 // 'yookassa' присутствует в enum'е заранее — провайдер будет выключен
 // на уровне payments-registry, пока сокомандник не подключит эквайринг.
 enum PaymentMethod {
+  balance
   stars
   crypto_usdt
   crypto_ton
@@ -34,6 +35,34 @@ enum PaymentStatus {
   paid
   failed
   refunded
+}
+
+enum UserRole {
+  user
+  support
+  admin
+  owner
+}
+
+enum BalanceTxKind {
+  referral
+  purchase
+  admin
+  refund
+  bonus
+}
+
+enum TicketStatus {
+  open
+  answered
+  closed
+}
+
+enum BroadcastStatus {
+  scheduled
+  sending
+  sent
+  cancelled
 }
 
 enum PayoutStatus {
@@ -52,11 +81,22 @@ model User {
   // Секрет в публичной ссылке подписки https://<домен>/sub/<subToken>. Можно перевыпустить.
   subToken      String   @unique @default(uuid()) @map("sub_token")
   trialUsed     Boolean  @default(false) @map("trial_used")
+  // Персональный код в реферальной ссылке t.me/lynkorobot?start=REF_<refCode>.
+  refCode       String?  @unique @map("ref_code")
+  role          UserRole @default(user)
+  balanceRub    Decimal  @default(0) @map("balance_rub") @db.Decimal(10, 2)
+  banned        Boolean  @default(false)
+  // Писал ли пользователь боту: без этого Telegram не даст отправить ему сообщение.
+  botStarted    Boolean  @default(false) @map("bot_started")
+  lastSeenAt    DateTime? @map("last_seen_at")
   createdAt     DateTime @default(now()) @map("created_at")
 
   subscriptions Subscription[]
   payments      Payment[]
   devices       Device[]
+  balanceTxs    BalanceTx[]
+  tickets       SupportTicket[]
+  promoUses     PromoUse[]
 
   referredBy      Referral? @relation("ReferredUser")
   referralsMade   Referral[] @relation("ReferrerUser")
@@ -73,6 +113,8 @@ model Subscription {
   startedAt DateTime            @default(now()) @map("started_at")
   expiresAt DateTime            @map("expires_at")
   autoRenew Boolean             @default(false) @map("auto_renew")
+  // Когда отправили напоминание об окончании (чтобы не слать повторно).
+  remindedAt DateTime?          @map("reminded_at")
 
   user User @relation(fields: [userId], references: [id])
 
@@ -89,11 +131,19 @@ model Payment {
   status       PaymentStatus @default(pending)
   planPurchased SubscriptionPlan? @map("plan_purchased")
   periodDays   Int           @default(30) @map("period_days")
+  // Полная цена после промокода = amountRub (к оплате провайдером) + balanceUsedRub.
+  balanceUsedRub Decimal     @default(0) @map("balance_used_rub") @db.Decimal(10, 2)
+  discountRub  Decimal       @default(0) @map("discount_rub") @db.Decimal(10, 2)
+  promoCodeId  BigInt?       @map("promo_code_id")
+  starsAmount  Int?          @map("stars_amount")
+  externalId   String?       @map("external_id")
+  autoRenew    Boolean       @default(false) @map("auto_renew")
   createdAt    DateTime      @default(now()) @map("created_at")
   paidAt       DateTime?     @map("paid_at")
 
   user           User             @relation(fields: [userId], references: [id])
   referralPayout ReferralPayout?
+  promoCode      PromoCode?       @relation(fields: [promoCodeId], references: [id])
 
   @@index([userId])
   @@map("payments")
@@ -165,4 +215,122 @@ model Device {
 
   @@unique([userId, hwid])
   @@map("devices")
+}
+
+// Все движения по внутреннему балансу: начисления, списания, возвраты.
+model BalanceTx {
+  id        BigInt        @id @default(autoincrement())
+  userId    BigInt        @map("user_id")
+  amountRub Decimal       @map("amount_rub") @db.Decimal(10, 2)
+  kind      BalanceTxKind
+  note      String?
+  paymentId BigInt?       @map("payment_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("balance_txs")
+}
+
+model PromoCode {
+  id        BigInt    @id @default(autoincrement())
+  code      String    @unique
+  percent   Int
+  maxUses   Int?      @map("max_uses")
+  usedCount Int       @default(0) @map("used_count")
+  expiresAt DateTime? @map("expires_at")
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  uses     PromoUse[]
+  payments Payment[]
+
+  @@map("promo_codes")
+}
+
+model PromoUse {
+  id        BigInt   @id @default(autoincrement())
+  promoId   BigInt   @map("promo_id")
+  userId    BigInt   @map("user_id")
+  paymentId BigInt?  @map("payment_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  promo PromoCode @relation(fields: [promoId], references: [id])
+  user  User      @relation(fields: [userId], references: [id])
+
+  @@unique([promoId, userId])
+  @@map("promo_uses")
+}
+
+model SupportTicket {
+  id           BigInt       @id @default(autoincrement())
+  userId       BigInt       @map("user_id")
+  subject      String
+  status       TicketStatus @default(open)
+  assigneeTgId BigInt?      @map("assignee_tg_id")
+  firstReplyAt DateTime?    @map("first_reply_at")
+  closedAt     DateTime?    @map("closed_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  user     User            @relation(fields: [userId], references: [id])
+  messages TicketMessage[]
+
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id         BigInt   @id @default(autoincrement())
+  ticketId   BigInt   @map("ticket_id")
+  fromStaff  Boolean  @default(false) @map("from_staff")
+  authorTgId BigInt   @map("author_tg_id")
+  text       String
+  internal   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+// Кто из команды что сделал в админ-меню.
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  adminTgId  BigInt   @map("admin_tg_id")
+  action     String
+  target     String?
+  details    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// Настройки, которые меняются из админ-меню (цены, trial, проценты, тексты).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Broadcast {
+  id            BigInt          @id @default(autoincrement())
+  segment       String
+  text          String
+  buttonText    String?         @map("button_text")
+  buttonUrl     String?         @map("button_url")
+  scheduledAt   DateTime        @map("scheduled_at")
+  status        BroadcastStatus @default(scheduled)
+  delivered     Int             @default(0)
+  failed        Int             @default(0)
+  blocked       Int             @default(0)
+  createdByTgId BigInt          @map("created_by_tg_id")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  @@map("broadcasts")
 }

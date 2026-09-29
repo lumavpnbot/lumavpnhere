@@ -19,7 +19,7 @@ export function createStarsProvider(botToken: string): PaymentProvider {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: 'LynkVPN',
+          title: 'LYNK',
           description,
           payload: orderId,
           currency: 'XTR',

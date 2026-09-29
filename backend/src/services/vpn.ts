@@ -3,8 +3,6 @@ import type { PanelProvider } from '@/panel'
 
 const DAY = 24 * 60 * 60 * 1000
 
-export const TRIAL_DAYS = 7
-export const TRIAL_DAYS_REFERRAL = 10
 
 // Лимиты тарифов (ТЗ раздел 5). null = без ограничения.
 export const PLAN_LIMITS: Record<SubscriptionPlan, { devices: number | null; trafficGb: number | null }> = {
@@ -60,15 +58,44 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider) {
     return prisma.subscription.create({ data: { userId: user.id, plan: 'pro', status: 'active', expiresAt } })
   }
 
+  /** Текущая действующая подписка (последняя по сроку). */
+  async function current(userId: bigint) {
+    return prisma.subscription.findFirst({
+      where: { userId, status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    })
+  }
+
+  /**
+   * Подарочные дни (бонус уровня, ручное продление из админки).
+   * Премиум не понижаем до Старта: если сейчас Премиум, продлеваем Премиум.
+   */
+  async function grant(user: User, plan: SubscriptionPlan, days: number) {
+    const cur = await current(user.id)
+    const effective: SubscriptionPlan = cur?.plan === 'pro' ? 'pro' : plan
+    return activate(user, effective, days, 'active')
+  }
+
   return {
     activate,
     ensureAdmin,
+    grant,
+    current,
 
-    async startTrial(user: User, viaReferral: boolean) {
-      if (user.trialUsed) return null
-      const sub = await activate(user, 'start', viaReferral ? TRIAL_DAYS_REFERRAL : TRIAL_DAYS, 'trial')
+    async startTrial(user: User, days: number, force = false) {
+      if (user.trialUsed && !force) return null
+      const sub = await activate(user, 'start', days, 'trial')
       await prisma.user.update({ where: { id: user.id }, data: { trialUsed: true } })
       return sub
+    },
+
+    /** Досрочно завершить подписку (админ) и отключить клиента на панели. */
+    async cancel(user: User) {
+      await prisma.subscription.updateMany({
+        where: { userId: user.id, status: { in: ['trial', 'active'] } },
+        data: { status: 'expired', expiresAt: new Date() },
+      })
+      await panel.disable(Number(user.tgId)).catch(() => undefined)
     },
 
     /** Раз в N минут: отключить на панели тех, у кого подписка закончилась. */

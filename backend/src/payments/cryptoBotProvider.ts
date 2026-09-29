@@ -17,7 +17,7 @@ export function createCryptoBotProvider(apiToken: string): PaymentProvider {
         headers: { 'Content-Type': 'application/json', 'Crypto-Pay-API-Token': apiToken },
         body: JSON.stringify({
           asset: 'USDT',
-          amount: rubToUsdtApprox(amountRub),
+          amount: await rubToUsdt(apiToken, amountRub),
           description,
           payload: orderId,
           expires_in: 900, // 15 минут — таймаут инвойса из ТЗ
@@ -50,9 +50,24 @@ export function createCryptoBotProvider(apiToken: string): PaymentProvider {
   }
 }
 
-// Курс — временная заглушка. В боевом виде брать из курса CryptoBot API
-// (getExchangeRates) с кэшем в Redis на несколько минут.
-function rubToUsdtApprox(amountRub: number): number {
-  const approxRateRubPerUsdt = 95
-  return Number((amountRub / approxRateRubPerUsdt).toFixed(2))
+// Курс USDT/RUB берём у CryptoBot (getExchangeRates), кэш 10 минут.
+// Если API недоступно, используем последний известный курс или 95 ₽.
+let rateCache: { at: number; rubPerUsdt: number } | null = null
+
+async function rubToUsdt(apiToken: string, amountRub: number): Promise<string> {
+  if (!rateCache || Date.now() - rateCache.at > 10 * 60 * 1000) {
+    try {
+      const res = await fetch('https://pay.crypt.bot/api/getExchangeRates', {
+        headers: { 'Crypto-Pay-API-Token': apiToken },
+        signal: AbortSignal.timeout(8000),
+      })
+      const data = (await res.json()) as { ok: boolean; result?: { source: string; target: string; rate: string; is_valid: boolean }[] }
+      const row = data.result?.find((r) => r.source === 'USDT' && r.target === 'RUB' && r.is_valid)
+      if (row) rateCache = { at: Date.now(), rubPerUsdt: Number(row.rate) }
+    } catch {
+      /* оставляем прошлый курс */
+    }
+  }
+  const rate = rateCache?.rubPerUsdt ?? 95
+  return (Math.ceil((amountRub / rate) * 100) / 100).toFixed(2)
 }
