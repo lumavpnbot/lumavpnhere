@@ -89,6 +89,34 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider) {
       return sub
     },
 
+    /**
+     * Пересоздать всех действующих клиентов на панелях с теми же сроками и лимитами.
+     * Нужно после добавления нового инбаунда (например XHTTP): иначе он появится
+     * у пользователя только при следующем продлении.
+     */
+    async syncAll() {
+      const subs = await prisma.subscription.findMany({
+        where: { status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
+        include: { user: true },
+        orderBy: { expiresAt: 'desc' },
+      })
+      const seen = new Set<bigint>()
+      let ok = 0
+      let failed = 0
+      for (const sub of subs) {
+        if (seen.has(sub.userId)) continue
+        seen.add(sub.userId)
+        const limits = PLAN_LIMITS[sub.plan]
+        try {
+          await panel.provision({ tgId: Number(sub.user.tgId), expiresAt: sub.expiresAt, trafficLimitGb: limits.trafficGb, deviceLimit: limits.devices })
+          ok++
+        } catch {
+          failed++
+        }
+      }
+      return { ok, failed }
+    },
+
     /** Досрочно завершить подписку (админ) и отключить клиента на панели. */
     async cancel(user: User) {
       await prisma.subscription.updateMany({

@@ -459,7 +459,14 @@ export function createAdmin(deps: {
       (list.map((s) => `${s.online ? '🟢' : '🔴'} <b>${s.country.toUpperCase()}</b> · ${esc(s.host)} · ${s.pingMs != null ? `${s.pingMs} мс` : 'нет ответа'}`).join('\n') || '<i>Серверы не настроены.</i>') +
       `\n\nВсе страны приходят пользователю в одной подписке, клиент сам переключается на доступный сервер.\n` +
       `Добавить или удалить сервер: переменная <code>H1_PANELS</code> в Railway (токены панелей хранятся только там).`
-    return { text, kb: [[btn('🔄 Обновить', 'adm:srv:refresh'), btn('🧪 Тест панелей', 'adm:srv:test')], back()] }
+    return {
+      text,
+      kb: [
+        [btn('🔄 Обновить', 'adm:srv:refresh'), btn('🧪 Тест панелей', 'adm:srv:test')],
+        [btn('♻️ Обновить клиентов на панелях', 'adm:srv:sync')],
+        back(),
+      ],
+    }
   }
 
   async function promoMenu(): Promise<View> {
@@ -828,6 +835,11 @@ export function createAdmin(deps: {
       }
 
       case 'srv':
+        if (b === 'sync') {
+          const r = await vpn.syncAll()
+          await staff.audit(ctx.tgId, 'panel_sync', undefined, r)
+          return show(ctx, { text: `${header('♻️', 'Клиенты обновлены')}Успешно: <b>${r.ok}</b> · ошибок: ${r.failed}\n\nНовые инбаунды появятся у пользователей после обновления подписки в Happ.`, kb: [back('adm:srv')] })
+        }
         if (b === 'test') {
           const info = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : { info: 'нет данных' }
           const json = JSON.stringify(info, null, 1).slice(0, 3000)

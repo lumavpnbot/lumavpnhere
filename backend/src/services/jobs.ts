@@ -94,6 +94,13 @@ export function createJobs(deps: { prisma: PrismaClient; tg: Telegram; billing: 
     setInterval(safe('ten-minutes', every10), 10 * 60 * 1000)
     setInterval(safe('broadcasts', dueBroadcasts), 60 * 1000)
     setTimeout(safe('startup', every10), 30 * 1000)
+    // После перезапуска (например, добавили инбаунд в H1_PANELS) обновляем клиентов на панелях.
+    if (process.env.SYNC_ON_START !== '0') {
+      setTimeout(
+        safe('panel-sync', async () => log.info({ result: await vpn.syncAll() }, 'panel sync done')),
+        60 * 1000,
+      )
+    }
   }
 
   return { start, sendBroadcast }
