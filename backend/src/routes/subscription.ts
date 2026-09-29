@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
+import { ownerIds } from '@/bot/staff'
+import { PLAN_LIMITS } from '@/services/vpn'
 
 const BRAND = 'LYNK'
 
@@ -113,6 +115,34 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     const user = await prisma.user.findUnique({ where: { subToken: token } })
     if (!user) return reply.code(404).send('not found')
 
+    // Устройство: Happ присылает x-hwid и данные об устройстве при каждом обновлении подписки.
+    const header = (k: string) => {
+      const v = request.headers[k]
+      return (Array.isArray(v) ? v[0] : v)?.toString().slice(0, 120) ?? null
+    }
+    const hwid = header('x-hwid')
+    if (hwid) {
+      const existing = await prisma.device.findUnique({ where: { userId_hwid: { userId: user.id, hwid } } })
+      if (!existing) {
+        const sub = await prisma.subscription.findFirst({
+          where: { userId: user.id, status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
+          orderBy: { expiresAt: 'desc' },
+        })
+        const isOwner = ownerIds(env).has(Number(user.tgId))
+        const limit = sub && !isOwner ? PLAN_LIMITS[sub.plan].devices : null
+        const count = await prisma.device.count({ where: { userId: user.id } })
+        if (limit != null && count >= limit) {
+          reply.header('announce', `base64:${Buffer.from(`Достигнут лимит устройств (${limit}). Удалите старое устройство в приложении LYNK.`).toString('base64')}`)
+          return reply.code(403).send('device limit reached')
+        }
+      }
+      const os = [header('x-device-os'), header('x-ver-os')].filter(Boolean).join(' ') || null
+      const data = { label: header('x-device-model') || os || 'Устройство', platform: os, app: header('user-agent'), lastSeenAt: new Date() }
+      await prisma.device
+        .upsert({ where: { userId_hwid: { userId: user.id, hwid } }, create: { userId: user.id, hwid, ...data }, update: data })
+        .catch(() => undefined)
+    }
+
     const client = await panel.getClient(Number(user.tgId))
     const urls = client?.enabled ? client.upstreamSubscriptionUrls : []
     if (!urls.length) return reply.code(404).send('no active subscription')
@@ -138,6 +168,8 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     reply.header('cache-control', 'no-store')
     // Happ: при открытии проверяет пинг через прокси и сам подключается к самому быстрому серверу.
     // https://www.happ.su/main/dev-docs/app-management
+    // Автообновление подписки в клиенте: каждые 2 часа.
+    reply.header('profile-update-interval', '2')
     reply.header('subscription-autoconnect', 'true')
     reply.header('subscription-autoconnect-type', 'lowestdelay')
     reply.header('subscription-ping-onopen-enabled', 'true')

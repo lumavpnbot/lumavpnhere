@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { PageTitle, TopBar } from '@/components/ui'
-import { DevicesIcon, PlusIcon } from '@/components/icons'
+import { DevicesIcon, MinusIcon, PlusIcon } from '@/components/icons'
 import { useLang, useT } from '@/i18n'
 import { timeAgo } from '@/lib/format'
-import { haptic } from '@/lib/telegram'
+import { confirmDialog, haptic, notify } from '@/lib/telegram'
 import { useAppStore } from '@/store/useAppStore'
 
 export default function DevicesPage() {
@@ -12,6 +12,7 @@ export default function DevicesPage() {
   const navigate = useNavigate()
   const devices = useAppStore((s) => s.devices)
   const limit = useAppStore((s) => s.profile.devicesLimit)
+  const removeDevice = useAppStore((s) => s.removeDevice)
   const full = devices.length >= limit
 
   return (
@@ -40,6 +41,17 @@ export default function DevicesPage() {
                   {d.platform}, {timeAgo(d.lastSeenAt, lang)}
                 </div>
               </div>
+              <button
+                onClick={async () => {
+                  haptic('medium')
+                  if (!(await confirmDialog(t('devices.removeConfirm', { name: d.label })))) return
+                  removeDevice(d.id).catch((e: Error) => notify(e.message))
+                }}
+                className="btn-glass !h-9 !w-9 shrink-0 !px-0"
+                aria-label={t('devices.remove')}
+              >
+                <MinusIcon className="h-4 w-4" />
+              </button>
             </div>
           ))}
         </div>

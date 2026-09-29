@@ -22,7 +22,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       'X-Telegram-Init-Data': getInitData(),
       ...options.headers,
     },
@@ -45,6 +45,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
 }

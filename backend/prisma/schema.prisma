@@ -211,6 +211,10 @@ model Device {
   userId     BigInt   @map("user_id")
   hwid       String
   label      String?
+  // ОС и версия из заголовков Happ (x-device-os, x-ver-os), приложение из user-agent.
+  platform   String?
+  app        String?
+  createdAt  DateTime @default(now()) @map("created_at")
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
 
   user User @relation(fields: [userId], references: [id])

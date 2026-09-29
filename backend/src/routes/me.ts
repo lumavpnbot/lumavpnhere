@@ -52,12 +52,13 @@ export function registerMeRoutes(
     }
 
     const subscription = await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: { expiresAt: 'desc' } })
-    const [client, referrals, referralsActive, earned, txs] = await Promise.all([
+    const [client, referrals, referralsActive, earned, txs, devices] = await Promise.all([
       panel.getClient(Number(tgId)).catch(() => null),
       prisma.user.count({ where: { referrerId: user.id } }),
       prisma.user.count({ where: { referrerId: user.id, payments: { some: { status: 'paid' } } } }),
       prisma.referralPayout.aggregate({ where: { referrerId: user.id, status: { in: ['hold', 'paid'] } }, _sum: { amountRub: true } }),
       prisma.balanceTx.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 30 }),
+      prisma.device.findMany({ where: { userId: user.id }, orderBy: { lastSeenAt: 'desc' } }),
     ])
     const limits = subscription ? PLAN_LIMITS[subscription.plan] : null
     const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
@@ -99,6 +100,12 @@ export function registerMeRoutes(
         subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
         happUrl: active ? happOpenUrl(env, user.subToken) : null,
       },
+      devices: devices.map((d) => ({
+        id: d.id.toString(),
+        label: d.label ?? 'Устройство',
+        platform: [d.platform, d.app?.split(/[\s/]/)[0]].filter(Boolean).join(', ') || 'Happ',
+        lastSeenAt: d.lastSeenAt.toISOString(),
+      })),
       transactions: txs.map((t) => ({
         id: t.id.toString(),
         kind: TX_KIND[t.kind] ?? 'bonus',

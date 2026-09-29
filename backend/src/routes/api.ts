@@ -154,6 +154,16 @@ export function registerApiRoutes(
     return { ticketId: ticket.id.toString() }
   })
 
+  /** Отвязать устройство: освобождает место в лимите. */
+  app.delete('/user/devices/:id', auth, async (request, reply) => {
+    const user = await me(request.tgUser!.tgId)
+    const { id } = request.params as { id: string }
+    if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'Неверный id' })
+    const r = await prisma.device.deleteMany({ where: { id: BigInt(id), userId: user.id } })
+    if (!r.count) return reply.code(404).send({ error: 'Устройство не найдено' })
+    return { ok: true }
+  })
+
   /** Серверы со статусом и пингом (с нашего бэкенда до узла). */
   app.get('/servers', async () => {
     const list = await servers.list()

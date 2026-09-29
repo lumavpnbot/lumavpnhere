@@ -90,6 +90,7 @@ interface AppState {
   refresh: () => Promise<void>
   loadServers: () => Promise<void>
   setAutoRenew: (enabled: boolean) => Promise<void>
+  removeDevice: (id: string) => Promise<void>
   setLang: (lang: Lang) => void
   setPrefs: (patch: Partial<NotificationPrefs>) => void
   setEmail: (email: string) => void
@@ -248,6 +249,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ servers: res.servers ?? [] })
     } catch {
       /* пинг не критичен */
+    }
+  },
+
+  removeDevice: async (id) => {
+    const prev = get().devices
+    set({ devices: prev.filter((d) => d.id !== id) })
+    if (!apiEnabled) return
+    try {
+      await api.del(`/user/devices/${id}`)
+    } catch (err) {
+      set({ devices: prev })
+      throw err
     }
   },
 

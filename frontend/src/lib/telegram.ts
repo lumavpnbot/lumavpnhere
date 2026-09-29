@@ -43,6 +43,7 @@ interface TgWebApp {
   openLink?(url: string): void
   openTelegramLink?(url: string): void
   showAlert?(message: string): void
+  showConfirm?(message: string, cb: (ok: boolean) => void): void
   openInvoice?(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void
   BackButton?: TgBackButton
   HapticFeedback?: {
@@ -164,5 +165,13 @@ export function openInvoice(url: string): Promise<InvoiceStatus> {
       window.open(url, '_blank', 'noopener')
       resolve('pending')
     }
+  })
+}
+
+/** Подтверждение: нативное окно Telegram, вне Telegram обычный confirm. */
+export function confirmDialog(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (inTelegram && tg?.showConfirm) tg.showConfirm(message, resolve)
+    else resolve(window.confirm(message))
   })
 }
