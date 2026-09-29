@@ -13,6 +13,8 @@ const ROUTES = [
   ['balance', '#/balance'],
   ['notifications', '#/account/notifications'],
   ['logins', '#/account/logins'],
+  ['support', '#/support'],
+  ['doc-terms', '#/docs/terms'],
 ]
 
 mkdirSync('shots', { recursive: true })
@@ -29,6 +31,18 @@ for (const lang of ['ru', 'en']) {
     await page.screenshot({ path: `shots/${lang}-${name}.png` })
     if (lang === 'ru') await page.screenshot({ path: `shots/${lang}-${name}-full.png`, fullPage: true })
   }
+
+  // Промокод и QR.
+  await page.goto(BASE + '#/plans')
+  await page.waitForTimeout(700)
+  await page.getByText(lang === 'ru' ? 'Есть промокод?' : 'Have a promo code?').first().click()
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `shots/${lang}-plans-promo-full.png`, fullPage: true })
+  await page.goto(BASE + '#/connect')
+  await page.waitForTimeout(700)
+  await page.getByText(lang === 'ru' ? 'QR-код' : 'QR code', { exact: true }).first().click()
+  await page.waitForTimeout(700)
+  await page.screenshot({ path: `shots/${lang}-connect-qr.png` })
 
   // Шторка выбора языка в настройках аккаунта.
   await page.goto(BASE + '#/account')

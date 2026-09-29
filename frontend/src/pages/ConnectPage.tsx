@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
+import Sheet from '@/components/Sheet'
 import { useNavigate } from 'react-router-dom'
 import { PageTitle, TopBar } from '@/components/ui'
-import { CheckIcon, CopyIcon, DownloadIcon, LinkIcon } from '@/components/icons'
+import { CheckIcon, CopyIcon, DownloadIcon, LinkIcon, QrIcon } from '@/components/icons'
 import { CLIENT_APP } from '@/config'
 import { useT } from '@/i18n'
 import { copyText, haptic, openExternal, tg } from '@/lib/telegram'
@@ -14,6 +16,7 @@ export default function ConnectPage() {
   const subUrl = useAppStore((s) => s.subscription.subscriptionUrl)
   const happUrl = useAppStore((s) => s.subscription.happUrl)
   const [copied, setCopied] = useState(false)
+  const [qr, setQr] = useState(false)
   const isAndroid = tg?.platform === 'android'
   const app = CLIENT_APP.name
 
@@ -62,15 +65,36 @@ export default function ConnectPage() {
               <LinkIcon className="h-5 w-5" />
               {t('connect.open', { app })}
             </button>
-            <button onClick={copy} className="btn-glass mt-2 w-full !h-11 !text-[14px]">
-              {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
-              {copied ? t('common.copied') : t('connect.copyManual')}
-            </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button onClick={copy} className="btn-glass !h-11 !px-3 !text-[14px]">
+                {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
+                {copied ? t('common.copied') : t('connect.copyShort')}
+              </button>
+              <button
+                onClick={() => {
+                  haptic('light')
+                  setQr(true)
+                }}
+                className="btn-glass !h-11 !px-3 !text-[14px]"
+              >
+                <QrIcon className="h-4 w-4" />
+                {t('connect.qr')}
+              </button>
+            </div>
           </Step>
 
           <Step n={3} title={t('connect.s3')} text={t('connect.s3text')} />
         </div>
       )}
+
+      <Sheet open={qr} onClose={() => setQr(false)} title={t('connect.qrTitle')}>
+        <div className="flex flex-col items-center pb-2">
+          <div className="rounded-[28px] bg-white p-5 shadow-[0_20px_60px_-20px_rgba(255,255,255,0.35)]">
+            {subUrl && <QRCodeSVG value={subUrl} size={220} bgColor="#ffffff" fgColor="#0b0b0d" level="M" />}
+          </div>
+          <p className="mt-5 max-w-[290px] text-center text-[14px] leading-snug text-dim">{t('connect.qrText', { app })}</p>
+        </div>
+      </Sheet>
     </>
   )
 }

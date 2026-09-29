@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_LIVE, type CountryCode, type PlanId } from '@/config'
+import { DEFAULT_LIVE, PRICES_RUB, type CountryCode, type PlanId } from '@/config'
 import type { Lang } from '@/i18n'
 import { getTelegramUser } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
@@ -17,6 +17,7 @@ export interface Subscription {
   subscriptionUrl: string | null
   /** https-страница бэкенда, которая открывает happ://add/... во внешнем браузере. */
   happUrl?: string | null
+  autoRenew?: boolean
 }
 
 export interface Device {
@@ -28,7 +29,7 @@ export interface Device {
 
 export interface Transaction {
   id: string
-  kind: 'topup' | 'referral' | 'purchase'
+  kind: 'topup' | 'referral' | 'purchase' | 'bonus' | 'refund'
   amount: number // ₽, со знаком
   plan?: PlanId
   at: string
@@ -46,6 +47,18 @@ export interface Profile {
   referralsCount: number
   referralsActive: number
   referralEarned: number
+  referralLevel: number
+  referralPercent: number
+  referralLink: string | null
+  defaultPromo: string | null
+}
+
+export type Prices = Record<PlanId, Record<'month' | 'year', number>>
+
+export interface ServerInfo {
+  country: CountryCode
+  online: boolean
+  pingMs: number | null
 }
 
 export interface NotificationPrefs {
@@ -64,11 +77,18 @@ interface AppState {
   devices: Device[]
   transactions: Transaction[]
   liveCountries: CountryCode[]
+  servers: ServerInfo[]
+  prices: Prices
+  maintenance: boolean
   prefs: NotificationPrefs
   demo: boolean
   loaded: boolean
   error: string | null
   bootstrap: () => Promise<void>
+  /** Перезагрузить /me (после оплаты, промокода и т.п.). */
+  refresh: () => Promise<void>
+  loadServers: () => Promise<void>
+  setAutoRenew: (enabled: boolean) => Promise<void>
   setLang: (lang: Lang) => void
   setPrefs: (patch: Partial<NotificationPrefs>) => void
   setEmail: (email: string) => void
@@ -117,6 +137,10 @@ function profileFromTelegram(): Profile {
     referralsCount: 0,
     referralsActive: 0,
     referralEarned: 0,
+    referralLevel: 0,
+    referralPercent: 30,
+    referralLink: null,
+    defaultPromo: null,
   }
 }
 
@@ -147,6 +171,9 @@ function demo(now = Date.now()) {
       referralsCount: 3,
       referralsActive: 1,
       referralEarned: 75,
+      referralLevel: 0,
+      referralPercent: 30,
+      referralLink: 'https://t.me/lynkorobot?start=REF_DEMO42',
     } satisfies Partial<Profile>,
   }
 }
@@ -158,6 +185,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   devices: [],
   transactions: [],
   liveCountries: DEFAULT_LIVE,
+  servers: [],
+  prices: PRICES_RUB,
+  maintenance: false,
   prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
   loaded: false,
@@ -165,7 +195,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   bootstrap: async () => {
     if (get().loaded) return
+    await get().refresh()
+    void get().loadServers()
+  },
 
+  refresh: async () => {
     if (!apiEnabled) {
       const d = demo()
       set((s) => ({
@@ -185,6 +219,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         devices?: Device[]
         transactions?: Transaction[]
         countries?: CountryCode[]
+        prices?: Prices
+        maintenance?: boolean
       }>('/me')
       const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
       set((s) => ({
@@ -194,11 +230,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         devices: me.devices ?? [],
         transactions: me.transactions ?? [],
         liveCountries: me.countries?.length ? me.countries : s.liveCountries,
+        prices: me.prices ?? s.prices,
+        maintenance: Boolean(me.maintenance),
         loaded: true,
       }))
     } catch (err) {
       console.warn('[api] /me failed', err)
       set({ loaded: true, error: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  loadServers: async () => {
+    if (!apiEnabled) return
+    try {
+      const res = await api.get<{ servers: ServerInfo[] }>('/servers')
+      set({ servers: res.servers ?? [] })
+    } catch {
+      /* пинг не критичен */
+    }
+  },
+
+  setAutoRenew: async (enabled) => {
+    set((s) => ({ subscription: { ...s.subscription, autoRenew: enabled } }))
+    if (!apiEnabled) return
+    try {
+      const res = await api.post<{ autoRenew: boolean }>('/subscription/autorenew', { enabled })
+      set((s) => ({ subscription: { ...s.subscription, autoRenew: res.autoRenew } }))
+    } catch {
+      set((s) => ({ subscription: { ...s.subscription, autoRenew: !enabled } }))
     }
   },
 

@@ -14,6 +14,8 @@ import AccountPage from '@/pages/AccountPage'
 import BalancePage from '@/pages/BalancePage'
 import NotificationsPage from '@/pages/NotificationsPage'
 import LoginsPage from '@/pages/LoginsPage'
+import SupportPage from '@/pages/SupportPage'
+import DocPage from '@/pages/DocPage'
 
 export default function App() {
   const location = useLocation()
@@ -49,6 +51,8 @@ export default function App() {
             <Route path="/account" element={<AccountPage />} />
             <Route path="/account/notifications" element={<NotificationsPage />} />
             <Route path="/account/logins" element={<LoginsPage />} />
+            <Route path="/support" element={<SupportPage />} />
+            <Route path="/docs/:doc" element={<DocPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </motion.main>

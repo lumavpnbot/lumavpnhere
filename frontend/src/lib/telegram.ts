@@ -43,6 +43,7 @@ interface TgWebApp {
   openLink?(url: string): void
   openTelegramLink?(url: string): void
   showAlert?(message: string): void
+  openInvoice?(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void
   BackButton?: TgBackButton
   HapticFeedback?: {
     impactOccurred(style: HapticImpact): void
@@ -151,4 +152,17 @@ export async function copyText(text: string): Promise<boolean> {
     document.body.removeChild(ta)
     return ok
   }
+}
+
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending'
+
+/** Оплата Telegram Stars: открывает нативное окно счёта (Bot API 6.1+). */
+export function openInvoice(url: string): Promise<InvoiceStatus> {
+  return new Promise((resolve) => {
+    if (inTelegram && tg?.openInvoice) tg.openInvoice(url, (status) => resolve(status))
+    else {
+      window.open(url, '_blank', 'noopener')
+      resolve('pending')
+    }
+  })
 }

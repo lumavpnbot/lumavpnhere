@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import Flag from '@/components/Flag'
 import { LangSheet } from '@/components/LangSwitch'
 import { Avatar, Brand, DemoBadge, Divider, ListRow, PageTitle, Section, TopBar, useDisplayName } from '@/components/ui'
-import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, ShieldIcon } from '@/components/icons'
-import { APP_VERSION, BRAND, DOCS, LINKS, PLANS } from '@/config'
+import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, RefreshIcon, ShieldIcon } from '@/components/icons'
+import { Toggle } from '@/components/controls'
+import { APP_VERSION, BRAND, LINKS, PLANS } from '@/config'
 import { useLang, useT } from '@/i18n'
 import { formatDate } from '@/lib/format'
 import { openExternal } from '@/lib/telegram'
@@ -19,6 +20,8 @@ export default function AccountPage() {
   const name = useDisplayName()
   const [langOpen, setLangOpen] = useState(false)
   const plan = PLANS.find((p) => p.id === subscription.plan)
+  const setAutoRenew = useAppStore((s) => s.setAutoRenew)
+  const hasSub = subscription.status === 'active'
 
   return (
     <>
@@ -73,18 +76,33 @@ export default function AccountPage() {
             hint={profile.email ?? t('account.loginsHint')}
             onClick={() => navigate('/account/logins')}
           />
+          {hasSub && (
+            <>
+              <Divider />
+              <div className="flex items-center gap-3.5 px-4 py-3.5">
+                <span className="tile !h-10 !w-10 !rounded-[13px]">
+                  <RefreshIcon className="h-[18px] w-[18px]" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium">{t('plans.autoRenew')}</span>
+                  <span className="block truncate text-[13px] text-faint">{t('account.autoRenewHint')}</span>
+                </span>
+                <Toggle checked={Boolean(subscription.autoRenew)} onChange={(v) => void setAutoRenew(v)} />
+              </div>
+            </>
+          )}
         </div>
       </Section>
 
       <Section title={t('account.help')}>
         <div className="glass overflow-hidden">
-          <ListRow icon={<ChatIcon className="h-[18px] w-[18px]" />} title={t('home.support')} onClick={() => openExternal(LINKS.support)} />
+          <ListRow icon={<ChatIcon className="h-[18px] w-[18px]" />} title={t('home.support')} hint={t('account.supportHint')} onClick={() => navigate('/support')} />
           <Divider />
           <ListRow icon={<MegaphoneIcon className="h-[18px] w-[18px]" />} title={t('home.channel')} onClick={() => openExternal(LINKS.channel)} />
           <Divider />
-          <ListRow icon={<DocIcon className="h-[18px] w-[18px]" />} title={t('account.terms')} onClick={() => openExternal(DOCS.terms)} />
+          <ListRow icon={<DocIcon className="h-[18px] w-[18px]" />} title={t('account.terms')} onClick={() => navigate('/docs/terms')} />
           <Divider />
-          <ListRow icon={<ShieldIcon className="h-[18px] w-[18px]" />} title={t('account.privacy')} onClick={() => openExternal(DOCS.privacy)} />
+          <ListRow icon={<ShieldIcon className="h-[18px] w-[18px]" />} title={t('account.privacy')} onClick={() => navigate('/docs/privacy')} />
         </div>
       </Section>
 

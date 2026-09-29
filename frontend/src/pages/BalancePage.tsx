@@ -1,43 +1,67 @@
-import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import Sheet from '@/components/Sheet'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageTitle, Section, TopBar } from '@/components/ui'
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, GiftIcon, PlusIcon, WalletIcon } from '@/components/icons'
+import { ArrowDownLeft, ArrowUpRight, GiftIcon, PlansIcon, ReferralsIcon, SparkIcon, WalletIcon } from '@/components/icons'
 import { PLANS } from '@/config'
-import { useLang, useT, type TKey } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 import { formatDate, formatRub } from '@/lib/format'
-import { haptic, notify } from '@/lib/telegram'
-import { apiEnabled } from '@/lib/api'
+import { haptic } from '@/lib/telegram'
+import { api, apiEnabled } from '@/lib/api'
 import { useAppStore, type Transaction } from '@/store/useAppStore'
 
-const AMOUNTS = [150, 300, 500, 1000]
-const METHODS: TKey[] = ['plans.stars', 'plans.crypto']
+interface PaymentRow {
+  id: string
+  plan: 'start' | 'pro' | null
+  periodDays: number
+  method: string
+  amount: number
+  status: 'paid' | 'refunded'
+  at: string
+}
 
+const METHOD_LABEL: Record<string, string> = { stars: 'Telegram Stars', crypto_usdt: 'USDT', crypto_ton: 'TON', balance: 'LYNK', yookassa_card: 'Карта', yookassa_sbp: 'СБП' }
+
+/**
+ * Баланс по ТЗ: пополняется реферальными начислениями, тратится только на подписку.
+ * Вывода на карту или крипту нет.
+ */
 export default function BalancePage() {
   const t = useT()
   const lang = useLang()
+  const navigate = useNavigate()
   const balance = useAppStore((s) => s.profile.balance)
   const transactions = useAppStore((s) => s.transactions)
-  const [topup, setTopup] = useState(false)
-  const [amount, setAmount] = useState(300)
-  const [method, setMethod] = useState<TKey>('plans.stars')
-  const [historyOpen, setHistoryOpen] = useState(true)
+  const [tab, setTab] = useState<'balance' | 'payments'>('balance')
+  const [payments, setPayments] = useState<PaymentRow[]>([])
 
-  const pay = () => {
-    haptic('medium')
-    if (!apiEnabled) {
-      notify(t('common.demoPay'))
-      return
-    }
-    // TODO: POST /balance/topup { amount, method }
+  useEffect(() => {
+    if (!apiEnabled) return
+    api.get<{ payments: PaymentRow[] }>('/payments').then((r) => setPayments(r.payments)).catch(() => undefined)
+  }, [])
+
+  const go = (path: string) => {
+    haptic('light')
+    navigate(path)
+  }
+
+  const planName = (id?: string | null) => {
+    const plan = PLANS.find((p) => p.id === id)
+    return plan ? t(plan.nameKey) : ''
   }
 
   const txTitle = (tx: Transaction) => {
-    if (tx.kind === 'purchase') {
-      const plan = PLANS.find((p) => p.id === tx.plan)
-      return t('tx.purchase', { plan: plan ? t(plan.nameKey) : '' })
+    switch (tx.kind) {
+      case 'purchase':
+        return t('tx.purchase', { plan: planName(tx.plan) })
+      case 'referral':
+        return t('tx.referral')
+      case 'refund':
+        return t('tx.refund')
+      case 'bonus':
+        return t('tx.bonus')
+      default:
+        return t('tx.topup')
     }
-    return tx.kind === 'referral' ? t('tx.referral') : t('tx.topup')
   }
 
   return (
@@ -45,118 +69,101 @@ export default function BalancePage() {
       <TopBar />
       <PageTitle title={t('balance.title')} subtitle={t('balance.subtitle')} />
 
-      <div className="glass glass-hero p-5">
-        <div className="flex items-center gap-4">
+      <div className="glass glass-hero relative overflow-hidden p-5">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-white/[0.07] blur-2xl" />
+        <div className="relative flex items-center gap-4">
           <span className="tile !h-14 !w-14 !rounded-[18px]">
             <WalletIcon className="h-7 w-7" />
           </span>
-          <div className="text-[36px] font-bold leading-none tabular-nums tracking-[-0.03em]">{formatRub(balance)}</div>
+          <div>
+            <div className="text-[13px] text-dim">{t('balance.available')}</div>
+            <div className="text-[36px] font-bold leading-none tabular-nums tracking-[-0.03em]">{formatRub(balance)}</div>
+          </div>
         </div>
-        <button
-          onClick={() => {
-            haptic('light')
-            setTopup(true)
-          }}
-          className="btn-glass-strong mt-5 w-full"
-        >
-          <PlusIcon className="h-5 w-5" />
-          {t('balance.topup')}
-        </button>
+        <div className="relative mt-5 grid grid-cols-2 gap-2">
+          <button onClick={() => go('/plans')} className="btn-glass-strong !h-12 !px-3 !text-[14px]">
+            <PlansIcon className="h-[18px] w-[18px]" />
+            {t('balance.pay')}
+          </button>
+          <button onClick={() => go('/referrals')} className="btn-glass !h-12 !px-3 !text-[14px]">
+            <ReferralsIcon className="h-[18px] w-[18px]" />
+            {t('balance.invite')}
+          </button>
+        </div>
       </div>
 
-      <Section>
-        <div className="glass overflow-hidden">
-          <button
-            onClick={() => {
-              haptic('select')
-              setHistoryOpen((v) => !v)
-            }}
-            className="flex w-full items-center justify-between px-5 py-4 text-left"
-          >
-            <span className="text-[16px] font-semibold">{t('balance.history')}</span>
-            <ChevronDown
-              className="h-5 w-5 text-dim transition-transform duration-300"
-              style={{ transform: historyOpen ? 'rotate(180deg)' : 'none' }}
-            />
-          </button>
-          <AnimatePresence initial={false}>
-            {historyOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="overflow-hidden"
+      <div className="glass mt-3 flex items-start gap-3 px-4 py-3.5">
+        <SparkIcon className="mt-0.5 h-4 w-4 shrink-0 text-dim" />
+        <p className="text-[13px] leading-relaxed text-dim">{t('balance.note')}</p>
+      </div>
+
+      <Section
+        title={t('balance.history')}
+        action={
+          <div className="flex gap-1.5">
+            {(['balance', 'payments'] as const).map((k) => (
+              <button
+                key={k}
+                data-active={tab === k}
+                onClick={() => {
+                  haptic('select')
+                  setTab(k)
+                }}
+                className="chip !h-8 !px-3 !text-[13px]"
               >
-                {transactions.length === 0 ? (
-                  <div className="px-5 pb-5 text-[14px] text-faint">{t('balance.empty')}</div>
-                ) : (
-                  <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
-                    {transactions.map((tx) => (
-                      <div key={tx.id} className="flex items-center gap-3.5 px-4 py-3.5">
-                        <span className="tile !h-10 !w-10 !rounded-[13px]">
-                          {tx.kind === 'purchase' ? (
-                            <ArrowUpRight className="h-[18px] w-[18px]" />
-                          ) : tx.kind === 'referral' ? (
-                            <GiftIcon className="h-[18px] w-[18px]" />
-                          ) : (
-                            <ArrowDownLeft className="h-[18px] w-[18px]" />
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[15px] font-medium">{txTitle(tx)}</div>
-                          <div className="text-[13px] text-faint">{formatDate(tx.at, lang)}</div>
-                        </div>
-                        <span className={`text-[15px] font-semibold tabular-nums ${tx.amount > 0 ? 'text-ok' : 'text-fg'}`}>
-                          {formatRub(tx.amount, true)}
-                        </span>
-                      </div>
-                    ))}
+                {k === 'balance' ? t('balance.tabBalance') : t('balance.tabPayments')}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <div className="glass divide-y divide-white/[0.06] overflow-hidden">
+          {tab === 'balance' ? (
+            transactions.length === 0 ? (
+              <div className="px-5 py-6 text-center text-[14px] text-faint">{t('balance.empty')}</div>
+            ) : (
+              transactions.map((tx) => (
+                <div key={tx.id} className="flex items-center gap-3.5 px-4 py-3.5">
+                  <span className="tile !h-10 !w-10 !rounded-[13px]">
+                    {tx.kind === 'purchase' ? (
+                      <ArrowUpRight className="h-[18px] w-[18px]" />
+                    ) : tx.kind === 'referral' || tx.kind === 'bonus' ? (
+                      <GiftIcon className="h-[18px] w-[18px]" />
+                    ) : (
+                      <ArrowDownLeft className="h-[18px] w-[18px]" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-medium">{txTitle(tx)}</div>
+                    <div className="text-[13px] text-faint">{formatDate(tx.at, lang)}</div>
                   </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <span className={`text-[15px] font-semibold tabular-nums ${tx.amount > 0 ? 'text-ok' : 'text-fg'}`}>{formatRub(tx.amount, true)}</span>
+                </div>
+              ))
+            )
+          ) : payments.length === 0 ? (
+            <div className="px-5 py-6 text-center text-[14px] text-faint">{t('balance.noPayments')}</div>
+          ) : (
+            payments.map((p) => (
+              <div key={p.id} className="flex items-center gap-3.5 px-4 py-3.5">
+                <span className="tile !h-10 !w-10 !rounded-[13px]">
+                  <PlansIcon className="h-[18px] w-[18px]" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium">
+                    {planName(p.plan)}, {p.periodDays >= 365 ? t('plans.twelveMonths') : t('plans.oneMonth')}
+                  </div>
+                  <div className="text-[13px] text-faint">
+                    {formatDate(p.at, lang)} · {METHOD_LABEL[p.method] ?? p.method}
+                    {p.status === 'refunded' ? ` · ${t('balance.refunded')}` : ''}
+                  </div>
+                </div>
+                <span className={`text-[15px] font-semibold tabular-nums ${p.status === 'refunded' ? 'text-faint line-through' : ''}`}>{formatRub(p.amount)}</span>
+              </div>
+            ))
+          )}
         </div>
       </Section>
-
-      <Sheet open={topup} onClose={() => setTopup(false)} title={t('balance.topup')}>
-        <div className="label mb-2.5">{t('balance.amount')}</div>
-        <div className="grid grid-cols-4 gap-2">
-          {AMOUNTS.map((a) => (
-            <button
-              key={a}
-              data-active={amount === a}
-              onClick={() => {
-                haptic('select')
-                setAmount(a)
-              }}
-              className="chip justify-center !px-0 tabular-nums"
-            >
-              {a} ₽
-            </button>
-          ))}
-        </div>
-        <div className="label mb-2.5 mt-5">{t('plans.method')}</div>
-        <div className="flex flex-wrap gap-2">
-          {METHODS.map((m) => (
-            <button
-              key={m}
-              data-active={method === m}
-              onClick={() => {
-                haptic('select')
-                setMethod(m)
-              }}
-              className="chip"
-            >
-              {t(m)}
-            </button>
-          ))}
-        </div>
-        <button onClick={pay} className="btn-glass-strong mt-6 w-full">
-          {t('plans.pay', { amount: formatRub(amount) })}
-        </button>
-      </Sheet>
     </>
   )
 }

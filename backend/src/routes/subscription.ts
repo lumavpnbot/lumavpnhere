@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
 
-const BRAND = 'LynkVPN'
+const BRAND = 'LYNK'
 
 // Заголовки подписки, которые понимают Happ / Hiddify / v2rayTun: трафик и срок, интервал обновления.
 const PASS_HEADERS = ['content-type', 'subscription-userinfo', 'profile-update-interval', 'announce']

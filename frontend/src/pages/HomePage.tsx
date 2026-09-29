@@ -33,6 +33,7 @@ export default function HomePage() {
   }
 
   const liveCodes = useAppStore((s) => s.liveCountries)
+
   const live = COUNTRIES.filter((c) => liveCodes.includes(c))
   const soon = COUNTRIES.filter((c) => !liveCodes.includes(c))
 
@@ -61,7 +62,7 @@ export default function HomePage() {
             <div className="mt-4 flex items-end justify-between gap-4">
               <div className="min-w-0">
                 <div className="truncate text-[34px] font-bold leading-none tracking-[-0.03em]">
-                  {plan ? t(plan.nameKey) : 'LynkVPN'}
+                  {plan ? t(plan.nameKey) : 'LYNK'}
                 </div>
                 {subscription.expiresAt && (
                   <div className="mt-2 text-[14px] text-dim">{t('home.until', { date: formatDate(subscription.expiresAt, lang) })}</div>
@@ -158,7 +159,7 @@ export default function HomePage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-medium">{t(`country.${c}` as TKey)}</div>
                 </div>
-                <StatusPill tone="ok">{t('common.available')}</StatusPill>
+                <PingPill country={c} />
               </div>
             </div>
           ))}
@@ -184,7 +185,7 @@ export default function HomePage() {
             icon={<ChatIcon className="h-[18px] w-[18px]" />}
             title={t('home.support')}
             hint={t('home.supportHint')}
-            onClick={() => openExternal(LINKS.support)}
+            onClick={() => go('/support')}
           />
           <Divider />
           <ListRow
@@ -243,4 +244,14 @@ function InfoCard({
       </span>
     </button>
   )
+}
+
+/** Статус узла: зелёная точка и задержка с нашего сервера до узла (обновляется раз в минуту). */
+function PingPill({ country }: { country: string }) {
+  const t = useT()
+  const info = useAppStore((s) => s.servers.find((x) => x.country === country))
+  if (!info) return <StatusPill tone="ok">{t('common.available')}</StatusPill>
+  if (!info.online) return <StatusPill tone="bad">{t('common.offline')}</StatusPill>
+  const tone = info.pingMs != null && info.pingMs > 250 ? 'warn' : 'ok'
+  return <StatusPill tone={tone}>{info.pingMs != null ? `${info.pingMs} ${t('common.ms')}` : t('common.available')}</StatusPill>
 }
