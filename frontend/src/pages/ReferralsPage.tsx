@@ -154,7 +154,7 @@ export default function ReferralsPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className={`text-[15px] font-medium ${reached ? '' : 'text-dim'}`}>{t(LEVEL_KEYS[i])}</div>
-                  <div className="truncate text-[12.5px] text-faint">
+                  <div className="text-[12.5px] leading-snug text-faint">
                     {i === 0 ? t('friends.fromStart') : t('friends.fromN', { n: l.min })}
                     {l.bonus ? `, ${t('friends.bonus', { days: l.bonus.days, plan: t(l.bonus.plan === 'pro' ? 'plan.pro' : 'plan.start') })}` : ''}
                   </div>

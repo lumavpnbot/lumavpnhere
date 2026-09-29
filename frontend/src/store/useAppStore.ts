@@ -162,8 +162,8 @@ function demo(now = Date.now()) {
     ] satisfies Device[],
     transactions: [
       { id: 't3', kind: 'referral', amount: 75, at: new Date(now - 1 * DAY).toISOString() },
-      { id: 't2', kind: 'purchase', amount: -249, plan: 'pro', at: new Date(now - 7 * DAY).toISOString() },
-      { id: 't1', kind: 'topup', amount: 354, at: new Date(now - 7 * DAY - 3600e3).toISOString() },
+      { id: 't2', kind: 'purchase', amount: -160, plan: 'pro', at: new Date(now - 7 * DAY).toISOString() },
+      { id: 't1', kind: 'topup', amount: 265, at: new Date(now - 7 * DAY - 3600e3).toISOString() },
     ] satisfies Transaction[],
     profile: {
       registeredAt: new Date(now - 7 * DAY).toISOString(),
