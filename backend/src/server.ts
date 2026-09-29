@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { PrismaClient } from '@prisma/client'
+import { ZodError } from 'zod'
 import { registerAuth } from '@/plugins/authenticate'
 import { registerMeRoutes } from '@/routes/me'
 import { registerPaymentRoutes } from '@/routes/payments'
@@ -39,8 +40,17 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, bo
   try {
     done(null, text ? JSON.parse(text) : {})
   } catch (err) {
-    done(err as Error, undefined)
+    done(Object.assign(err as Error, { statusCode: 400 }), undefined)
   }
+})
+// Ошибки валидации (zod) отдаём как 400 с понятным текстом, а не 500.
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof ZodError) {
+    return reply.code(400).send({ error: error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ') })
+  }
+  const status = (error as { statusCode?: number }).statusCode ?? 500
+  if (status >= 500) request.log.error({ err: error }, 'request failed')
+  return reply.code(status).send({ error: status >= 500 ? 'Внутренняя ошибка сервера' : (error as Error).message })
 })
 app.addHook('onError', async (request, _reply, error) => {
   recordError(`${request.method} ${request.url.split('?')[0]}`, error)
@@ -98,7 +108,7 @@ registerSubscriptionRoutes(app, prisma, panel, env)
 registerApiRoutes(app, { prisma, settings, servers, staff, env })
 registerEmailRoutes(app, prisma, env)
 let botSetup = 'ещё не запускалась'
-const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, env })
+const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, env })
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null

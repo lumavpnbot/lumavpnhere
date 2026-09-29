@@ -1150,7 +1150,13 @@ export function createAdmin(deps: {
       }
       case 'bc_button': {
         const [label, url] = v.split('|').map((s) => s.trim())
-        if (!label || !url || !/^https?:\/\//.test(url)) { await retry('Формат: Текст | https://ссылка'); return true }
+        let okUrl = false
+        try {
+          okUrl = new URL(url ?? '').protocol === 'https:'
+        } catch {
+          okUrl = false
+        }
+        if (!label || !url || !okUrl) { await retry('Формат: Текст | https://ссылка'); return true }
         data.buttonText = label
         data.buttonUrl = url
         await previewBroadcast(ctx)

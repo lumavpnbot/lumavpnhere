@@ -19,7 +19,7 @@ export function registerApiRoutes(
   const { prisma, settings, servers, staff, env } = deps
   const auth = { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }
   const me = (tgId: number) => prisma.user.findUniqueOrThrow({ where: { tgId: BigInt(tgId) } })
-  const botUsername = env.BOT_USERNAME || 'lynkorobot'
+  const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
 
   app.get('/subscription/plans', async () => {
     const s = await settings.get()

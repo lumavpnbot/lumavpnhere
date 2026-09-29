@@ -19,14 +19,18 @@ export function registerMeRoutes(
   deps: { prisma: PrismaClient; panel: PanelProvider; vpn: VpnService; users: UserService; settings: SettingsService; env: NodeJS.ProcessEnv },
 ) {
   const { prisma, panel, vpn, users, settings, env } = deps
-  const botUsername = env.BOT_USERNAME || 'lynkorobot'
+  const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
 
   app.get('/me', { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }, async (request, reply) => {
     const { tgId, username, startParam } = request.tgUser!
     const s = await settings.get()
     const isAdmin = ownerIds(env).has(tgId)
 
-    let { user } = await users.ensureUser({ tgId, username, refPayload: startParam })
+    const ensured = await users.ensureUser({ tgId, username, refPayload: startParam })
+    let user = ensured.user
+    if (ensured.attached && !ensured.created && user.trialUsed && !isAdmin) {
+      await vpn.grant(user, 'start', Math.max(0, s.trialDaysReferral - s.trialDays)).catch(() => undefined)
+    }
     if (user.banned) return reply.code(403).send({ error: 'Доступ к сервису ограничен. Напишите в поддержку.' })
     user = await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } })
 

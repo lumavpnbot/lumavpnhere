@@ -42,14 +42,22 @@ export function createUserService(prisma: PrismaClient, onSuspicious: (text: str
     const tgId = BigInt(params.tgId)
     let user = await prisma.user.findUnique({ where: { tgId } })
     let created = false
+    let attached = false
 
     if (!user) {
       const referrer = await referrerFrom(params.refPayload, tgId)
-      user = await prisma.user.create({
-        data: { tgId, username: params.username, referrerId: referrer?.id ?? null, botStarted: Boolean(params.fromBot) },
-      })
-      created = true
-      if (referrer) {
+      try {
+        user = await prisma.user.create({
+          data: { tgId, username: params.username, referrerId: referrer?.id ?? null, botStarted: Boolean(params.fromBot) },
+        })
+        created = true
+      } catch (err) {
+        // /start и первый /me могут прийти одновременно: второй запрос просто берёт уже созданного.
+        if ((err as { code?: string }).code !== 'P2002') throw err
+        user = await prisma.user.findUniqueOrThrow({ where: { tgId } })
+      }
+      if (created && referrer) {
+        attached = true
         await prisma.referral.create({ data: { referrerId: referrer.id, referredId: user.id, levelAtTime: referrer.referralLevel } }).catch(() => undefined)
         // Антифрод из ТЗ: больше 10 приглашений за сутки отправляем на ручную проверку.
         const today = await prisma.referral.count({ where: { referrerId: referrer.id, createdAt: { gte: new Date(Date.now() - DAY) } } })
@@ -57,7 +65,18 @@ export function createUserService(prisma: PrismaClient, onSuspicious: (text: str
           await onSuspicious(`🚩 У ${referrer.username ? '@' + referrer.username : referrer.tgId} больше 10 рефералов за сутки. Проверьте в админ-меню.`)
         }
       }
-    } else {
+    } else if (params.refPayload && !user.referrerId && user.createdAt.getTime() > Date.now() - 2 * DAY) {
+      // Человек успел открыть приложение до перехода по ссылке друга: привязываем,
+      // если аккаунту меньше 2 суток и он ещё ничего не оплачивал.
+      const referrer = await referrerFrom(params.refPayload, tgId)
+      const paid = await prisma.payment.count({ where: { userId: user.id, status: 'paid' } })
+      if (referrer && !paid) {
+        user = await prisma.user.update({ where: { id: user.id }, data: { referrerId: referrer.id } })
+        await prisma.referral.create({ data: { referrerId: referrer.id, referredId: user.id, levelAtTime: referrer.referralLevel } }).catch(() => undefined)
+        attached = true
+      }
+    }
+    if (!created) {
       const patch: { username?: string | null; botStarted?: boolean } = {}
       if (params.username !== user.username) patch.username = params.username
       if (params.fromBot && !user.botStarted) patch.botStarted = true
@@ -65,7 +84,7 @@ export function createUserService(prisma: PrismaClient, onSuspicious: (text: str
     }
 
     user = await ensureRefCode(user)
-    return { user, created }
+    return { user, created, attached }
   }
 
   return { ensureUser }

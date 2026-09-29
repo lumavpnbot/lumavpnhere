@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client'
 import type { BillingService } from '@/services/billing'
 import type { SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
+import type { VpnService } from '@/services/vpn'
 import { recordError } from '@/lib/errors'
 import type { Admin } from './admin'
 import type { Staff } from './staff'
@@ -24,20 +25,24 @@ export function registerBot(
     settings: SettingsService
     billing: BillingService
     users: UserService
+    vpn: VpnService
     env: NodeJS.ProcessEnv
   },
 ) {
-  const { prisma, tg, staff, admin, settings, billing, users, env } = deps
+  const { prisma, tg, staff, admin, settings, billing, users, vpn, env } = deps
   const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
   // Секрет вебхука выводим из токена: Telegram присылает его в заголовке, чужие запросы отбрасываем.
   const secret = crypto.createHash('sha256').update(`lynk-webhook:${deps.botToken}`).digest('hex').slice(0, 48)
 
   async function onStart(msg: TgMessage, payload: string | null) {
     const from = msg.from!
-    const { user, created } = await users.ensureUser({ tgId: from.id, username: from.username ?? null, refPayload: payload, fromBot: true })
+    const { user, created, attached } = await users.ensureUser({ tgId: from.id, username: from.username ?? null, refPayload: payload, fromBot: true })
     if (user.banned) return tg.send(msg.chat.id, 'Доступ к сервису ограничен. Если это ошибка, напишите в поддержку.')
     const s = await settings.get()
-    const extra = created && user.referrerId ? `\n\n🎁 Вы пришли по приглашению друга: пробный период <b>${s.trialDaysReferral} дней</b>.` : ''
+    if (attached && !created && user.trialUsed) {
+      await vpn.grant(user, 'start', Math.max(0, s.trialDaysReferral - s.trialDays)).catch(() => undefined)
+    }
+    const extra = attached && user.referrerId ? `\n\n🎁 Вы пришли по приглашению друга: пробный период <b>${s.trialDaysReferral} дней</b>.` : ''
     await tg.send(msg.chat.id, s.welcomeText + extra, {
       keyboard: [[{ text: '🚀 Открыть LYNK', web_app: { url: webAppUrl } }], [{ text: '💬 Написать в поддержку', callback_data: 'u:support' }]],
     })
