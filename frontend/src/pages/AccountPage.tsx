@@ -124,6 +124,8 @@ export default function AccountPage() {
         <span className="text-[12px] text-faint">
           {BRAND} v{APP_VERSION}
         </span>
+        {/* Надпись для верификации платёжного провайдера Platega. */}
+        <span className="text-[11px] text-faint">Платега верификация</span>
       </div>
 
       <LangSheet open={langOpen} onClose={() => setLangOpen(false)} />
