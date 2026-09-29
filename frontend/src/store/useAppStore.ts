@@ -51,6 +51,7 @@ export interface Profile {
   referralPercent: number
   referralLink: string | null
   defaultPromo: string | null
+  isAdmin?: boolean
 }
 
 export type Prices = Record<PlanId, Record<'month' | 'year', number>>

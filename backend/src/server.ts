@@ -6,6 +6,7 @@ import { registerMeRoutes } from '@/routes/me'
 import { registerPaymentRoutes } from '@/routes/payments'
 import { registerSubscriptionRoutes } from '@/routes/subscription'
 import { registerApiRoutes } from '@/routes/api'
+import { registerEmailRoutes } from '@/routes/email'
 import { createPaymentRegistry } from '@/payments/registry'
 import { createPanelProvider } from '@/panel'
 import { createVpnService } from '@/services/vpn'
@@ -48,8 +49,29 @@ app.addHook('onError', async (request, _reply, error) => {
 await app.register(cors, { origin: true })
 // Первый токен в списке: активный бот (@lynkorobot). Остальные только для входа в Mini App.
 const botTokens = parseBotTokens(env.TELEGRAM_BOT_TOKEN)
-const botToken = botTokens[0] ?? ''
+const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '').toLowerCase()
 registerAuth(app, botTokens)
+
+/**
+ * Какой из токенов управляет ботом: тот, чей username совпадает с BOT_USERNAME.
+ * Так неважно, в каком порядке токены записаны в TELEGRAM_BOT_TOKEN.
+ */
+async function pickBotToken(): Promise<{ token: string; username: string | null }> {
+  let fallback: { token: string; username: string | null } | null = null
+  for (const token of botTokens) {
+    try {
+      const me = await createTelegram(token).call<{ username: string }>('getMe')
+      if (me.username.toLowerCase() === botUsername) return { token, username: me.username }
+      fallback ??= { token, username: me.username }
+    } catch (err) {
+      app.log.warn(`getMe failed for bot ${botIdOf(token)}: ${(err as Error).message}`)
+    }
+  }
+  return fallback ?? { token: botTokens[0] ?? '', username: null }
+}
+const picked = await pickBotToken()
+const botToken = picked.token
+app.log.info(`bot: @${picked.username ?? '?'} (id ${botIdOf(botToken)})`)
 
 const tg = createTelegram(botToken)
 const staff = createStaff(prisma, tg, env)
@@ -74,12 +96,23 @@ registerMeRoutes(app, { prisma, panel, vpn, users, settings, env })
 registerPaymentRoutes(app, prisma, payments, billing)
 registerSubscriptionRoutes(app, prisma, panel, env)
 registerApiRoutes(app, { prisma, settings, servers, staff, env })
+registerEmailRoutes(app, prisma, env)
+let botSetup = 'ещё не запускалась'
 const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, env })
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null
   // botIds: только публичная часть токенов (id бота), чтобы проверить, какой бот подключён.
-  return { ok: true, botIds: botTokens.map(botIdOf), panel: panel.kind, panelInfo }
+  const webhook = tg.enabled
+    ? await tg.call<{ url: string; pending_update_count: number; last_error_message?: string; last_error_date?: number }>('getWebhookInfo').catch((e: Error) => ({ error: e.message }))
+    : null
+  return {
+    ok: true,
+    botIds: botTokens.map(botIdOf),
+    bot: { username: picked.username, id: botIdOf(botToken), setup: botSetup, webhook },
+    panel: panel.kind,
+    panelInfo,
+  }
 })
 
 jobs.start()
@@ -87,7 +120,15 @@ jobs.start()
 const port = Number(env.PORT ?? 3000)
 app
   .listen({ port, host: '0.0.0.0' })
-  .then(() => bot.setup().catch((err) => app.log.error({ err }, 'bot setup failed')))
+  .then(() =>
+    bot.setup().then(
+      (r) => (botSetup = r),
+      (err: Error) => {
+        botSetup = `ошибка: ${err.message}`
+        app.log.error({ err }, 'bot setup failed')
+      },
+    ),
+  )
   .catch((err) => {
     app.log.error(err)
     process.exit(1)

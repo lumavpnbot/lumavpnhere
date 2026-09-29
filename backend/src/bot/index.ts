@@ -110,10 +110,11 @@ export function registerBot(
 
     const text = msg.text ?? ''
     const [command, ...rest] = text.split(' ')
-    if (command === '/start') return onStart(msg, rest[0] ?? null)
-    if (command === '/admin') {
+    const isAdminCmd = command === '/admin' || (command === '/start' && rest[0] === 'admin')
+    if (command === '/start' && !isAdminCmd) return onStart(msg, rest[0] ?? null)
+    if (isAdminCmd) {
       const role = await staff.roleOf(msg.from.id)
-      if (!role) return // обычным пользователям команда не отвечает (ТЗ 6)
+      if (!role) return command === '/start' ? onStart(msg, null) : undefined // обычным пользователям /admin не отвечает (ТЗ 6)
       await users.ensureUser({ tgId: msg.from.id, username: msg.from.username ?? null, fromBot: true })
       const view = admin.home(role)
       return admin.show({ chatId: msg.chat.id, tgId: msg.from.id, role }, view)
@@ -142,8 +143,10 @@ export function registerBot(
   })
 
   /** Регистрируем вебхук и команды. PUBLIC_URL: адрес бэкенда на Railway. */
-  async function setup() {
-    if (!tg.enabled || !env.PUBLIC_URL || env.BOT_DISABLED === '1') return
+  async function setup(): Promise<string> {
+    if (!tg.enabled) return 'нет TELEGRAM_BOT_TOKEN'
+    if (!env.PUBLIC_URL) return 'нет PUBLIC_URL'
+    if (env.BOT_DISABLED === '1') return 'выключено через BOT_DISABLED'
     const url = `${env.PUBLIC_URL.replace(/\/+$/, '')}/tg/webhook`
     await tg.call('setWebhook', {
       url,
@@ -152,7 +155,20 @@ export function registerBot(
       drop_pending_updates: false,
     })
     await tg.call('setMyCommands', { commands: [{ command: 'start', description: 'Открыть LYNK' }] })
+    // Команде показываем /admin в меню команд (только в их личных чатах).
+    for (const id of await staff.staffIds('support')) {
+      await tg
+        .call('setMyCommands', {
+          commands: [
+            { command: 'start', description: 'Открыть LYNK' },
+            { command: 'admin', description: 'Админ-меню' },
+          ],
+          scope: { type: 'chat', chat_id: id },
+        })
+        .catch(() => undefined)
+    }
     app.log.info(`bot webhook set: ${url}`)
+    return `вебхук установлен: ${url}`
   }
 
   return { setup }

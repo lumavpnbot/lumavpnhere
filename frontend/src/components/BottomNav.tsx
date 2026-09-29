@@ -34,10 +34,10 @@ export default function BottomNav() {
         <div className="relative grid grid-cols-5">
           <span
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-1/5 p-0.5 transition-transform duration-300"
+            className="absolute inset-y-0 left-0 w-1/5 transition-transform duration-300"
             style={{ transform: `translateX(${index * 100}%)`, transitionTimingFunction: 'var(--ease)' }}
           >
-            <span className="block h-full w-full rounded-pill bg-white/[0.13]" />
+            <span className="block h-full w-full rounded-[22px] bg-white/[0.13]" />
           </span>
 
           {TABS.map(({ to, label, icon: Icon }, i) => {
@@ -54,7 +54,7 @@ export default function BottomNav() {
               >
                 <Icon className={`h-[22px] w-[22px] transition-colors duration-200 ${active ? 'text-fg' : 'text-faint'}`} />
                 <span
-                  className={`max-w-full truncate px-1 text-[10.5px] font-medium leading-none transition-colors duration-200 ${
+                  className={`max-w-full truncate px-0.5 text-[10px] font-medium leading-none tracking-[-0.01em] transition-colors duration-200 ${
                     active ? 'text-fg' : 'text-faint'
                   }`}
                 >

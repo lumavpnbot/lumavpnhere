@@ -68,6 +68,7 @@ export function registerMeRoutes(
       profile: {
         tgId: Number(user.tgId),
         username: user.username,
+        email: user.email,
         registeredAt: user.createdAt,
         devicesLimit: isAdmin ? 99 : limits?.devices ?? 0,
         isAdmin,

@@ -5,7 +5,7 @@ import { LangSheet } from '@/components/LangSwitch'
 import { Avatar, Brand, DemoBadge, Divider, ListRow, PageTitle, Section, TopBar, useDisplayName } from '@/components/ui'
 import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, RefreshIcon, ShieldIcon } from '@/components/icons'
 import { Toggle } from '@/components/controls'
-import { APP_VERSION, BRAND, LINKS, PLANS } from '@/config'
+import { APP_VERSION, BOT_USERNAME, BRAND, LINKS, PLANS } from '@/config'
 import { useLang, useT } from '@/i18n'
 import { formatDate } from '@/lib/format'
 import { openExternal } from '@/lib/telegram'
@@ -93,6 +93,19 @@ export default function AccountPage() {
           )}
         </div>
       </Section>
+
+      {profile.isAdmin && (
+        <Section title={t('account.team')}>
+          <div className="glass overflow-hidden">
+            <ListRow
+              icon={<ShieldIcon className="h-[18px] w-[18px]" />}
+              title={t('account.admin')}
+              hint={t('account.adminHint')}
+              onClick={() => openExternal(`https://t.me/${BOT_USERNAME}?start=admin`)}
+            />
+          </div>
+        </Section>
+      )}
 
       <Section title={t('account.help')}>
         <div className="glass overflow-hidden">

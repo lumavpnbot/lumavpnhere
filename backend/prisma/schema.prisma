@@ -84,6 +84,8 @@ model User {
   // Персональный код в реферальной ссылке t.me/lynkorobot?start=REF_<refCode>.
   refCode       String?  @unique @map("ref_code")
   role          UserRole @default(user)
+  // Подтверждённая почта (вход без Telegram, чеки).
+  email         String?  @unique
   balanceRub    Decimal  @default(0) @map("balance_rub") @db.Decimal(10, 2)
   banned        Boolean  @default(false)
   // Писал ли пользователь боту: без этого Telegram не даст отправить ему сообщение.
@@ -333,4 +335,19 @@ model Broadcast {
   createdAt     DateTime        @default(now()) @map("created_at")
 
   @@map("broadcasts")
+}
+
+// Одноразовые коды для привязки почты. Храним только хэш кода.
+model EmailCode {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  email     String
+  codeHash  String   @map("code_hash")
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("email_codes")
 }

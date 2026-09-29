@@ -4,6 +4,7 @@ import { PageTitle, TopBar } from '@/components/ui'
 import { MailIcon, TelegramIcon } from '@/components/icons'
 import { useT } from '@/i18n'
 import { haptic, notify } from '@/lib/telegram'
+import { api, apiEnabled } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -16,26 +17,45 @@ export default function LoginsPage() {
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmailInput] = useState('')
   const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const openSheet = () => {
     haptic('light')
     setStep('email')
     setCode('')
+    setError(null)
     setOpen(true)
   }
 
-  // TODO: POST /auth/email/start { email } → письмо с кодом; POST /auth/email/verify { email, code }.
-  const sendCode = () => {
-    haptic('medium')
-    setStep('code')
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+    } catch (err) {
+      haptic('error')
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const confirm = () => {
-    haptic('success')
-    setEmail(email.trim())
-    setOpen(false)
-    notify(t('logins.done'))
-  }
+  const sendCode = () =>
+    run(async () => {
+      haptic('medium')
+      if (apiEnabled) await api.post('/auth/email/start', { email: email.trim() })
+      setStep('code')
+    })
+
+  const confirm = () =>
+    run(async () => {
+      if (apiEnabled) await api.post('/auth/email/verify', { email: email.trim(), code })
+      haptic('success')
+      setEmail(email.trim().toLowerCase())
+      setOpen(false)
+      notify(t('logins.done'))
+    })
 
   return (
     <>
@@ -91,8 +111,9 @@ export default function LoginsPage() {
               onChange={(e) => setEmailInput(e.target.value)}
               className="field"
             />
-            <button onClick={sendCode} disabled={!EMAIL_RE.test(email.trim())} className="btn-glass-strong mt-4 w-full">
-              {t('logins.sendCode')}
+            {error && <p className="mt-3 px-1 text-[13px] text-bad">{error}</p>}
+            <button onClick={sendCode} disabled={busy || !EMAIL_RE.test(email.trim())} className="btn-glass-strong mt-4 w-full">
+              {busy ? <Spinner /> : t('logins.sendCode')}
             </button>
           </>
         ) : (
@@ -107,12 +128,20 @@ export default function LoginsPage() {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               className="field text-center !text-[22px] font-semibold tracking-[0.4em]"
             />
-            <button onClick={confirm} disabled={code.length !== 6} className="btn-glass-strong mt-4 w-full">
-              {t('logins.confirm')}
+            {error && <p className="mt-3 px-1 text-[13px] text-bad">{error}</p>}
+            <button onClick={confirm} disabled={busy || code.length !== 6} className="btn-glass-strong mt-4 w-full">
+              {busy ? <Spinner /> : t('logins.confirm')}
+            </button>
+            <button onClick={sendCode} disabled={busy} className="mt-3 w-full text-center text-[13px] text-faint">
+              {t('logins.resend')}
             </button>
           </>
         )}
       </Sheet>
     </>
   )
+}
+
+function Spinner() {
+  return <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 }
