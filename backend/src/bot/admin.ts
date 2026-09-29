@@ -304,6 +304,7 @@ export function createAdmin(deps: {
     }
     if (role === 'owner') {
       kb.push([btn('+ Баланс', `adm:u:${id}:bal:add`), btn('− Баланс', `adm:u:${id}:bal:sub`), btn('Отменить подписку', `adm:u:${id}:cancel`)])
+      kb.push([btn('🧹 Обнулить рефералку', `adm:u:${id}:refreset`)])
     }
     kb.push([btn('🕓 История', `adm:u:${id}:hist`)])
     kb.push(back('adm:users'))
@@ -417,6 +418,8 @@ export function createAdmin(deps: {
         [btn('⏳ Начисления на холде', 'adm:rh:0')],
         [btn('🏆 Топ-30', 'adm:ref:top'), btn('⚡ Снять все холды', 'adm:ref:release')],
         [btn('🎉 Бонус активным', 'adm:ref:bonus'), btn('% по уровням', 'adm:set:pct')],
+        [btn('🧹 Обнулить рефералку у пользователя', 'adm:ref:resetone')],
+        [btn('🧹 Обнулить рефералку у всех', 'adm:ref:resetall')],
         back(),
       ],
     }
@@ -720,6 +723,24 @@ export function createAdmin(deps: {
         if (c === 'msg') return void (await ask(ctx, 'user_msg', 'Текст сообщения пользователю (можно HTML).', { userId: b }, `adm:u:${b}`))
         if (ctx.role !== 'owner') return 'Только для владельца'
         if (c === 'bal') return void (await ask(ctx, 'user_bal', d === 'add' ? 'Сколько рублей начислить?' : 'Сколько рублей списать?', { userId: b, sign: d === 'add' ? 1 : -1 }, `adm:u:${b}`))
+        if (c === 'refreset')
+          return show(ctx, {
+            text:
+              `${header('🧹', 'Обнулить рефералку', u.username ? '@' + esc(u.username) : String(u.tgId))}` +
+              `Все приглашённые отвяжутся от пользователя, начисления на холде отменятся, уровень станет «Базовый».\n\n` +
+              `Можно также списать уже зачисленные реферальные бонусы с баланса.`,
+            kb: [
+              [btn('Обнулить', `adm:u:${b}:refresetok:0`)],
+              [btn('Обнулить и списать бонусы', `adm:u:${b}:refresetok:1`)],
+              [btn('Отмена', `adm:u:${b}`)],
+            ],
+          })
+        if (c === 'refresetok') {
+          const r = await billing.resetReferrals(id, d === '1')
+          await staff.audit(ctx.tgId, 'referral_reset', target, r)
+          await show(ctx, await userCard(id, ctx.role))
+          return `Отвязано ${r.unlinked}, холдов отменено ${r.holdsCancelled}${r.clawback ? `, списано ${r.clawback} ₽` : ''}`
+        }
         if (c === 'cancel') return show(ctx, confirm('Подписка будет завершена сейчас, а неиспользованные дни последней оплаты вернутся на баланс.', `adm:u:${b}:cancelok`, `adm:u:${b}`))
         if (c === 'cancelok') {
           const cur = await vpn.current(u.id)
@@ -812,6 +833,31 @@ export function createAdmin(deps: {
           await staff.audit(ctx.tgId, 'release_holds', undefined, { count: n })
           await show(ctx, await referralsMenu())
           return `Зачислено: ${n}`
+        }
+        if (b === 'resetone') return void (await ask(ctx, 'ref_reset_find', 'Чью рефералку обнулить? Введите tg_id или @username.', {}, 'adm:ref'))
+        if (b === 'resetall')
+          return show(ctx, {
+            text: `${header('🧹', 'Обнулить рефералку у всех')}У всех пользователей отвяжутся приглашённые, начисления на холде отменятся, уровни сбросятся. Действие нельзя отменить.`,
+            kb: [[btn('Обнулить у всех', 'adm:ref:resetallok:0')], [btn('Обнулить у всех и списать бонусы', 'adm:ref:resetallok:1')], [btn('Отмена', 'adm:ref')]],
+          })
+        if (b === 'resetallok') {
+          const referrers = await prisma.user.findMany({
+            where: { OR: [{ referralsMade: { some: {} } }, { payoutsReceived: { some: {} } }, { referralLevel: { gt: 0 } }] },
+            select: { id: true },
+          })
+          const total = { users: 0, unlinked: 0, holdsCancelled: 0, clawback: 0 }
+          for (const r of referrers) {
+            const res = await billing.resetReferrals(r.id, c === '1')
+            total.users++
+            total.unlinked += res.unlinked
+            total.holdsCancelled += res.holdsCancelled
+            total.clawback += res.clawback
+          }
+          await staff.audit(ctx.tgId, 'referral_reset_all', undefined, total)
+          return show(ctx, {
+            text: `${header('🧹', 'Рефералка обнулена')}Рефереров: <b>${total.users}</b>\nОтвязано приглашённых: ${total.unlinked}\nОтменено холдов: ${total.holdsCancelled}\nСписано бонусов: ${rub(total.clawback)}`,
+            kb: [back('adm:ref')],
+          })
         }
         if (b === 'bonus') return void (await ask(ctx, 'ref_bonus', 'Сколько рублей начислить каждому рефереру, у которого есть хотя бы один оплативший друг?', {}, 'adm:ref'))
         if (b === 'bonusok') {
@@ -1069,6 +1115,16 @@ export function createAdmin(deps: {
         const pays = await prisma.payment.findMany({ where: { userId: u.id }, orderBy: { createdAt: 'desc' }, take: 10 })
         await tg.send(ctx.chatId, `${header('🔎', `Платежи ${u.username ? '@' + esc(u.username) : u.tgId}`)}${pays.length ? '' : '<i>нет платежей</i>'}`, {
           keyboard: [...pays.map((p) => [btn(`${p.status} · ${rub(p.amountRub)} · ${day(p.createdAt)}`, `adm:p:${p.id}`)]), back('adm:pay:all:0')],
+        })
+        return true
+      }
+      case 'ref_reset_find': {
+        const u = await findUser(v)
+        if (!u) { await retry('Пользователь не найден'); return true }
+        done()
+        await show({ ...ctx, messageId: undefined }, {
+          text: `${header('🧹', 'Обнулить рефералку', u.username ? '@' + esc(u.username) : String(u.tgId))}Все приглашённые отвяжутся, начисления на холде отменятся, уровень станет «Базовый».`,
+          kb: [[btn('Обнулить', `adm:u:${u.id}:refresetok:0`)], [btn('Обнулить и списать бонусы', `adm:u:${u.id}:refresetok:1`)], [btn('Отмена', 'adm:ref')]],
         })
         return true
       }

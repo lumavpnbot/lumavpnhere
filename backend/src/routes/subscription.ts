@@ -136,6 +136,14 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     reply.header('profile-title', `base64:${Buffer.from(BRAND).toString('base64')}`)
     if (env.SUPPORT_URL) reply.header('support-url', env.SUPPORT_URL)
     reply.header('cache-control', 'no-store')
+    // Happ: при открытии проверяет пинг через прокси и сам подключается к самому быстрому серверу.
+    // https://www.happ.su/main/dev-docs/app-management
+    reply.header('subscription-autoconnect', 'true')
+    reply.header('subscription-autoconnect-type', 'lowestdelay')
+    reply.header('subscription-ping-onopen-enabled', 'true')
+    reply.header('ping-type', 'proxy-head')
+    reply.header('check-url-via-proxy', 'https://cp.cloudflare.com/generate_204')
+    reply.header('subscriptions-sort-type', 'ping')
 
     // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
     // другие страны. Убираем повторы по ссылке без названия (#…).

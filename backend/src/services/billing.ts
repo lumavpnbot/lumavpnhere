@@ -284,7 +284,32 @@ export function createBillingService(
     return renewed
   }
 
-  return { quote, createOrder, completePayment, refundToBalance, releaseHolds, adjustBalance, autoRenewFromBalance, updateReferrerLevel }
+  /**
+   * Обнуление рефералки (накрутка): отвязать приглашённых, отменить начисления на холде,
+   * сбросить уровень. withBalance: ещё и списать уже зачисленные реферальные бонусы.
+   */
+  async function resetReferrals(referrerId: bigint, withBalance: boolean) {
+    return prisma.$transaction(async (tx) => {
+      const unlinked = await tx.user.updateMany({ where: { referrerId }, data: { referrerId: null } })
+      await tx.referral.deleteMany({ where: { referrerId } })
+      const holds = await tx.referralPayout.updateMany({ where: { referrerId, status: 'hold' }, data: { status: 'cancelled' } })
+      let clawback = 0
+      if (withBalance) {
+        const paid = await tx.referralPayout.aggregate({ where: { referrerId, status: 'paid' }, _sum: { amountRub: true } })
+        const user = await tx.user.findUniqueOrThrow({ where: { id: referrerId } })
+        clawback = Math.min(Number(user.balanceRub), Number(paid._sum.amountRub ?? 0))
+        await tx.referralPayout.updateMany({ where: { referrerId, status: 'paid' }, data: { status: 'cancelled' } })
+        if (clawback > 0) {
+          await tx.user.update({ where: { id: referrerId }, data: { balanceRub: { decrement: clawback } } })
+          await tx.balanceTx.create({ data: { userId: referrerId, amountRub: -clawback, kind: 'admin', note: 'Обнуление рефералки' } })
+        }
+      }
+      await tx.user.update({ where: { id: referrerId }, data: { referralLevel: 0 } })
+      return { unlinked: unlinked.count, holdsCancelled: holds.count, clawback }
+    })
+  }
+
+  return { resetReferrals, quote, createOrder, completePayment, refundToBalance, releaseHolds, adjustBalance, autoRenewFromBalance, updateReferrerLevel }
 }
 
 export type BillingService = ReturnType<typeof createBillingService>
