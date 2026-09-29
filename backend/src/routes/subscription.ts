@@ -64,7 +64,17 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     if (single) return reply.send(ok[0].body)
 
     // Несколько стран: склеиваем списки ссылок.
-    const links = ok.flatMap((r) => decodeList(r.body.toString('utf8')))
+    // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
+    // другие страны. Убираем повторы по ссылке без названия (#…).
+    const seen = new Set<string>()
+    const links = ok
+      .flatMap((r) => decodeList(r.body.toString('utf8')))
+      .filter((l) => {
+        const key = l.split('#')[0]
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
     reply.header('content-type', 'text/plain; charset=utf-8')
     return reply.send(Buffer.from(links.join('\n')).toString('base64'))
   })
