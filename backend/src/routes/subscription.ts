@@ -27,7 +27,7 @@ const COUNTRY_NAMES: Record<string, string> = {
   gb: 'Великобритания', tr: 'Турция', kz: 'Казахстан', jp: 'Япония', fr: 'Франция', ee: 'Эстония', lv: 'Латвия',
 }
 const COUNTRY_ORDER = ['fi', 'nl', 'de', 'us', 'ru', 'se', 'pl', 'gb', 'tr', 'kz', 'jp']
-const PROTO_ORDER = ['TCP', 'XHTTP', 'Hysteria', 'WS', 'gRPC']
+const PROTO_ORDER = ['TCP 443', 'XHTTP', 'gRPC', 'TCP', 'Hysteria', 'WS']
 // Хосты H1: fi3.h1cloud.net → fi, msk2.h1cloud.net → ru.
 const HOST_ALIASES: Record<string, string> = { msk: 'ru', spb: 'ru', ams: 'nl', fra: 'de' }
 
@@ -43,11 +43,15 @@ function countryFromFlag(name: string): string | null {
   return null
 }
 
+// Ищем страну в любой части адреса: fi3.h1cloud.net, 82fdf9df.fi3.h1clayd.click (свой домен 443).
 function countryFromHost(host: string): string | null {
-  const m = /^([a-z]{2,3})\d*\./i.exec(host)
-  if (!m) return null
-  const k = m[1].toLowerCase()
-  return HOST_ALIASES[k] ?? (k.length === 2 ? k : null)
+  for (const label of host.toLowerCase().split('.')) {
+    const m = /^([a-z]{2,3})\d*$/.exec(label)
+    if (!m) continue
+    const k = HOST_ALIASES[m[1]] ?? m[1]
+    if (COUNTRY_NAMES[k]) return k
+  }
+  return null
 }
 
 function protoOf(link: string, params: URLSearchParams): string {
@@ -81,7 +85,14 @@ function renameLinks(links: string[]): string[] {
       /* vmess:// и прочие base64-форматы: имя оставляем */
     }
     const country = countryFromFlag(oldName) ?? countryFromHost(host)
-    const proto = protoOf(body, params)
+    let proto = protoOf(body, params)
+    // Подключение на 443 со своим доменом (Selfsteal) отличаем от обычного TCP.
+    try {
+      const port = new URL(body).port
+      if (proto === 'TCP' && (port === '443' || port === '8443')) proto = 'TCP 443'
+    } catch {
+      /* без порта */
+    }
     return { body, oldName, country, proto }
   })
   rows.sort((a, b) => {

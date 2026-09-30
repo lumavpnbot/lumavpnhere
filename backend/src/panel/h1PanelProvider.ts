@@ -92,7 +92,14 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     if (resolvedInbounds) return resolvedInbounds
     const all = await listInbounds()
     const tags = cfg.inboundTags ?? []
-    const picked = tags.length ? all.filter((i) => tags.includes(String(i.tag ?? i.remark ?? ''))) : all
+    // Теги сравниваем без учёта регистра, и по tag, и по названию (remark).
+    // «selfsteal*» в конце со звёздочкой = все инбаунды, чьё имя начинается с selfsteal.
+    const wanted = tags.map((t) => t.toLowerCase())
+    const matches = (name: string) => {
+      const n = name.toLowerCase()
+      return wanted.some((w) => (w.endsWith('*') ? n.startsWith(w.slice(0, -1)) : n === w))
+    }
+    const picked = tags.length ? all.filter((i) => matches(String(i.tag ?? '')) || matches(String(i.remark ?? ''))) : all
     const ids = picked.map((i) => String(i.id ?? '')).filter(Boolean)
     if (!ids.length) throw new Error(`H1: не нашёл инбаунды ${tags.join(',') || '(любые)'} в /api/inbounds`)
     resolvedInbounds = ids
