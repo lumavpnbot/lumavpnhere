@@ -17,3 +17,21 @@ export function recentErrors(hours = 24): ErrorEntry[] {
   const since = Date.now() - hours * 3600_000
   return buffer.filter((e) => e.at.getTime() >= since).reverse()
 }
+
+/** Последние запросы подписки (для диагностики устройств в админ-меню). */
+export interface SubRequest {
+  at: Date
+  tgId: number
+  ua: string
+  hwid: boolean
+  os: string | null
+  model: string | null
+}
+const subRequests: SubRequest[] = []
+export function recordSubRequest(r: SubRequest) {
+  subRequests.push(r)
+  if (subRequests.length > 50) subRequests.shift()
+}
+export function recentSubRequests(): SubRequest[] {
+  return [...subRequests].reverse()
+}

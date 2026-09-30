@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
+import { recordError, recordSubRequest } from '@/lib/errors'
 import { PLAN_LIMITS } from '@/services/vpn'
 
 const BRAND = 'LYNK'
@@ -120,7 +121,11 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
       const v = request.headers[k]
       return (Array.isArray(v) ? v[0] : v)?.toString().slice(0, 120) ?? null
     }
-    const hwid = header('x-hwid')
+    const ua = header('user-agent') ?? ''
+    // Если клиент не прислал HWID (старые версии, другие приложения), узнаём устройство по user-agent.
+    const isClientApp = /happ|v2ray|hiddify|streisand|v2box|nekobox|sing-?box|clash|karing|shadowrocket|foxray/i.test(ua)
+    const hwid = header('x-hwid') ?? (isClientApp ? `ua:${ua.slice(0, 100)}` : null)
+    recordSubRequest({ at: new Date(), tgId: Number(user.tgId), ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
     if (hwid) {
       const existing = await prisma.device.findUnique({ where: { userId_hwid: { userId: user.id, hwid } } })
       if (!existing) {
@@ -136,11 +141,13 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
           return reply.code(403).send('device limit reached')
         }
       }
-      const os = [header('x-device-os'), header('x-ver-os')].filter(Boolean).join(' ') || null
-      const data = { label: header('x-device-model') || os || 'Устройство', platform: os, app: header('user-agent'), lastSeenAt: new Date() }
+      const uaApp = ua.split(/[\s/]/)[0] || null
+      const uaOs = /ios|iphone|ipad/i.test(ua) ? 'iOS' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Windows' : /mac/i.test(ua) ? 'macOS' : /linux/i.test(ua) ? 'Linux' : null
+      const os = [header('x-device-os') ?? uaOs, header('x-ver-os')].filter(Boolean).join(' ') || null
+      const data = { label: header('x-device-model') || os || uaApp || 'Устройство', platform: os, app: ua || null, lastSeenAt: new Date() }
       await prisma.device
         .upsert({ where: { userId_hwid: { userId: user.id, hwid } }, create: { userId: user.id, hwid, ...data }, update: data })
-        .catch(() => undefined)
+        .catch((err) => recordError('device upsert', err))
     }
 
     const client = await panel.getClient(Number(user.tgId))

@@ -4,7 +4,7 @@ import type { BillingService } from '@/services/billing'
 import type { ServerStatusService } from '@/services/servers'
 import { LEVEL_NAMES, type PaidPlan, type Period, type SettingsService } from '@/services/settings'
 import type { VpnService } from '@/services/vpn'
-import { recentErrors } from '@/lib/errors'
+import { recentErrors, recentSubRequests } from '@/lib/errors'
 import { can, type Staff, type StaffRole } from './staff'
 import { esc, type InlineKeyboard, type Telegram } from './tg'
 
@@ -616,6 +616,11 @@ export function createAdmin(deps: {
     if (kind === 'hooks') {
       const rows = await prisma.paymentLog.findMany({ orderBy: { createdAt: 'desc' }, take: 15 })
       body = rows.map((r) => `${dt(r.createdAt)} · <code>${esc(r.orderId)}</code> · ${esc(r.event)}`).join('\n')
+    } else if (kind === 'subs') {
+      body = recentSubRequests()
+        .slice(0, 15)
+        .map((r) => `${dt(r.at)} · <code>${r.tgId}</code> · ${r.hwid ? '🟢 HWID' : '⚪️ без HWID'}${r.model ? ` · ${esc(r.model)}` : ''}${r.os ? ` · ${esc(r.os)}` : ''}\n<code>${esc(r.ua).slice(0, 80)}</code>`)
+        .join('\n')
     } else if (kind === 'errors') {
       body = recentErrors(24)
         .slice(0, 15)
@@ -625,11 +630,12 @@ export function createAdmin(deps: {
       const rows = await prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 15 })
       body = rows.map((r) => `${dt(r.createdAt)} · ${r.adminTgId} · <b>${esc(r.action)}</b>${r.target ? ` · ${esc(r.target)}` : ''}`).join('\n')
     }
-    const title = kind === 'hooks' ? 'Логи вебхуков' : kind === 'errors' ? 'Ошибки бэкенда за 24 ч' : 'Audit log'
+    const title = kind === 'subs' ? 'Запросы подписки (устройства)' : kind === 'hooks' ? 'Логи вебхуков' : kind === 'errors' ? 'Ошибки бэкенда за 24 ч' : 'Audit log'
     return {
       text: `${header('📋', title)}${body || '<i>Пусто.</i>'}`,
       kb: [
         [btn(kind === 'audit' ? '• Audit' : 'Audit', 'adm:logs:audit'), btn(kind === 'hooks' ? '• Вебхуки' : 'Вебхуки', 'adm:logs:hooks'), btn(kind === 'errors' ? '• Ошибки' : 'Ошибки', 'adm:logs:errors')],
+        [btn(kind === 'subs' ? '• Подписки' : 'Подписки', 'adm:logs:subs')],
         [btn('🔎 Поиск', 'adm:logs:search'), btn('📄 Экспорт', 'adm:logs:csv')],
         back(),
       ],
