@@ -139,14 +139,18 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     recordSubRequest({ at: new Date(), tgId: Number(user.tgId), ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
     if (hwid) {
       const existing = await prisma.device.findUnique({ where: { userId_hwid: { userId: user.id, hwid } } })
-      if (!existing) {
+      // Лимит устройств блокирует подписку только если явно включён (DEVICE_LIMIT_ENFORCE=1)
+      // и только по настоящему HWID: user-agent у одного телефона бывает разным, и
+      // блокировка по нему отрезала людям подписку.
+      const enforce = env.DEVICE_LIMIT_ENFORCE === '1' && !hwid.startsWith('ua:')
+      if (!existing && enforce) {
         const sub = await prisma.subscription.findFirst({
           where: { userId: user.id, status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
           orderBy: { expiresAt: 'desc' },
         })
         const isOwner = ownerIds(env).has(Number(user.tgId))
         const limit = sub && !isOwner ? PLAN_LIMITS[sub.plan].devices : null
-        const count = await prisma.device.count({ where: { userId: user.id } })
+        const count = await prisma.device.count({ where: { userId: user.id, NOT: { hwid: { startsWith: 'ua:' } } } })
         if (limit != null && count >= limit) {
           reply.header('announce', `base64:${Buffer.from(`Достигнут лимит устройств (${limit}). Удалите старое устройство в приложении LYNK.`).toString('base64')}`)
           return reply.code(403).send('device limit reached')
