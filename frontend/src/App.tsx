@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import AmbientBackground from '@/components/AmbientBackground'
 import BottomNav from '@/components/BottomNav'
 import { TAB_PATHS, useTelegramBackButton } from '@/lib/navigation'
+import { onAppVisible } from '@/lib/telegram'
 import { useAppStore } from '@/store/useAppStore'
 import HomePage from '@/pages/HomePage'
 import PlansPage from '@/pages/PlansPage'
@@ -16,10 +17,15 @@ import NotificationsPage from '@/pages/NotificationsPage'
 import LoginsPage from '@/pages/LoginsPage'
 import SupportPage from '@/pages/SupportPage'
 import DocPage from '@/pages/DocPage'
+import StatusPage from '@/pages/StatusPage'
+import TransferPage from '@/pages/TransferPage'
+import AchievementsPage from '@/pages/AchievementsPage'
 
 export default function App() {
   const location = useLocation()
   const bootstrap = useAppStore((s) => s.bootstrap)
+  const refresh = useAppStore((s) => s.refresh)
+  const loadStatus = useAppStore((s) => s.loadStatus)
   const nested = !TAB_PATHS.includes(location.pathname)
 
   useTelegramBackButton()
@@ -27,6 +33,26 @@ export default function App() {
   useEffect(() => {
     void bootstrap()
   }, [bootstrap])
+
+  // Подписка и баланс меняются вне приложения (оплата в CryptoBot, продление из админки,
+  // бонусы). Раньше /me грузился один раз при запуске, и данные «не обновлялись» до перезапуска.
+  useEffect(() => {
+    let last = Date.now()
+    const update = () => {
+      if (Date.now() - last < 5_000) return
+      last = Date.now()
+      void refresh()
+      void loadStatus()
+    }
+    const off = onAppVisible(update)
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') update()
+    }, 60_000)
+    return () => {
+      off()
+      window.clearInterval(timer)
+    }
+  }, [refresh, loadStatus])
 
   return (
     <>
@@ -53,6 +79,9 @@ export default function App() {
             <Route path="/account/logins" element={<LoginsPage />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/docs/:doc" element={<DocPage />} />
+            <Route path="/status" element={<StatusPage />} />
+            <Route path="/account/transfer" element={<TransferPage />} />
+            <Route path="/account/achievements" element={<AchievementsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </motion.main>

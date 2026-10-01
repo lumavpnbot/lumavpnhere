@@ -75,7 +75,18 @@ export function registerPaymentRoutes(
     const user = await me(request.tgUser!.tgId)
     const p = await prisma.payment.findUnique({ where: { orderId } })
     if (!p || p.userId !== user.id) return reply.code(404).send({ error: 'Заказ не найден' })
-    return { orderId, status: p.status }
+    // Статус paid ставится до выдачи доступа на панели. Если отдать его сразу, фронт
+    // перезагружал /me раньше, чем создавалась подписка, и показывал старую.
+    // Событие 'paid' в логе пишется последним, после выдачи.
+    if (p.status === 'paid') {
+      const processed = await prisma.paymentLog.count({ where: { orderId, event: 'paid' } })
+      if (!processed) return { orderId, status: 'pending', activated: false }
+      const activated = await prisma.paymentLog.count({ where: { orderId, event: 'activated' } })
+      // Старые платежи (до отметки 'activated') считаем выданными.
+      const failed = await prisma.paymentLog.count({ where: { orderId, event: 'activation_failed' } })
+      return { orderId, status: 'paid', activated: activated > 0 || failed === 0 }
+    }
+    return { orderId, status: p.status, activated: false }
   })
 
   /** История платежей пользователя. */

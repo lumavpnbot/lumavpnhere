@@ -40,11 +40,13 @@ interface TgWebApp {
   setBackgroundColor?(color: string): void
   setBottomBarColor?(color: string): void
   onEvent?(event: string, cb: () => void): void
+  offEvent?(event: string, cb: () => void): void
   openLink?(url: string): void
   openTelegramLink?(url: string): void
   showAlert?(message: string): void
   showConfirm?(message: string, cb: (ok: boolean) => void): void
   openInvoice?(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void
+  shareMessage?(id: string, cb?: (sent: boolean) => void): void
   BackButton?: TgBackButton
   HapticFeedback?: {
     impactOccurred(style: HapticImpact): void
@@ -98,6 +100,24 @@ export function initTelegram() {
     tg.onEvent?.('fullscreenChanged', syncFullscreenClass)
   } catch (err) {
     console.warn('[telegram] init failed', err)
+  }
+}
+
+/**
+ * Пользователь вернулся в Mini App (из Happ, CryptoBot, чата с ботом): вкладка снова видна
+ * или Telegram прислал событие activated (Bot API 8.0). Возвращает функцию отписки.
+ */
+export function onAppVisible(cb: () => void): () => void {
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') cb()
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('focus', cb)
+  tg?.onEvent?.('activated', cb)
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('focus', cb)
+    tg?.offEvent?.('activated', cb)
   }
 }
 
@@ -164,6 +184,21 @@ export function openInvoice(url: string): Promise<InvoiceStatus> {
     else {
       window.open(url, '_blank', 'noopener')
       resolve('pending')
+    }
+  })
+}
+
+/**
+ * Нативное окно «Поделиться» (Bot API 8.0): сообщение готовит бот, Telegram сообщает,
+ * отправил ли его пользователь. null — метод недоступен (старый клиент или вне Telegram).
+ */
+export function shareMessage(id: string): Promise<boolean | null> {
+  return new Promise((resolve) => {
+    if (!inTelegram || !tg?.shareMessage || !atLeast('8.0')) return resolve(null)
+    try {
+      tg.shareMessage(id, (sent) => resolve(Boolean(sent)))
+    } catch {
+      resolve(null)
     }
   })
 }

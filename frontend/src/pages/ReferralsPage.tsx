@@ -4,8 +4,9 @@ import { CheckIcon, CopyIcon, GiftIcon, PercentIcon, ReferralsIcon, ShareIcon, W
 import { BOT_USERNAME, REFERRAL } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
 import { formatDate, formatRub } from '@/lib/format'
-import { copyText, haptic, openExternal } from '@/lib/telegram'
+import { copyText, haptic, notify } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
+import { shareReferral } from '@/lib/share'
 import { useAppStore } from '@/store/useAppStore'
 
 interface Level {
@@ -55,6 +56,7 @@ export default function ReferralsPage() {
   const t = useT()
   const lang = useLang()
   const profile = useAppStore((s) => s.profile)
+  const refresh = useAppStore((s) => s.refresh)
   const [copied, setCopied] = useState(false)
   const [info, setInfo] = useState<ReferralInfo | null>(null)
   const [earnings, setEarnings] = useState<Earning[]>([])
@@ -85,9 +87,14 @@ export default function ReferralsPage() {
     }
   }
 
-  const share = () => {
+  // Нативное «Поделиться» Telegram: если сообщение отправлено, засчитывается бейдж «Шеринг».
+  const share = async () => {
     haptic('light')
-    openExternal(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t('friends.shareText'))}`)
+    if (await shareReferral(link, t('friends.shareText'))) {
+      haptic('success')
+      notify(t('ach.shareDone'))
+      void refresh()
+    }
   }
 
   return (

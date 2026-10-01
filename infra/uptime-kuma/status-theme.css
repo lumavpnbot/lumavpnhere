@@ -1,0 +1,90 @@
+/*
+ * Тёмная серебряная тема LYNK для публичной страницы Uptime Kuma (ТЗ v6.3 · 02).
+ * Uptime Kuma → Status Page → Edit → Custom CSS: вставить этот файл целиком.
+ * Форк не нужен: страница статуса поддерживает свой CSS.
+ */
+:root {
+  --lynk-bg: #050505;
+  --lynk-fg: #e8e8ec;
+  --lynk-dim: #9a9aa4;
+  --lynk-line: rgba(255, 255, 255, 0.08);
+}
+
+body,
+.dark body,
+#app {
+  background: var(--lynk-bg) !important;
+  color: var(--lynk-fg) !important;
+  font-family: -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', sans-serif !important;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -300px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1200px;
+  height: 1000px;
+  background: radial-gradient(circle, rgba(220, 220, 235, 0.07) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.title-flex .title,
+h1 {
+  background: linear-gradient(180deg, #ffffff 0%, #b8b8c0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+}
+
+.shadow-box,
+.monitor-list,
+.overall-status,
+.incident {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)) !important;
+  border: 1px solid var(--lynk-line) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+.item,
+.monitor-list .item {
+  border-bottom: 1px solid var(--lynk-line) !important;
+  background: transparent !important;
+}
+
+.beat {
+  border-radius: 3px !important;
+}
+.beat.empty {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.badge.bg-primary,
+.bg-primary {
+  background: rgba(110, 231, 160, 0.15) !important;
+  color: #6ee7a0 !important;
+}
+.badge.bg-danger,
+.bg-danger {
+  background: rgba(252, 165, 165, 0.15) !important;
+  color: #fca5a5 !important;
+}
+.badge.bg-warning,
+.bg-warning {
+  background: rgba(252, 211, 77, 0.15) !important;
+  color: #fcd34d !important;
+}
+
+a,
+.text-primary {
+  color: var(--lynk-fg) !important;
+}
+
+footer,
+.text-muted {
+  color: var(--lynk-dim) !important;
+}

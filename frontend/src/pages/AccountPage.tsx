@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import Flag from '@/components/Flag'
 import { LangSheet } from '@/components/LangSwitch'
 import { Avatar, Brand, DemoBadge, Divider, ListRow, PageTitle, Section, TopBar, useDisplayName } from '@/components/ui'
-import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, RefreshIcon, ShieldIcon } from '@/components/icons'
+import { BellIcon, ChatIcon, DocIcon, LanguageIcon, MailIcon, MegaphoneIcon, PulseIcon, RefreshIcon, ShieldIcon, TransferIcon, TrophyIcon } from '@/components/icons'
+import { AchievementIcon } from '@/components/achievements'
 import { Toggle } from '@/components/controls'
 import { APP_VERSION, BOT_USERNAME, BRAND, LINKS, PLANS } from '@/config'
 import { useLang, useT } from '@/i18n'
@@ -29,15 +30,28 @@ export default function AccountPage() {
       <PageTitle title={t('account.title')} />
       <DemoBadge />
 
-      <div className="glass glass-hero flex items-center gap-4 p-4">
-        <Avatar size={56} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[18px] font-semibold">{name}</div>
-          <div className="mt-0.5 text-[13px] text-faint">
-            {plan ? t(plan.nameKey) : t('home.none')}
-            {plan && subscription.expiresAt ? `, ${t('home.until', { date: formatDate(subscription.expiresAt, lang) })}` : ''}
+      <div className="glass glass-hero p-4">
+        <div className="flex items-center gap-4">
+          <Avatar size={56} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[18px] font-semibold">{name}</div>
+            <div className="mt-0.5 text-[13px] text-faint">
+              {plan ? t(plan.nameKey) : t('home.none')}
+              {plan && subscription.expiresAt ? `, ${t('home.until', { date: formatDate(subscription.expiresAt, lang) })}` : ''}
+            </div>
           </div>
         </div>
+        {/* Шоукейс: закреплённые бейджи видны первыми в профиле (ТЗ 3.6). */}
+        {!!profile.showcase?.length && (
+          <button onClick={() => navigate('/account/achievements')} className="press mt-4 flex w-full gap-2">
+            {profile.showcase.map((b) => (
+              <span key={b.code} className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white/[0.06] px-2.5 py-2">
+                <AchievementIcon code={b.code} rarity={b.rarity} size={28} />
+                <span className="truncate text-[12px] font-semibold">{b.title}</span>
+              </span>
+            ))}
+          </button>
+        )}
       </div>
 
       <Section title={t('account.info')}>
@@ -46,6 +60,19 @@ export default function AccountPage() {
           <Row label={t('account.username')} value={profile.username ? `@${profile.username}` : t('common.notSet')} />
           <Row label={t('account.name')} value={profile.firstName ?? t('common.notSet')} />
           <Row label={t('account.registered')} value={profile.registeredAt ? formatDate(profile.registeredAt, lang) : t('common.notSet')} />
+        </div>
+      </Section>
+
+      <Section>
+        <div className="glass overflow-hidden">
+          <ListRow
+            icon={<TrophyIcon className="h-[18px] w-[18px]" />}
+            title={t('ach.row')}
+            hint={t('ach.rowHint', { n: profile.achievementsUnlocked ?? 0, total: 16 })}
+            onClick={() => navigate('/account/achievements')}
+          />
+          <Divider />
+          <ListRow icon={<TransferIcon className="h-[18px] w-[18px]" />} title={t('transfer.row')} hint={t('transfer.rowHint')} onClick={() => navigate('/account/transfer')} />
         </div>
       </Section>
 
@@ -110,6 +137,8 @@ export default function AccountPage() {
       <Section title={t('account.help')}>
         <div className="glass overflow-hidden">
           <ListRow icon={<ChatIcon className="h-[18px] w-[18px]" />} title={t('home.support')} hint={t('account.supportHint')} onClick={() => navigate('/support')} />
+          <Divider />
+          <ListRow icon={<PulseIcon className="h-[18px] w-[18px]" />} title={t('status.row')} hint={t('status.rowHint')} onClick={() => navigate('/status')} />
           <Divider />
           <ListRow icon={<MegaphoneIcon className="h-[18px] w-[18px]" />} title={t('home.channel')} onClick={() => openExternal(LINKS.channel)} />
           <Divider />

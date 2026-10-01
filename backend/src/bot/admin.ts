@@ -3,8 +3,31 @@ import type { PanelProvider } from '@/panel'
 import type { BillingService } from '@/services/billing'
 import type { ServerStatusService } from '@/services/servers'
 import { LEVEL_NAMES, type PaidPlan, type Period, type SettingsService } from '@/services/settings'
-import type { VpnService } from '@/services/vpn'
+import { LATEST_FIRST, type VpnService } from '@/services/vpn'
 import { recentErrors, recentSubRequests } from '@/lib/errors'
+import type { AdminApi, AdminFeatures } from './adminFeatures'
+import {
+  DAY,
+  PAGE,
+  ago,
+  back,
+  btn,
+  csv,
+  day,
+  dt,
+  header,
+  mskDayStart,
+  mskMonthStart,
+  num,
+  parseMsk,
+  pager,
+  planName,
+  rub,
+  who,
+  type Ctx,
+  type Fsm,
+  type View,
+} from './adminUi'
 import { can, type Staff, type StaffRole } from './staff'
 import { esc, type InlineKeyboard, type Telegram } from './tg'
 
@@ -14,67 +37,6 @@ import { esc, type InlineKeyboard, type Telegram } from './tg'
  * которое перерисовывается. Пошаговый ввод (поиск, суммы, тексты) через FSM.
  */
 
-const DAY = 24 * 60 * 60 * 1000
-const PAGE = 8
-
-interface View {
-  text: string
-  kb: InlineKeyboard
-}
-
-interface Ctx {
-  chatId: number
-  tgId: number
-  role: StaffRole
-  messageId?: number
-}
-
-type Fsm = { kind: string; data: Record<string, string | number | null> }
-
-// ── форматирование ──────────────────────────────────────────────────────────
-
-const num = (n: unknown) => Number(n ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })
-const rub = (n: unknown) => `${num(n)} ₽`
-const dt = (d: Date | null | undefined) =>
-  d
-    ? d.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : 'нет'
-const day = (d: Date | null | undefined) =>
-  d ? d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'нет'
-const planName = (p: string | null | undefined) => (p === 'pro' ? 'Премиум' : p === 'start' ? 'Старт' : p === 'free' ? 'Free' : 'нет')
-const who = (u: { username: string | null; tgId: bigint }) => (u.username ? `@${esc(u.username)}` : `<code>${u.tgId}</code>`)
-const ago = (d: Date) => {
-  const m = Math.round((Date.now() - d.getTime()) / 60000)
-  if (m < 60) return `${m} мин назад`
-  const h = Math.round(m / 60)
-  return h < 48 ? `${h} ч назад` : `${Math.round(h / 24)} дн назад`
-}
-const line = '<code>─────────────────────</code>'
-const header = (icon: string, title: string, sub?: string) => `${icon} <b>${title}</b>${sub ? `\n<i>${sub}</i>` : ''}\n${line}\n`
-const btn = (text: string, data: string) => ({ text, callback_data: data })
-const back = (to = 'adm:home', label = '‹ Назад') => [btn(label, to)]
-const pager = (prefix: string, page: number, hasNext: boolean) => {
-  const row = []
-  if (page > 0) row.push(btn('‹', `${prefix}:${page - 1}`))
-  row.push(btn(`стр. ${page + 1}`, 'adm:noop'))
-  if (hasNext) row.push(btn('›', `${prefix}:${page + 1}`))
-  return row
-}
-
-/** Начало суток по Москве. */
-function mskDayStart(offsetDays = 0) {
-  const now = new Date(Date.now() + 3 * 3600_000)
-  now.setUTCHours(0, 0, 0, 0)
-  return new Date(now.getTime() - 3 * 3600_000 - offsetDays * DAY)
-}
-function mskMonthStart() {
-  const now = new Date(Date.now() + 3 * 3600_000)
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 3 * 3600_000)
-}
-
-function csv(rows: (string | number | null | undefined)[][]) {
-  return rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
-}
 
 const TEMPLATES = [
   'Здравствуйте! Спасибо за обращение, уже разбираемся. Ответим в ближайшее время.',
@@ -126,16 +88,6 @@ function userFilter(filter: string): Prisma.UserWhereInput {
   }
 }
 
-/** Разбор даты «ДД.ММ ЧЧ:ММ» по Москве. */
-function parseMsk(input: string): Date | null {
-  const m = /^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\s+(\d{1,2}):(\d{2})$/.exec(input.trim())
-  if (!m) return null
-  const now = new Date()
-  const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : now.getUTCFullYear()
-  const d = new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[1]), Number(m[4]) - 3, Number(m[5])))
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
 export function createAdmin(deps: {
   prisma: PrismaClient
   tg: Telegram
@@ -146,9 +98,12 @@ export function createAdmin(deps: {
   panel: PanelProvider
   servers: ServerStatusService
   sendBroadcast: (id: bigint) => Promise<void>
+  /** Разделы ТЗ v6.3: переносы, достижения, статус, устройства пользователя. */
+  features?: (api: AdminApi) => AdminFeatures
 }) {
   const { prisma, tg, staff, settings, billing, vpn, panel, servers } = deps
   const fsm = new Map<number, Fsm>()
+  const features = deps.features?.({ show, ask, fsm, userCard: (id, role) => userCard(id, role) })
 
   // ── экраны ────────────────────────────────────────────────────────────────
 
@@ -163,6 +118,7 @@ export function createAdmin(deps: {
       ['promo', '🎟 Промокоды', 'adm:promo'],
       ['sup', '💬 Поддержка', 'adm:sup:open:0'],
       ['bc', '📢 Рассылки', 'adm:bc'],
+      ...(features?.homeItems ?? []),
       ['set', '⚙️ Настройки', 'adm:set'],
       ['logs', '📋 Логи', 'adm:logs'],
     ]
@@ -307,6 +263,7 @@ export function createAdmin(deps: {
       kb.push([btn('🧹 Обнулить рефералку', `adm:u:${id}:refreset`)])
     }
     kb.push([btn('🕓 История', `adm:u:${id}:hist`)])
+    if (features) kb.push(...features.userRows(id, role))
     kb.push(back('adm:users'))
     return { text, kb }
   }
@@ -385,15 +342,18 @@ export function createAdmin(deps: {
   async function paymentCard(id: bigint): Promise<View> {
     const p = await prisma.payment.findUnique({ where: { id }, include: { user: true, promoCode: true, referralPayout: true } })
     if (!p) return { text: 'Платёж не найден', kb: [back('adm:pay:all:0')] }
+    // Оплачен, но выдать доступ на панели не удалось (джоба повторяет сама, кнопка ниже вручную).
+    const stuck = p.status === 'paid' && (await billing.needsActivation(p.orderId))
     const text =
       header('🧾', `Платёж #${p.id}`, p.orderId) +
       `Пользователь: ${who(p.user)}\n` +
       `Тариф: <b>${planName(p.planPurchased)}</b>, ${p.periodDays === 365 ? '12 мес' : '1 мес'}\n` +
       `Способ: <b>${p.method}</b>${p.starsAmount ? ` (${p.starsAmount} ⭐)` : ''}\n` +
       `К оплате: <b>${rub(p.amountRub)}</b> · с баланса ${rub(p.balanceUsedRub)} · скидка ${rub(p.discountRub)}${p.promoCode ? ` (${esc(p.promoCode.code)})` : ''}\n` +
-      `Статус: <b>${p.status}</b>\nСоздан: ${dt(p.createdAt)} · оплачен: ${dt(p.paidAt)}\n` +
+      `Статус: <b>${p.status}</b>${stuck ? ' · ⚠️ доступ не выдан' : ''}\nСоздан: ${dt(p.createdAt)} · оплачен: ${dt(p.paidAt)}\n` +
       `Реферальное начисление: ${p.referralPayout ? `${rub(p.referralPayout.amountRub)} (${p.referralPayout.status})` : 'нет'}`
     const kb: InlineKeyboard = []
+    if (stuck) kb.push([btn('♻️ Выдать доступ повторно', `adm:p:${id}:reactivate`)])
     if (p.status === 'paid') kb.push([btn('↩️ Возврат на баланс', `adm:p:${id}:refund`)])
     if (p.status === 'pending') kb.push([btn('✅ Отметить оплаченным', `adm:p:${id}:markpaid`)])
     kb.push([btn('👤 Пользователь', `adm:u:${p.userId}`)])
@@ -541,7 +501,8 @@ export function createAdmin(deps: {
     if (!t) return { text: 'Обращение не найдено', kb: [back('adm:sup:open:0')] }
     const msgs = [...t.messages]
       .reverse()
-      .map((m) => `${m.internal ? '📝 <i>заметка</i>' : m.fromStaff ? '🛟 <b>Поддержка</b>' : '👤 <b>Пользователь</b>'} · ${dt(m.createdAt)}\n${esc(m.text).slice(0, 600)}`)
+      // Лимит сообщения Telegram 4096 символов: 10 сообщений по 600 не влезали, и обращение не открывалось.
+      .map((m) => `${m.internal ? '📝 <i>заметка</i>' : m.fromStaff ? '🛟 <b>Поддержка</b>' : '👤 <b>Пользователь</b>'} · ${dt(m.createdAt)}\n${esc(m.text.length > 350 ? `${m.text.slice(0, 350)}…` : m.text)}`)
       .join('\n\n')
     const text =
       header('💬', `Обращение #${t.id}`, `${t.status} · ${t.assigneeTgId ? `назначено ${t.assigneeTgId}` : 'не назначено'}`) +
@@ -668,6 +629,10 @@ export function createAdmin(deps: {
   async function onCallback(ctx: Ctx, data: string): Promise<string | void> {
     const p = data.split(':').slice(1)
     const [a, b, c, d] = p
+    if (features?.handles(a)) {
+      if (!can(ctx.role, features.section(a))) return 'Нет доступа к этому разделу'
+      return features.onCallback(ctx, p)
+    }
     const section =
       a === 'uf' || a === 'u' ? 'users' : a === 'sx' ? 'subs' : a === 'p' ? 'pay' : a === 'rh' || a === 'rc' ? 'ref' : a === 'pl' || a === 'pr' ? 'promo' : a === 't' ? 'sup' : a === 'roles' ? 'set' : a
     if (!['home', 'noop', 'cancel'].includes(a) && !can(ctx.role, section)) return 'Нет доступа к этому разделу'
@@ -705,9 +670,10 @@ export function createAdmin(deps: {
           return `Продлено на ${days} дн`
         }
         if (c === 'plan') {
-          const cur = await vpn.current(u.id)
-          if (!cur) return 'Нет активной подписки: сначала продлите'
-          await vpn.activate(u, d as PaidPlan, 0, cur.status === 'trial' ? 'trial' : 'active')
+          // Меняем тариф у текущей подписки (раньше создавалась вторая строка с тем же сроком,
+          // и приложение могло показывать старый тариф).
+          const changed = await vpn.changePlan(u, d as PaidPlan)
+          if (!changed) return 'Нет активной подписки: сначала продлите'
           await staff.audit(ctx.tgId, 'change_plan', target, { plan: d })
           await show(ctx, await userCard(id, ctx.role))
           return `Тариф: ${planName(d)}`
@@ -779,7 +745,7 @@ export function createAdmin(deps: {
           })
           let ok = 0
           for (const u of users) {
-            const last = await prisma.subscription.findFirst({ where: { userId: u.id }, orderBy: { expiresAt: 'desc' } })
+            const last = await prisma.subscription.findFirst({ where: { userId: u.id }, orderBy: LATEST_FIRST })
             try {
               await vpn.grant(u, last?.plan === 'pro' ? 'pro' : 'start', days)
               ok++
@@ -819,6 +785,14 @@ export function createAdmin(deps: {
           if (pay) await staff.notify(pay.user.tgId, `↩️ Возврат <b>${rub(amount)}</b> зачислен на ваш баланс LYNK.`)
           await show(ctx, await paymentCard(id))
           return 'Возврат выполнен'
+        }
+        if (c === 'reactivate') {
+          const pay = await prisma.payment.findUnique({ where: { id } })
+          if (!pay) return 'Платёж не найден'
+          const ok = await billing.retryActivation(pay.orderId)
+          await staff.audit(ctx.tgId, 'reactivate', `payment:${id}`, { ok })
+          await show(ctx, await paymentCard(id))
+          return ok ? 'Доступ выдан' : 'Выдавать нечего: доступ уже выдан'
         }
         if (c === 'markpaid') return show(ctx, confirm('Платёж будет считаться оплаченным, подписка выдастся сразу.', `adm:p:${b}:markpaidok`, `adm:p:${b}`))
         if (c === 'markpaidok') {
@@ -962,7 +936,9 @@ export function createAdmin(deps: {
           if (!draft || draft.kind !== 'bc_ready') return 'Черновик не найден, начните заново'
           if (b === 'sched') return void (await ask(ctx, 'bc_when', 'Когда отправить? Формат: ДД.ММ ЧЧ:ММ по Москве, например 05.10 18:30', draft.data, 'adm:bc'))
           const bc = await saveBroadcast(ctx, draft.data, new Date())
-          await deps.sendBroadcast(bc.id)
+          // Не ждём окончания: рассылка на тысячи людей идёт минутами, а кнопка должна ответить сразу.
+          void deps.sendBroadcast(bc.id).catch((err: Error) => tg.send(ctx.chatId, `Рассылка #${bc.id} прервалась: ${esc(err.message)}`).catch(() => undefined))
+          await tg.send(ctx.chatId, `📤 Рассылка #${bc.id} отправляется. Пришлю итог, когда закончится.`, { keyboard: [back('adm:bc')] })
           return 'Рассылка запущена'
         }
         if (b === 'x') {
@@ -1322,7 +1298,7 @@ export function createAdmin(deps: {
         return true
       }
     }
-    return false
+    return features ? features.onText(ctx, state, text) : false
   }
 
   return {

@@ -12,13 +12,17 @@ export default function DevicesPage() {
   const navigate = useNavigate()
   const devices = useAppStore((s) => s.devices)
   const limit = useAppStore((s) => s.profile.devicesLimit)
+  const bonus = useAppStore((s) => s.profile.bonusDevices ?? 0)
   const removeDevice = useAppStore((s) => s.removeDevice)
   const full = devices.length >= limit
 
   return (
     <>
       <TopBar />
-      <PageTitle title={t('devices.title')} subtitle={t('devices.subtitle', { used: devices.length, limit })} />
+      <PageTitle
+        title={t('devices.title')}
+        subtitle={`${t('devices.subtitle', { used: devices.length, limit })}${bonus ? `, ${t('devices.bonus', { n: bonus })}` : ''}`}
+      />
 
       {devices.length === 0 ? (
         <div className="glass flex flex-col items-center px-6 py-12 text-center">

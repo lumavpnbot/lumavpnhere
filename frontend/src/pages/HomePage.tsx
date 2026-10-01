@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Flag from '@/components/Flag'
 import { DemoBadge, Divider, ListRow, Section, StatusPill, TopBar } from '@/components/ui'
-import { ChatIcon, ChevronRight, DevicesIcon, InfinityIcon, MegaphoneIcon, ReferralsIcon, ShieldIcon, WalletIcon } from '@/components/icons'
+import { ChatIcon, ChevronRight, DevicesIcon, InfinityIcon, MegaphoneIcon, PulseIcon, ReferralsIcon, ShieldIcon, WalletIcon } from '@/components/icons'
+import StatusWidget from '@/components/StatusWidget'
 import { COUNTRIES, LINKS, PLANS } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
 import mark from '@/assets/lynk-mark.png'
@@ -41,6 +42,7 @@ export default function HomePage() {
     <>
       <TopBar home />
       <DemoBadge />
+      <StatusWidget />
 
       {/* ── Подписка ── */}
       <div className="glass glass-hero p-5">
@@ -187,6 +189,8 @@ export default function HomePage() {
             hint={t('home.supportHint')}
             onClick={() => go('/support')}
           />
+          <Divider />
+          <ListRow icon={<PulseIcon className="h-[18px] w-[18px]" />} title={t('status.row')} hint={t('status.rowHint')} onClick={() => go('/status')} />
           <Divider />
           <ListRow
             icon={<MegaphoneIcon className="h-[18px] w-[18px]" />}

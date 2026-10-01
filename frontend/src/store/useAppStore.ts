@@ -52,6 +52,53 @@ export interface Profile {
   referralLink: string | null
   defaultPromo: string | null
   isAdmin?: boolean
+  /** ТЗ v6.3: бонусные устройства и скидка за достижения, закреплённые бейджи. */
+  bonusDevices?: number
+  rewardDiscount?: number
+  achievementsUnlocked?: number
+  showcase?: ShowcaseItem[]
+}
+
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
+
+export interface ShowcaseItem {
+  slot: number
+  code: string
+  rarity: Rarity
+  title: string
+}
+
+export interface StatusNode {
+  id: string
+  country: string | null
+  online: boolean
+  pingMs: number | null
+  checkedAt: string | null
+  uptime24h: number | null
+  uptime30d: number | null
+  hourly: (number | null)[]
+}
+
+export interface Incident {
+  id: string
+  title: string
+  text: string | null
+  severity: 'minor' | 'major'
+  status: 'open' | 'resolved'
+  node: string | null
+  auto: boolean
+  eta: string | null
+  startedAt: string
+  resolvedAt: string | null
+}
+
+export interface StatusSnapshot {
+  overall: 'ok' | 'degraded' | 'down'
+  updatedAt: string
+  eta: string | null
+  nodes: StatusNode[]
+  openIncidents: Incident[]
+  incidents: Incident[]
 }
 
 export type Prices = Record<PlanId, Record<'month' | 'year', number>>
@@ -79,6 +126,7 @@ interface AppState {
   transactions: Transaction[]
   liveCountries: CountryCode[]
   servers: ServerInfo[]
+  status: StatusSnapshot | null
   prices: Prices
   maintenance: boolean
   prefs: NotificationPrefs
@@ -89,6 +137,8 @@ interface AppState {
   /** Перезагрузить /me (после оплаты, промокода и т.п.). */
   refresh: () => Promise<void>
   loadServers: () => Promise<void>
+  /** Статус сервиса (виджет на главной и экран «Статус»). */
+  loadStatus: () => Promise<void>
   setAutoRenew: (enabled: boolean) => Promise<void>
   removeDevice: (id: string) => Promise<void>
   setLang: (lang: Lang) => void
@@ -180,6 +230,23 @@ function demo(now = Date.now()) {
   }
 }
 
+function demoStatus(now = Date.now()): StatusSnapshot {
+  const hourly = Array.from({ length: 24 }, (_, i) => (i === 20 ? 96.7 : 100))
+  return {
+    overall: 'ok',
+    updatedAt: new Date(now).toISOString(),
+    eta: null,
+    nodes: [{ id: 'fi', country: 'fi', online: true, pingMs: 38, checkedAt: new Date(now).toISOString(), uptime24h: 99.86, uptime30d: 99.94, hourly }],
+    openIncidents: [],
+    incidents: [
+      { id: '1', title: 'FI: узел не отвечает', text: 'Обнаружено мониторингом.', severity: 'minor', status: 'resolved', node: 'fi', auto: true, eta: null, startedAt: new Date(now - 4 * 3600e3).toISOString(), resolvedAt: new Date(now - 4 * 3600e3 + 120e3).toISOString() },
+    ],
+  }
+}
+
+// Один запрос /me за раз: фокус окна, возврат в Mini App и таймер могут сработать одновременно.
+let inflight: Promise<void> | null = null
+
 export const useAppStore = create<AppState>((set, get) => ({
   lang: initialLang(),
   profile: profileFromTelegram(),
@@ -188,6 +255,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   transactions: [],
   liveCountries: DEFAULT_LIVE,
   servers: [],
+  status: null,
   prices: PRICES_RUB,
   maintenance: false,
   prefs: load('lynk.prefs', DEFAULT_PREFS),
@@ -199,9 +267,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().loaded) return
     await get().refresh()
     void get().loadServers()
+    void get().loadStatus()
   },
 
-  refresh: async () => {
+  loadStatus: async () => {
+    if (!apiEnabled) {
+      set({ status: demoStatus() })
+      return
+    }
+    try {
+      set({ status: await api.get<StatusSnapshot>('/api/status') })
+    } catch {
+      /* статус не критичен */
+    }
+  },
+
+  refresh: () => {
     if (!apiEnabled) {
       const d = demo()
       set((s) => ({
@@ -211,35 +292,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         profile: { ...s.profile, ...d.profile },
         loaded: true,
       }))
-      return
+      return Promise.resolve()
     }
-
-    try {
-      const me = await api.get<{
-        profile: Partial<Profile>
-        subscription: Partial<Subscription> | null
-        devices?: Device[]
-        transactions?: Transaction[]
-        countries?: CountryCode[]
-        prices?: Prices
-        maintenance?: boolean
-      }>('/me')
-      const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
-      set((s) => ({
-        error: provisionError ? `panel: ${provisionError}` : null,
-        profile: { ...s.profile, ...me.profile },
-        subscription: { ...EMPTY_SUB, ...(me.subscription ?? {}) },
-        devices: me.devices ?? [],
-        transactions: me.transactions ?? [],
-        liveCountries: me.countries?.length ? me.countries : s.liveCountries,
-        prices: me.prices ?? s.prices,
-        maintenance: Boolean(me.maintenance),
-        loaded: true,
-      }))
-    } catch (err) {
-      console.warn('[api] /me failed', err)
-      set({ loaded: true, error: err instanceof Error ? err.message : String(err) })
-    }
+    if (inflight) return inflight
+    inflight = loadMe().finally(() => {
+      inflight = null
+    })
+    return inflight
   },
 
   loadServers: async () => {
@@ -288,12 +347,43 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ prefs })
   },
 
-  // TODO: реальная привязка через POST /auth/email/start + /auth/email/verify.
+  // Почта подтверждается на бэкенде (POST /auth/email/start + /auth/email/verify), тут только показ.
   setEmail: (email) => {
     save('lynk.email', email)
     set((s) => ({ profile: { ...s.profile, email } }))
   },
 }))
+
+/** Загрузка /me: профиль, подписка, устройства, история. */
+async function loadMe() {
+  const set = useAppStore.setState
+  try {
+    const me = await api.get<{
+      profile: Partial<Profile>
+      subscription: Partial<Subscription> | null
+      devices?: Device[]
+      transactions?: Transaction[]
+      countries?: CountryCode[]
+      prices?: Prices
+      maintenance?: boolean
+    }>('/me')
+    const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
+    set((s) => ({
+      error: provisionError ? `panel: ${provisionError}` : null,
+      profile: { ...s.profile, ...me.profile },
+      subscription: { ...EMPTY_SUB, ...(me.subscription ?? {}) },
+      devices: me.devices ?? [],
+      transactions: me.transactions ?? [],
+      liveCountries: me.countries?.length ? me.countries : s.liveCountries,
+      prices: me.prices ?? s.prices,
+      maintenance: Boolean(me.maintenance),
+      loaded: true,
+    }))
+  } catch (err) {
+    console.warn('[api] /me failed', err)
+    set({ loaded: true, error: err instanceof Error ? err.message : String(err) })
+  }
+}
 
 export function daysLeft(sub: Subscription): number {
   if (!sub.expiresAt) return 0

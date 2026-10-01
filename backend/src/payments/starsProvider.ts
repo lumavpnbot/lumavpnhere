@@ -6,7 +6,7 @@ import type { PaymentProvider, CreateInvoiceParams, WebhookEvent } from './types
  * successful_payment в самом боте, поэтому verifyWebhook здесь не используется
  * напрямую — событие в этот провайдер прокидывается из обработчика апдейтов бота.
  */
-export function createStarsProvider(botToken: string): PaymentProvider {
+export function createStarsProvider(botToken: string, apiBase = 'https://api.telegram.org'): PaymentProvider {
   return {
     id: 'stars',
     enabled: Boolean(botToken),
@@ -15,7 +15,7 @@ export function createStarsProvider(botToken: string): PaymentProvider {
       // 1 XTR ≈ фиксированный курс, который устанавливает Telegram — конвертацию
       // делаем на этапе показа цены пользователю (см. PlansPage), здесь просто
       // создаём инвойс через Bot API createInvoiceLink.
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/createInvoiceLink`, {
+      const res = await fetch(`${apiBase}/bot${botToken}/createInvoiceLink`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -25,9 +25,10 @@ export function createStarsProvider(botToken: string): PaymentProvider {
           currency: 'XTR',
           prices: [{ label: description, amount: Math.round(amountRub) }],
         }),
+        signal: AbortSignal.timeout(15_000),
       })
-      const data = (await res.json()) as { result?: string; ok: boolean }
-      if (!data.ok || !data.result) throw new Error('Не удалось создать Stars-инвойс')
+      const data = (await res.json().catch(() => ({ ok: false }))) as { result?: string; ok: boolean; description?: string }
+      if (!data.ok || !data.result) throw new Error(`Не удалось создать Stars-инвойс${data.description ? `: ${data.description}` : ''}`)
       return { payload: data.result }
     },
 

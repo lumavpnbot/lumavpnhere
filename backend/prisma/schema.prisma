@@ -71,6 +71,45 @@ enum PayoutStatus {
   cancelled
 }
 
+// ── ТЗ v6.3: перенос подписок ──
+enum TransferStatus {
+  checking // В обработке
+  approved // Одобрено (авто или админом)
+  rejected // Отклонено
+  disputed // Спорное: ручная модерация
+  need_link // Запрошена другая ссылка
+}
+
+enum TransferVerdict {
+  auto_approved
+  disputed
+  auto_rejected
+}
+
+enum ProviderList {
+  white
+  gray
+  black
+}
+
+// ── ТЗ v6.3: достижения ──
+enum RewardKind {
+  days
+  discount
+  device
+}
+
+// ── ТЗ v6.3: статус сервиса ──
+enum IncidentSeverity {
+  minor
+  major
+}
+
+enum IncidentStatus {
+  open
+  resolved
+}
+
 model User {
   id            BigInt   @id @default(autoincrement())
   tgId          BigInt   @unique @map("tg_id")
@@ -104,6 +143,10 @@ model User {
   referralsMade   Referral[] @relation("ReferrerUser")
   payoutsReceived ReferralPayout[]
 
+  transfers    TransferRequest[]
+  achievements UserAchievement[]
+  rewards      UserReward[]
+
   @@map("users")
 }
 
@@ -117,6 +160,8 @@ model Subscription {
   autoRenew Boolean             @default(false) @map("auto_renew")
   // Когда отправили напоминание об окончании (чтобы не слать повторно).
   remindedAt DateTime?          @map("reminded_at")
+  // Откуда дни: trial | payment | gift (админ, бонусы, достижения) | transfer | admin (команда проекта).
+  source    String              @default("payment")
 
   user User @relation(fields: [userId], references: [id])
 
@@ -136,6 +181,9 @@ model Payment {
   // Полная цена после промокода = amountRub (к оплате провайдером) + balanceUsedRub.
   balanceUsedRub Decimal     @default(0) @map("balance_used_rub") @db.Decimal(10, 2)
   discountRub  Decimal       @default(0) @map("discount_rub") @db.Decimal(10, 2)
+  // Скидка за достижения (ТЗ 3.1) и какие разовые награды она израсходует после оплаты.
+  achDiscountRub Decimal     @default(0) @map("ach_discount_rub") @db.Decimal(10, 2)
+  achRewardIds Json?         @map("ach_reward_ids")
   promoCodeId  BigInt?       @map("promo_code_id")
   starsAmount  Int?          @map("stars_amount")
   externalId   String?       @map("external_id")
@@ -339,6 +387,156 @@ model Broadcast {
   createdAt     DateTime        @default(now()) @map("created_at")
 
   @@map("broadcasts")
+}
+
+// ── ТЗ v6.3 · 01 Перенос подписок ──────────────────────────────────────────
+model TransferRequest {
+  id             BigInt           @id @default(autoincrement())
+  userId         BigInt           @map("user_id")
+  link           String
+  linkHash       String           @map("link_hash") // SHA-256 нормализованной ссылки
+  linkType       String           @map("link_type") // subscription | vless | vmess | trojan | ss
+  provider       String? // домен провайдера (или сервера для vless/vmess/…)
+  providerList   ProviderList?    @map("provider_list") // null = домена нет в базе
+  status         TransferStatus   @default(checking)
+  verdict        TransferVerdict?
+  days           Int? // рассчитанный остаток дней (до ограничения 90)
+  creditedDays   Int?             @map("credited_days")
+  expireAt       DateTime?        @map("expire_at")
+  httpStatus     Int?             @map("http_status")
+  responseMs     Int?             @map("response_ms")
+  bodyBytes      Int?             @map("body_bytes")
+  configsCount   Int?             @map("configs_count")
+  userInfo       String?          @map("user_info") // заголовок subscription-userinfo целиком
+  checks         Json             @default("[]") // 14 пунктов чек-листа
+  log            Json             @default("[]") // шаги проверки для аудита и экспорта
+  ip             String?
+  userAgent      String?          @map("user_agent")
+  accountAgeDays Int              @map("account_age_days")
+  hadPaidSub     Boolean          @default(false) @map("had_paid_sub")
+  rejectReason   String?          @map("reject_reason")
+  decidedByTgId  BigInt?          @map("decided_by_tg_id")
+  decidedAt      DateTime?        @map("decided_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  user     User              @relation(fields: [userId], references: [id])
+  comments TransferComment[]
+
+  @@index([linkHash])
+  @@index([userId])
+  @@index([ip])
+  @@index([status])
+  @@index([createdAt])
+  @@map("transfer_requests")
+}
+
+model TransferComment {
+  id         BigInt   @id @default(autoincrement())
+  transferId BigInt   @map("transfer_id")
+  authorTgId BigInt   @map("author_tg_id")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  transfer TransferRequest @relation(fields: [transferId], references: [id])
+
+  @@index([transferId])
+  @@map("transfer_comments")
+}
+
+// Белый / серый / чёрный список провайдеров.
+model TransferProvider {
+  id        BigInt       @id @default(autoincrement())
+  domain    String       @unique
+  name      String?
+  list      ProviderList @default(white)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@map("transfer_providers")
+}
+
+// ── ТЗ v6.3 · 03 Достижения ────────────────────────────────────────────────
+model UserAchievement {
+  id            BigInt   @id @default(autoincrement())
+  userId        BigInt   @map("user_id")
+  code          String
+  unlockedAt    DateTime @default(now()) @map("unlocked_at")
+  grantedByTgId BigInt?  @map("granted_by_tg_id") // ручная выдача админом
+  showcaseSlot  Int?     @map("showcase_slot") // 0..2 — закреплён в шоукейсе
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, code])
+  @@index([code])
+  @@map("user_achievements")
+}
+
+// Награды: дни (выдаются сразу), скидки (на следующие платежи), бонусные устройства.
+model UserReward {
+  id            BigInt     @id @default(autoincrement())
+  userId        BigInt     @map("user_id")
+  code          String? // код достижения
+  kind          RewardKind
+  value         Int // дни / проценты / устройства
+  expiresAt     DateTime?  @map("expires_at") // скидка: до какой даты; null = бессрочно
+  reusable      Boolean    @default(false) // скидка не расходуется (на год / навсегда)
+  lapseWithSub  Boolean    @default(false) @map("lapse_with_sub") // устройство сгорает, если подписка закончилась
+  applyNext     Boolean    @default(true) @map("apply_next") // «Применить к следующему платежу»
+  usedAt        DateTime?  @map("used_at")
+  usedPaymentId BigInt?    @map("used_payment_id")
+  revokedAt     DateTime?  @map("revoked_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("user_rewards")
+}
+
+// ── ТЗ v6.3 · 02 Статус сервиса ────────────────────────────────────────────
+model StatusCheck {
+  id     BigInt   @id @default(autoincrement())
+  node   String
+  ok     Boolean
+  pingMs Int?     @map("ping_ms")
+  at     DateTime @default(now())
+
+  @@index([node, at])
+  @@index([at])
+  @@map("status_checks")
+}
+
+model Incident {
+  id            BigInt           @id @default(autoincrement())
+  title         String
+  text          String?
+  severity      IncidentSeverity @default(minor)
+  status        IncidentStatus   @default(open)
+  node          String?
+  auto          Boolean          @default(false) // открыт мониторингом, закроется сам при восстановлении
+  eta           DateTime? // ожидаемое время восстановления
+  startedAt     DateTime         @default(now()) @map("started_at")
+  resolvedAt    DateTime?        @map("resolved_at")
+  createdByTgId BigInt?          @map("created_by_tg_id")
+  notifiedAll   Boolean          @default(false) @map("notified_all")
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("incidents")
+}
+
+// История привязок устройств (ТЗ 5.2 «Устройства»).
+model DeviceEvent {
+  id     BigInt   @id @default(autoincrement())
+  userId BigInt   @map("user_id")
+  hwid   String
+  label  String?
+  event  String // bound | unbound | admin_unbound
+  byTgId BigInt?  @map("by_tg_id")
+  at     DateTime @default(now())
+
+  @@index([userId])
+  @@map("device_events")
 }
 
 // Одноразовые коды для привязки почты. Храним только хэш кода.

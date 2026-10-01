@@ -3,9 +3,10 @@ import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
 import { rateLimit } from '@/plugins/rateLimit'
+import type { AchievementService } from '@/services/achievements'
 import { LEVEL_NAMES, type SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
-import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
+import { LATEST_FIRST, PLAN_LIMITS, type VpnService } from '@/services/vpn'
 import { happOpenUrl, subscriptionUrl } from './subscription'
 
 const TX_KIND: Record<string, string> = { referral: 'referral', purchase: 'purchase', admin: 'bonus', bonus: 'bonus', refund: 'refund' }
@@ -16,9 +17,17 @@ const TX_KIND: Record<string, string> = { referral: 'referral', purchase: 'purch
  */
 export function registerMeRoutes(
   app: FastifyInstance,
-  deps: { prisma: PrismaClient; panel: PanelProvider; vpn: VpnService; users: UserService; settings: SettingsService; env: NodeJS.ProcessEnv },
+  deps: {
+    prisma: PrismaClient
+    panel: PanelProvider
+    vpn: VpnService
+    users: UserService
+    settings: SettingsService
+    achievements?: AchievementService
+    env: NodeJS.ProcessEnv
+  },
 ) {
-  const { prisma, panel, vpn, users, settings, env } = deps
+  const { prisma, panel, vpn, users, settings, achievements, env } = deps
   const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
 
   app.get('/me', { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }, async (request, reply) => {
@@ -28,10 +37,12 @@ export function registerMeRoutes(
 
     const ensured = await users.ensureUser({ tgId, username, refPayload: startParam })
     let user = ensured.user
+    if (user.banned) return reply.code(403).send({ error: 'Доступ к сервису ограничен. Напишите в поддержку.' })
     if (ensured.attached && !ensured.created && user.trialUsed && !isAdmin) {
       await vpn.grant(user, 'start', Math.max(0, s.trialDaysReferral - s.trialDays)).catch(() => undefined)
     }
-    if (user.banned) return reply.code(403).send({ error: 'Доступ к сервису ограничен. Напишите в поддержку.' })
+    // Кто-то пришёл по ссылке друга: у пригласившего засчитывается «Шеринг».
+    if (ensured.attached && user.referrerId && achievements) void achievements.evaluateById(user.referrerId).catch(() => undefined)
     user = await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } })
 
     if (!isAdmin && !user.trialUsed) {
@@ -51,8 +62,11 @@ export function registerMeRoutes(
       })
     }
 
-    const subscription = await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: { expiresAt: 'desc' } })
-    const [client, referrals, referralsActive, earned, txs, devices] = await Promise.all([
+    // Действующая подписка, а если её нет, последняя истёкшая (чтобы показать «закончилась»).
+    const subscription =
+      (await vpn.current(user.id)) ?? (await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: LATEST_FIRST }))
+    const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
+    const [panelClient, referrals, referralsActive, earned, txs, devices] = await Promise.all([
       panel.getClient(Number(tgId)).catch(() => null),
       prisma.user.count({ where: { referrerId: user.id } }),
       prisma.user.count({ where: { referrerId: user.id, payments: { some: { status: 'paid' } } } }),
@@ -60,8 +74,27 @@ export function registerMeRoutes(
       prisma.balanceTx.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 30 }),
       prisma.device.findMany({ where: { userId: user.id }, orderBy: { lastSeenAt: 'desc' } }),
     ])
+    // Подписка есть в БД, а на панели клиента нет или срок меньше: чиним сразу,
+    // иначе оплаченное продление не доходит до VPN («подписка не обновляется»).
+    let client = panelClient
+    if (active && !isAdmin) {
+      client = await vpn.sync(user, panelClient).then(
+        (r) => r.client,
+        (err: Error) => {
+          request.log.error({ err }, 'panel sync failed')
+          return panelClient
+        },
+      )
+    }
     const limits = subscription ? PLAN_LIMITS[subscription.plan] : null
-    const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
+    // Лимит устройств с бонусами за достижения, скидка на следующий платёж, закреплённые бейджи.
+    const [deviceLimit, bonusDevices, discount, showcase, badges] = await Promise.all([
+      active && subscription ? vpn.deviceLimit(user, subscription.plan) : Promise.resolve(0),
+      vpn.bonusDevices(user.id),
+      achievements ? achievements.discountFor(user.id) : Promise.resolve({ percent: 0, rewardIds: [] }),
+      achievements ? achievements.showcase(user) : Promise.resolve([]),
+      prisma.userAchievement.count({ where: { userId: user.id } }),
+    ])
     const promoUsed = s.defaultPromo
       ? await prisma.promoUse.count({ where: { userId: user.id, promo: { code: s.defaultPromo } } })
       : 1
@@ -75,7 +108,11 @@ export function registerMeRoutes(
         username: user.username,
         email: user.email,
         registeredAt: user.createdAt,
-        devicesLimit: isAdmin ? 99 : limits?.devices ?? 0,
+        devicesLimit: isAdmin ? 99 : active ? (deviceLimit ?? 99) : 0,
+        bonusDevices: active ? bonusDevices : 0,
+        rewardDiscount: discount.percent,
+        achievementsUnlocked: badges,
+        showcase,
         isAdmin,
         provisionError,
         balance: Number(user.balanceRub),
@@ -96,7 +133,7 @@ export function registerMeRoutes(
         expiresAt: subscription.expiresAt,
         autoRenew: subscription.autoRenew,
         trafficUsedGb: client?.trafficUsedGb ?? 0,
-        trafficLimitGb: limits?.trafficGb ?? null,
+        trafficLimitGb: isAdmin ? null : (limits?.trafficGb ?? null),
         subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
         happUrl: active ? happOpenUrl(env, user.subToken) : null,
       },

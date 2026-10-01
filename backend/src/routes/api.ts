@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { PrismaClient } from '@prisma/client'
 import type { Staff } from '@/bot/staff'
@@ -6,7 +6,7 @@ import { esc } from '@/bot/tg'
 import { rateLimit } from '@/plugins/rateLimit'
 import type { ServerStatusService } from '@/services/servers'
 import { LEVEL_NAMES, type SettingsService } from '@/services/settings'
-import { PLAN_LIMITS } from '@/services/vpn'
+import { LATEST_FIRST, PLAN_LIMITS, activeWhere, type VpnService } from '@/services/vpn'
 
 /**
  * Эндпоинты Mini App из ТЗ (раздел 2): тарифы, автопродление, рефералка,
@@ -14,9 +14,9 @@ import { PLAN_LIMITS } from '@/services/vpn'
  */
 export function registerApiRoutes(
   app: FastifyInstance,
-  deps: { prisma: PrismaClient; settings: SettingsService; servers: ServerStatusService; staff: Staff; env: NodeJS.ProcessEnv },
+  deps: { prisma: PrismaClient; settings: SettingsService; servers: ServerStatusService; staff: Staff; vpn: VpnService; env: NodeJS.ProcessEnv },
 ) {
-  const { prisma, settings, servers, staff, env } = deps
+  const { prisma, settings, servers, staff, vpn, env } = deps
   const auth = { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }
   const me = (tgId: number) => prisma.user.findUniqueOrThrow({ where: { tgId: BigInt(tgId) } })
   const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
@@ -40,10 +40,7 @@ export function registerApiRoutes(
   app.post('/subscription/autorenew', auth, async (request) => {
     const { enabled } = z.object({ enabled: z.boolean() }).parse(request.body)
     const user = await me(request.tgUser!.tgId)
-    const sub = await prisma.subscription.findFirst({
-      where: { userId: user.id, status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
-      orderBy: { expiresAt: 'desc' },
-    })
+    const sub = await prisma.subscription.findFirst({ where: { userId: user.id, ...activeWhere() }, orderBy: LATEST_FIRST })
     if (!sub) return { autoRenew: false }
     await prisma.subscription.update({ where: { id: sub.id }, data: { autoRenew: enabled } })
     return { autoRenew: enabled }
@@ -136,7 +133,7 @@ export function registerApiRoutes(
   })
 
   app.post('/support/ticket', { preHandler: [app.authenticate, rateLimit(10, 60_000, 'ticket')] }, async (request) => {
-    const body = z.object({ text: z.string().trim().min(3).max(3000), ticketId: z.string().optional() }).parse(request.body)
+    const body = z.object({ text: z.string().trim().min(3).max(3000), ticketId: z.string().regex(/^\d+$/).optional() }).parse(request.body)
     const user = await me(request.tgUser!.tgId)
     let ticket = body.ticketId
       ? await prisma.supportTicket.findFirst({ where: { id: BigInt(body.ticketId), userId: user.id } })
@@ -155,13 +152,40 @@ export function registerApiRoutes(
   })
 
   /** Отвязать устройство: освобождает место в лимите. */
-  app.delete('/user/devices/:id', auth, async (request, reply) => {
+  const unbind = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = await me(request.tgUser!.tgId)
     const { id } = request.params as { id: string }
     if (!/^\d+$/.test(id)) return reply.code(400).send({ error: 'Неверный id' })
-    const r = await prisma.device.deleteMany({ where: { id: BigInt(id), userId: user.id } })
-    if (!r.count) return reply.code(404).send({ error: 'Устройство не найдено' })
+    const device = await prisma.device.findFirst({ where: { id: BigInt(id), userId: user.id } })
+    if (!device) return reply.code(404).send({ error: 'Устройство не найдено' })
+    await prisma.device.delete({ where: { id: device.id } })
+    await prisma.deviceEvent.create({ data: { userId: user.id, hwid: device.hwid, label: device.label, event: 'unbound' } })
     return { ok: true }
+  }
+  app.delete('/user/devices/:id', auth, unbind)
+  // ТЗ v6.3 · 04: устройства.
+  app.delete('/api/devices/:id', auth, unbind)
+
+  app.get('/api/devices', auth, async (request) => {
+    const user = await me(request.tgUser!.tgId)
+    const rows = await prisma.device.findMany({ where: { userId: user.id }, orderBy: { lastSeenAt: 'desc' } })
+    return {
+      devices: rows.map((d) => ({
+        id: d.id.toString(),
+        label: d.label ?? 'Устройство',
+        platform: [d.platform, d.app?.split(/[\s/]/)[0]].filter(Boolean).join(', ') || 'Happ',
+        createdAt: d.createdAt.toISOString(),
+        lastSeenAt: d.lastSeenAt.toISOString(),
+      })),
+    }
+  })
+
+  /** Занято / доступно (лимит тарифа + бонусные устройства за достижения). */
+  app.get('/api/devices/count', auth, async (request) => {
+    const user = await me(request.tgUser!.tgId)
+    const [used, sub, bonus] = await Promise.all([prisma.device.count({ where: { userId: user.id } }), vpn.current(user.id), vpn.bonusDevices(user.id)])
+    const limit = sub ? await vpn.deviceLimit(user, sub.plan) : 0
+    return { used, limit, bonus: sub ? bonus : 0, unlimited: sub != null && limit == null }
   })
 
   /** Серверы со статусом и пингом (с нашего бэкенда до узла). */

@@ -11,6 +11,8 @@ export interface PanelClient {
   devicesCount: number
   /** Ссылки подписки у самих панелей (http), по одной на страну. Пользователю не отдаём, склеиваем в /sub/:token. */
   upstreamSubscriptionUrls: string[]
+  /** Готовые ссылки конфигов (vless://…), если панель отдаёт их напрямую (мок для разработки). */
+  links?: string[]
 }
 
 export interface ProvisionParams {

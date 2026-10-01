@@ -33,7 +33,7 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
       const first = results[0]
       if (first.status === 'rejected') throw first.reason
       const ok: PanelClient[] = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-      return { ...first.value, upstreamSubscriptionUrls: ok.flatMap((c) => c.upstreamSubscriptionUrls) }
+      return { ...first.value, upstreamSubscriptionUrls: ok.flatMap((c) => c.upstreamSubscriptionUrls), links: ok.flatMap((c) => c.links ?? []) }
     },
 
     async getClient(tgId) {
@@ -62,8 +62,8 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
         )
       }
 
-      const urls = results.flatMap((r) => (r.status === 'fulfilled' && r.value?.enabled ? r.value.upstreamSubscriptionUrls : []))
-      return { ...main, upstreamSubscriptionUrls: urls }
+      const alive = results.flatMap((r) => (r.status === 'fulfilled' && r.value?.enabled ? [r.value] : []))
+      return { ...main, upstreamSubscriptionUrls: alive.flatMap((c) => c.upstreamSubscriptionUrls), links: alive.flatMap((c) => c.links ?? []) }
     },
 
     async disable(tgId) {

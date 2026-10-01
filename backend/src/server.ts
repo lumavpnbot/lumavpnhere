@@ -16,10 +16,17 @@ import { createBillingService } from '@/services/billing'
 import { createUserService } from '@/services/users'
 import { createServerStatus } from '@/services/servers'
 import { createJobs } from '@/services/jobs'
-import { createTelegram } from '@/bot/tg'
-import { createStaff } from '@/bot/staff'
+import { registerTransferRoutes } from '@/routes/transfer'
+import { registerAchievementRoutes } from '@/routes/achievements'
+import { registerStatusRoutes } from '@/routes/status'
+import { createAchievementService } from '@/services/achievements'
+import { createTransferService } from '@/services/transfer'
+import { createStatusService } from '@/services/status'
+import { createTelegram, telegramApiBase, type InlineKeyboard } from '@/bot/tg'
+import { createStaff, ownerIds } from '@/bot/staff'
 import { createAdmin } from '@/bot/admin'
-import { registerBot } from '@/bot/index'
+import { createAdminFeatures } from '@/bot/adminFeatures'
+import { registerBot, statusPageUrl } from '@/bot/index'
 import { botIdOf, parseBotTokens } from '@/lib/telegramAuth'
 import { recordError } from '@/lib/errors'
 
@@ -29,8 +36,17 @@ declare module 'fastify' {
   }
 }
 
+// Локальный запуск (npm run dev): читаем backend/.env. На Railway переменные уже в окружении,
+// и они важнее файла (loadEnvFile не перезаписывает заданные переменные).
+try {
+  process.loadEnvFile()
+} catch {
+  /* .env нет — берём только окружение */
+}
+
 const env = process.env
-const app = Fastify({ logger: true })
+// За прокси Railway реальный IP клиента в X-Forwarded-For: он нужен для антифрода переноса и лимитов.
+const app = Fastify({ logger: true, trustProxy: env.TRUST_PROXY !== '0' })
 const prisma = new PrismaClient()
 
 // Сохраняем исходное тело запроса: по нему проверяется подпись вебхуков CryptoBot.
@@ -83,32 +99,64 @@ const picked = await pickBotToken()
 const botToken = picked.token
 app.log.info(`bot: @${picked.username ?? '?'} (id ${botIdOf(botToken)})`)
 
-const tg = createTelegram(botToken)
+const tg = createTelegram(botToken, telegramApiBase(env))
 const staff = createStaff(prisma, tg, env)
 const settings = createSettingsService(prisma)
 const payments = createPaymentRegistry({
   TELEGRAM_BOT_TOKEN: botToken,
+  TELEGRAM_API_URL: telegramApiBase(env),
   CRYPTOBOT_API_TOKEN: env.CRYPTOBOT_API_TOKEN,
   YOOKASSA_SHOP_ID: env.YOOKASSA_SHOP_ID,
   YOOKASSA_SECRET_KEY: env.YOOKASSA_SECRET_KEY,
 })
 const panel = createPanelProvider(env)
-const vpn = createVpnService(prisma, panel)
-const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'))
+const owners = ownerIds(env)
+const vpn = createVpnService(prisma, panel, (tgId) => owners.has(tgId))
+const achievements = createAchievementService({ prisma, settings, vpn, notify: staff.notify })
+const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'), achievements)
 const users = createUserService(prisma, (t) => staff.notifyStaff(t, 'owner'))
 const servers = createServerStatus(env)
+/** Сообщение команде (админам и владельцам) с кнопками, например «Открыть заявку». */
+const notifyAdmins = async (text: string, keyboard?: InlineKeyboard) => {
+  for (const id of await staff.staffIds('admin')) await tg.send(id, text, { keyboard }).catch(() => undefined)
+}
+const transfer = createTransferService({ prisma, settings, vpn, achievements, notify: staff.notify, notifyStaff: notifyAdmins })
+const status = createStatusService({
+  prisma,
+  env,
+  // Авто-инциденты: команде и в канал статуса (STATUS_CHANNEL_ID, ТЗ 02 «бот дублирует алерты в канал»).
+  alert: async (text) => {
+    await notifyAdmins(text)
+    if (env.STATUS_CHANNEL_ID) await tg.send(env.STATUS_CHANNEL_ID, text).catch((err) => recordError('status channel', err))
+  },
+})
 const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
-const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl })
-const admin = createAdmin({ prisma, tg, staff, settings, billing, vpn, panel, servers, sendBroadcast: jobs.sendBroadcast })
+const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements })
+const admin = createAdmin({
+  prisma,
+  tg,
+  staff,
+  settings,
+  billing,
+  vpn,
+  panel,
+  servers,
+  sendBroadcast: jobs.sendBroadcast,
+  features: (api) =>
+    createAdminFeatures({ prisma, tg, staff, settings, vpn, transfer, achievements, status, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env) }, api),
+})
 app.log.info(`panel mode: ${panel.kind}`)
 
-registerMeRoutes(app, { prisma, panel, vpn, users, settings, env })
+registerMeRoutes(app, { prisma, panel, vpn, users, settings, achievements, env })
 registerPaymentRoutes(app, prisma, payments, billing)
-registerSubscriptionRoutes(app, prisma, panel, env)
-registerApiRoutes(app, { prisma, settings, servers, staff, env })
+registerSubscriptionRoutes(app, prisma, panel, vpn, env)
+registerApiRoutes(app, { prisma, settings, servers, staff, vpn, env })
 registerEmailRoutes(app, prisma, env)
+registerTransferRoutes(app, { prisma, transfer, settings, users })
+registerAchievementRoutes(app, { achievements, users, tg, env })
+registerStatusRoutes(app, status)
 let botSetup = 'ещё не запускалась'
-const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, env })
+const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, panel, achievements, status, env })
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null

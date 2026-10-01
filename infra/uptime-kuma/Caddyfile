@@ -1,0 +1,3 @@
+status.lynk.io {
+	reverse_proxy uptime-kuma:3001
+}

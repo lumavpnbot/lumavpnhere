@@ -10,6 +10,8 @@ const PARENT: Record<string, string> = {
   '/balance': '/',
   '/account/notifications': '/account',
   '/account/logins': '/account',
+  '/account/transfer': '/account',
+  '/account/achievements': '/account',
 }
 
 /**

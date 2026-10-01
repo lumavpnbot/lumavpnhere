@@ -42,6 +42,7 @@ export default function PlansPage() {
   const prices = useAppStore((s) => s.prices)
   const maintenance = useAppStore((s) => s.maintenance)
   const refresh = useAppStore((s) => s.refresh)
+  const rewardPercent = useAppStore((s) => s.profile.rewardDiscount ?? 0)
 
   const [period, setPeriod] = useState<Period>('month')
   const [planId, setPlanId] = useState<PlanId>('start')
@@ -55,10 +56,18 @@ export default function PlansPage() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<Result>(null)
   const poll = useRef<number | null>(null)
+  const balanceTouched = useRef(false)
+
+  // Баланс приходит с /me позже первого рендера: включаем «списать с баланса», пока пользователь сам не трогал переключатель.
+  useEffect(() => {
+    if (!balanceTouched.current) setUseBalance(balance > 0)
+  }, [balance])
 
   const base = prices[planId][period]
   const discount = promo ? round2((base * promo.percent) / 100) : 0
-  const total = round2(Math.max(0, base - discount))
+  // Скидка за достижения применяется автоматически к цене после промокода (как на бэкенде).
+  const achDiscount = round2((Math.max(0, base - discount) * rewardPercent) / 100)
+  const total = round2(Math.max(0, base - discount - achDiscount))
   const fromBalance = method === 'balance' || useBalance ? round2(Math.min(balance, total)) : 0
   const toPay = round2(total - fromBalance)
   const notEnough = method === 'balance' && balance < total
@@ -96,17 +105,29 @@ export default function PlansPage() {
     poll.current = window.setInterval(async () => {
       tries++
       try {
+        // Бэкенд отдаёт paid только после выдачи доступа, так что /me уже вернёт новую подписку.
         const r = await api.get<{ status: string }>(`/payments/order/${orderId}`)
         if (r.status === 'paid') {
           window.clearInterval(poll.current!)
           await refresh()
           haptic('success')
           setResult({ kind: 'success' })
+          return
+        }
+        if (r.status === 'failed') {
+          window.clearInterval(poll.current!)
+          setResult(null)
+          haptic('error')
+          notify(t('plans.payFailed'))
+          return
         }
       } catch {
         /* повторим */
       }
-      if (tries > 90) window.clearInterval(poll.current!)
+      if (tries > 90) {
+        window.clearInterval(poll.current!)
+        void refresh()
+      }
     }, 4000)
   }
 
@@ -322,7 +343,13 @@ export default function PlansPage() {
               <span className="block text-[15px] font-medium">{t('plans.useBalance')}</span>
               <span className="block text-[13px] text-faint">{t('plans.useBalanceHint', { amount: formatRub(Math.min(balance, total)) })}</span>
             </span>
-            <Toggle checked={useBalance} onChange={setUseBalance} />
+            <Toggle
+              checked={useBalance}
+              onChange={(v) => {
+                balanceTouched.current = true
+                setUseBalance(v)
+              }}
+            />
           </div>
         )}
         <div className="flex items-center gap-3 px-4 py-3.5">
@@ -338,6 +365,7 @@ export default function PlansPage() {
       <div className="glass mt-3 space-y-2 px-5 py-4 text-[14px]">
         <Line label={`${t(PLANS.find((p) => p.id === planId)!.nameKey)}, ${period === 'month' ? t('plans.oneMonth') : t('plans.twelveMonths')}`} value={formatRub(base)} />
         {discount > 0 && <Line label={t('plans.discount', { code: promo!.code })} value={formatRub(-discount)} accent />}
+        {achDiscount > 0 && <Line label={t('plans.achDiscount', { percent: rewardPercent })} value={formatRub(-achDiscount)} accent />}
         {fromBalance > 0 && <Line label={t('plans.fromBalance')} value={formatRub(-fromBalance)} accent />}
         <div className="flex items-baseline justify-between border-t border-white/[0.07] pt-3">
           <span className="text-[15px] font-semibold">{t('plans.total')}</span>

@@ -13,7 +13,7 @@ interface Entry {
 }
 
 /** Список серверов берём из той же переменной, что и панели (H1_PANELS). Токены сюда не попадают. */
-function entries(env: NodeJS.ProcessEnv): Entry[] {
+export function entries(env: NodeJS.ProcessEnv): Entry[] {
   if (env.H1_PANELS) {
     try {
       return (JSON.parse(env.H1_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))
@@ -25,7 +25,7 @@ function entries(env: NodeJS.ProcessEnv): Entry[] {
 }
 
 /** Время TCP-подключения к серверу с нашего бэкенда (не пинг пользователя, но показывает, жив ли узел). */
-function tcpPing(host: string, port: number, timeoutMs = 3000): Promise<number | null> {
+export function tcpPing(host: string, port: number, timeoutMs = 3000): Promise<number | null> {
   return new Promise((resolve) => {
     const started = performance.now()
     const socket = net.connect({ host, port })

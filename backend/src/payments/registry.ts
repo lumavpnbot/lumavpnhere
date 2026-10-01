@@ -11,12 +11,13 @@ import { createYooKassaProvider } from './yookassaProvider'
  */
 export function createPaymentRegistry(env: {
   TELEGRAM_BOT_TOKEN?: string
+  TELEGRAM_API_URL?: string
   CRYPTOBOT_API_TOKEN?: string
   YOOKASSA_SHOP_ID?: string
   YOOKASSA_SECRET_KEY?: string
 }) {
   const providers: PaymentProvider[] = [
-    createStarsProvider(env.TELEGRAM_BOT_TOKEN ?? ''),
+    createStarsProvider(env.TELEGRAM_BOT_TOKEN ?? '', env.TELEGRAM_API_URL),
     createCryptoBotProvider(env.CRYPTOBOT_API_TOKEN ?? ''),
     createYooKassaProvider(env.YOOKASSA_SHOP_ID ?? '', env.YOOKASSA_SECRET_KEY ?? ''),
   ]

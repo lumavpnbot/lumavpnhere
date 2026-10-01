@@ -67,6 +67,10 @@ export const ACCESS: Record<string, StaffRole[]> = {
   bc: ['admin', 'owner'],
   set: ['owner'],
   logs: ['owner'],
+  // ТЗ v6.3
+  tr: ['admin', 'owner'],
+  ach: ['admin', 'owner'],
+  st: ['admin', 'owner'],
 }
 
 export const can = (role: StaffRole, section: string) => (ACCESS[section] ?? ['owner']).includes(role)

@@ -210,6 +210,46 @@ export const RefreshIcon = (p: P) => (
     <path d="M20 20v-4h-4" />
   </Base>
 )
+export const TrophyIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M7 4.5h10v5a5 5 0 0 1-10 0z" />
+    <path d="M7 6.5H4.5v1.5A3 3 0 0 0 7.5 11M17 6.5h2.5v1.5a3 3 0 0 1-3 3M12 14.5V18M8.5 20.5h7M9.5 18h5" />
+  </Base>
+)
+export const PulseIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+  </Base>
+)
+export const TransferIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M4 8h13.5M14 4.5 17.5 8 14 11.5" />
+    <path d="M20 16H6.5M10 12.5 6.5 16l3.5 3.5" />
+  </Base>
+)
+export const LockIcon = (p: P) => (
+  <Base {...p}>
+    <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+  </Base>
+)
+export const StarIcon = (p: P) => (
+  <Base {...p}>
+    <path d="m12 3.5 2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6-4.5-4.1 6-.7z" />
+  </Base>
+)
+export const CalendarIcon = (p: P) => (
+  <Base {...p}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </Base>
+)
+export const ClockIcon = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Base>
+)
 export const QrIcon = (p: P) => (
   <Base {...p}>
     <rect x="4" y="4" width="6" height="6" rx="1.2" />

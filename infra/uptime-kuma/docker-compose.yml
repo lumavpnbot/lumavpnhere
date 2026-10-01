@@ -1,0 +1,29 @@
+# Uptime Kuma для публичной страницы статуса LYNK (ТЗ v6.3 · 02).
+# Запуск на отдельном VPS:  docker compose up -d
+# Дальше: https://status.lynk.io → настроить мониторы и страницу статуса (см. README.md рядом).
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    volumes:
+      - uptime-kuma:/app/data
+
+  # HTTPS для status.lynk.io (Caddy сам получит сертификат Let's Encrypt).
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - uptime-kuma
+
+volumes:
+  uptime-kuma:
+  caddy_data:

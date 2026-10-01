@@ -1,19 +1,29 @@
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
-import type { PanelProvider } from '@/panel'
+import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
 import { recordError, recordSubRequest } from '@/lib/errors'
-import { PLAN_LIMITS } from '@/services/vpn'
+import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
 
 const BRAND = 'LYNK'
+const GB = 1024 ** 3
 
-// Заголовки подписки, которые понимают Happ / Hiddify / v2rayTun: трафик и срок, интервал обновления.
-const PASS_HEADERS = ['content-type', 'subscription-userinfo', 'profile-update-interval', 'announce']
+const b64 = (s: string) => Buffer.from(s).toString('base64')
+
+/** «upload=1; download=2; total=3; expire=4» → объект. */
+export function parseUserInfo(v: string | null): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const part of (v ?? '').split(';')) {
+    const [k, n] = part.split('=').map((s) => s.trim())
+    if (k && n && Number.isFinite(Number(n))) out[k.toLowerCase()] = Number(n)
+  }
+  return out
+}
 
 // Чтобы склеить несколько стран, просим у панелей простой список ссылок (как для v2rayNG).
 const PLAIN_UA = 'v2rayNG/1.9.0'
 
-function decodeList(body: string): string[] {
+export function decodeList(body: string): string[] {
   const text = body.trim()
   const raw = /^[A-Za-z0-9+/=\s_-]+$/.test(text) && !text.includes('://') ? Buffer.from(text, 'base64').toString('utf8') : text
   return raw
@@ -121,11 +131,23 @@ function renameLinks(links: string[]): string[] {
  *  - все страны (отдельные панели) собираются в одну подписку;
  *  - при смене провайдера или добавлении страны ссылка у пользователя та же.
  */
-export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaClient, panel: PanelProvider, env: NodeJS.ProcessEnv) {
+export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaClient, panel: PanelProvider, vpn: VpnService, env: NodeJS.ProcessEnv) {
   app.get('/sub/:token', async (request, reply) => {
     const { token } = request.params as { token: string }
     const user = await prisma.user.findUnique({ where: { subToken: token } })
     if (!user) return reply.code(404).send('not found')
+    const tgId = Number(user.tgId)
+    const isOwner = ownerIds(env).has(tgId)
+
+    reply.header('cache-control', 'no-store')
+    reply.header('profile-title', `base64:${b64(BRAND)}`)
+    if (env.SUPPORT_URL) reply.header('support-url', env.SUPPORT_URL)
+    const announce = (text: string) => reply.header('announce', `base64:${b64(text)}`)
+
+    if (user.banned) {
+      announce('Доступ к сервису ограничен. Напишите в поддержку.')
+      return reply.code(403).send('banned')
+    }
 
     // Устройство: Happ присылает x-hwid и данные об устройстве при каждом обновлении подписки.
     const header = (k: string) => {
@@ -136,7 +158,21 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // Если клиент не прислал HWID (старые версии, другие приложения), узнаём устройство по user-agent.
     const isClientApp = /happ|v2ray|hiddify|streisand|v2box|nekobox|sing-?box|clash|karing|shadowrocket|foxray/i.test(ua)
     const hwid = header('x-hwid') ?? (isClientApp ? `ua:${ua.slice(0, 100)}` : null)
-    recordSubRequest({ at: new Date(), tgId: Number(user.tgId), ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
+    recordSubRequest({ at: new Date(), tgId, ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
+
+    // Источник правды: подписка в БД. Панель подтягиваем к ней (vpn.sync).
+    // Команде проекта «Премиум» выдаётся автоматически, даже если приложение ещё не открывали.
+    const sub = (await vpn.current(user.id)) ?? (isOwner ? await vpn.ensureAdmin(user).catch(() => null) : null)
+    if (!sub) {
+      // Подписки нет, а клиент на панели ещё включён (сбой отключения): выключаем в фоне.
+      void panel
+        .getClient(tgId)
+        .then((c) => (c?.enabled ? panel.disable(tgId) : undefined))
+        .catch((err) => recordError('sub disable', err))
+      announce('Подписка закончилась. Продлите её в приложении LYNK.')
+      return reply.code(404).send('no active subscription')
+    }
+
     if (hwid) {
       const existing = await prisma.device.findUnique({ where: { userId_hwid: { userId: user.id, hwid } } })
       // Лимит устройств блокирует подписку только если явно включён (DEVICE_LIMIT_ENFORCE=1)
@@ -144,15 +180,11 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
       // блокировка по нему отрезала людям подписку.
       const enforce = env.DEVICE_LIMIT_ENFORCE === '1' && !hwid.startsWith('ua:')
       if (!existing && enforce) {
-        const sub = await prisma.subscription.findFirst({
-          where: { userId: user.id, status: { in: ['trial', 'active'] }, expiresAt: { gt: new Date() } },
-          orderBy: { expiresAt: 'desc' },
-        })
-        const isOwner = ownerIds(env).has(Number(user.tgId))
-        const limit = sub && !isOwner ? PLAN_LIMITS[sub.plan].devices : null
+        // Лимит тарифа + бонусные устройства за достижения.
+        const limit = isOwner ? null : await vpn.deviceLimit(user, sub.plan)
         const count = await prisma.device.count({ where: { userId: user.id, NOT: { hwid: { startsWith: 'ua:' } } } })
         if (limit != null && count >= limit) {
-          reply.header('announce', `base64:${Buffer.from(`Достигнут лимит устройств (${limit}). Удалите старое устройство в приложении LYNK.`).toString('base64')}`)
+          announce(`Достигнут лимит устройств (${limit}). Удалите старое устройство в приложении LYNK.`)
           return reply.code(403).send('device limit reached')
         }
       }
@@ -163,11 +195,23 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
       await prisma.device
         .upsert({ where: { userId_hwid: { userId: user.id, hwid } }, create: { userId: user.id, hwid, ...data }, update: data })
         .catch((err) => recordError('device upsert', err))
+      if (!existing) await prisma.deviceEvent.create({ data: { userId: user.id, hwid, label: data.label, event: 'bound' } }).catch(() => undefined)
     }
 
-    const client = await panel.getClient(Number(user.tgId))
+    // Если на панели клиента нет, он выключен или срок там меньше оплаченного, выдаём заново.
+    let client: PanelClient | null = null
+    try {
+      client = (await vpn.sync(user)).client
+    } catch (err) {
+      recordError('sub sync', err)
+      client = await panel.getClient(tgId).catch(() => null)
+    }
     const urls = client?.enabled ? client.upstreamSubscriptionUrls : []
-    if (!urls.length) return reply.code(404).send('no active subscription')
+    const direct = client?.enabled ? (client.links ?? []) : []
+    if (!urls.length && !direct.length) {
+      announce('Серверы временно недоступны. Обновите подписку через пару минут.')
+      return reply.code(503).send('panel unavailable')
+    }
 
     // Берём у панелей простой список ссылок, чтобы переименовать конфиги и склеить страны.
     const responses = await Promise.allSettled(
@@ -178,20 +222,30 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         }),
       ),
     )
+    responses.forEach((r) => r.status === 'rejected' && recordError('sub upstream', r.reason))
     const ok = responses.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-    if (!ok.length) return reply.code(502).send('upstream error')
-
-    for (const h of PASS_HEADERS) {
-      const v = ok[0].headers.get(h)
-      if (v && h !== 'content-type') reply.header(h, v)
+    if (!ok.length && !direct.length) {
+      announce('Серверы временно недоступны. Обновите подписку через пару минут.')
+      return reply.code(502).send('upstream error')
     }
-    reply.header('profile-title', `base64:${Buffer.from(BRAND).toString('base64')}`)
-    if (env.SUPPORT_URL) reply.header('support-url', env.SUPPORT_URL)
-    reply.header('cache-control', 'no-store')
+
+    const upstreamAnnounce = ok[0]?.headers.get('announce')
+    if (upstreamAnnounce) reply.header('announce', upstreamAnnounce)
+
+    // Срок и лимит трафика берём из нашей БД: так клиент (Happ) всегда показывает
+    // актуальную дату после продления, даже если панель отдала старые данные.
+    const up = parseUserInfo(ok[0]?.headers.get('subscription-userinfo') ?? null)
+    const limitGb = isOwner ? null : PLAN_LIMITS[sub.plan].trafficGb
+    const upload = up.upload ?? 0
+    const download = up.download ?? Math.round((client?.trafficUsedGb ?? 0) * GB)
+    reply.header(
+      'subscription-userinfo',
+      `upload=${upload}; download=${download}; total=${limitGb ? limitGb * GB : 0}; expire=${Math.floor(sub.expiresAt.getTime() / 1000)}`,
+    )
     // Happ: при открытии проверяет пинг через прокси и сам подключается к самому быстрому серверу.
     // https://www.happ.su/main/dev-docs/app-management
-    // Автообновление подписки в клиенте: каждые 2 часа.
-    reply.header('profile-update-interval', '2')
+    // Автообновление подписки в клиенте: каждый час.
+    reply.header('profile-update-interval', '1')
     reply.header('subscription-autoconnect', 'true')
     reply.header('subscription-autoconnect-type', 'lowestdelay')
     reply.header('subscription-ping-onopen-enabled', 'true')
@@ -203,17 +257,15 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // другие страны. Убираем повторы по ссылке без названия (#…).
     const seen = new Set<string>()
     const links = renameLinks(
-      ok
-        .flatMap((r) => decodeList(r.body.toString('utf8')))
-        .filter((l) => {
-          const key = l.split('#')[0]
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        }),
+      [...ok.flatMap((r) => decodeList(r.body.toString('utf8'))), ...direct].filter((l) => {
+        const key = l.split('#')[0]
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      }),
     )
     reply.header('content-type', 'text/plain; charset=utf-8')
-    return reply.send(Buffer.from(links.join('\n')).toString('base64'))
+    return reply.send(b64(links.join('\n')))
   })
 
   /**

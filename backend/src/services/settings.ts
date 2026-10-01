@@ -8,6 +8,19 @@ export interface LevelBonus {
   days: number
 }
 
+/**
+ * Награда за достижение (ТЗ 3.1). days — дни подписки сразу; discount — % на следующие
+ * платежи (validDays: срок действия, null = навсегда; reusable: не расходуется);
+ * device — бонусные устройства (forever: не сгорают, когда подписка заканчивается).
+ */
+export interface RewardSpec {
+  kind: 'days' | 'discount' | 'device'
+  value: number
+  validDays?: number | null
+  reusable?: boolean
+  forever?: boolean
+}
+
 /** Всё, что команда может менять из админ-меню в боте, без деплоя. */
 export interface AppSettings {
   prices: Record<PaidPlan, Record<Period, number>>
@@ -26,6 +39,18 @@ export interface AppSettings {
   maintenance: boolean
   welcomeText: string
   defaultPromo: string
+  /** Достижения: награды, изменённые из админки (код → награды). */
+  achievementRewards: Record<string, RewardSpec[]>
+  /** Срок действия разовых скидок за достижения, дней. */
+  achievementDiscountDays: number
+  /** Потолок суммарной скидки за достижения, %. */
+  achievementMaxDiscount: number
+  /** Дата запуска сервиса (бейдж «Ранний доступ»: покупка в первые 30 дней). */
+  launchDate: string
+  /** Перенос подписок: минимальный возраст аккаунта, диапазон дней. */
+  transferMinAccountDays: number
+  transferMinDays: number
+  transferMaxDays: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -42,6 +67,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   welcomeText:
     '<b>LYNK</b>: быстрое и защищённое соединение прямо в Telegram.\n\nОткройте приложение кнопкой ниже: первые 7 дней бесплатно, настройка занимает минуту.',
   defaultPromo: '',
+  achievementRewards: {},
+  achievementDiscountDays: 90,
+  achievementMaxDiscount: 25,
+  launchDate: '2025-09-30',
+  transferMinAccountDays: 3,
+  transferMinDays: 7,
+  transferMaxDays: 90,
 }
 
 export const LEVEL_NAMES = ['Базовый', 'Серебро', 'Золото', 'Платина'] as const

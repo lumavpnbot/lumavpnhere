@@ -3,7 +3,9 @@ import type { FastifyBaseLogger } from 'fastify'
 import { segmentWhere } from '@/bot/admin'
 import { TgError, type Telegram } from '@/bot/tg'
 import { recordError } from '@/lib/errors'
+import type { AchievementService } from './achievements'
 import type { BillingService } from './billing'
+import type { StatusService } from './status'
 import type { VpnService } from './vpn'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -13,8 +15,28 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * Фоновые задачи: истечение подписок, снятие холда, напоминания,
  * автопродление с баланса, отложенные рассылки.
  */
-export function createJobs(deps: { prisma: PrismaClient; tg: Telegram; billing: BillingService; vpn: VpnService; log: FastifyBaseLogger; webAppUrl: string }) {
-  const { prisma, tg, billing, vpn, log, webAppUrl } = deps
+export function createJobs(deps: {
+  prisma: PrismaClient
+  tg: Telegram
+  billing: BillingService
+  vpn: VpnService
+  log: FastifyBaseLogger
+  webAppUrl: string
+  status?: StatusService
+  achievements?: AchievementService
+}) {
+  const { prisma, tg, billing, vpn, log, webAppUrl, status, achievements } = deps
+
+  /** Достижения за лояльность (6/12/24 месяца) наступают со временем: проверяем всех, кто платил. */
+  async function achievementsSweep() {
+    if (!achievements) return 0
+    const payers = await prisma.payment.findMany({ where: { status: 'paid' }, distinct: ['userId'], select: { userId: true } })
+    let unlocked = 0
+    for (const p of payers) {
+      unlocked += (await achievements.evaluateById(p.userId).catch(() => [])).length
+    }
+    return unlocked
+  }
   const openApp = [[{ text: 'Открыть LYNK', web_app: { url: webAppUrl } }]]
 
   async function remind() {
@@ -33,7 +55,10 @@ export function createJobs(deps: { prisma: PrismaClient; tg: Telegram; billing: 
     })
     for (const sub of due) {
       // Есть ли более поздняя подписка (уже продлили)? Тогда не напоминаем.
-      const later = await prisma.subscription.count({ where: { userId: sub.userId, expiresAt: { gt: sub.expiresAt } } })
+      // Строки с тем же сроком (старая смена тарифа) не дублируют напоминание: пишем только по последней.
+      const later = await prisma.subscription.count({
+        where: { userId: sub.userId, OR: [{ expiresAt: { gt: sub.expiresAt } }, { expiresAt: sub.expiresAt, id: { gt: sub.id } }] },
+      })
       await prisma.subscription.update({ where: { id: sub.id }, data: { remindedAt: new Date() } })
       if (later || !sub.user.botStarted) continue
       const days = Math.max(1, Math.ceil((sub.expiresAt.getTime() - now) / DAY))
@@ -85,15 +110,29 @@ export function createJobs(deps: { prisma: PrismaClient; tg: Telegram; billing: 
     })
 
   function start() {
+    // Шаги независимы: ошибка в одном (например, панель недоступна) не должна отменять остальные.
+    const step = (name: string, fn: () => Promise<unknown>) =>
+      fn().catch((err) => {
+        recordError(`job:${name}`, err)
+        log.error({ err }, `job ${name} failed`)
+      })
     const every10 = async () => {
-      await vpn.expireOverdue()
-      await billing.releaseHolds()
-      await billing.autoRenewFromBalance()
-      await remind()
+      await step('expire', () => vpn.expireOverdue())
+      await step('holds', () => billing.releaseHolds())
+      await step('autorenew', () => billing.autoRenewFromBalance())
+      await step('activations', () => billing.retryFailedActivations())
+      await step('remind', remind)
     }
     setInterval(safe('ten-minutes', every10), 10 * 60 * 1000)
     setInterval(safe('broadcasts', dueBroadcasts), 60 * 1000)
     setTimeout(safe('startup', every10), 30 * 1000)
+    // Статус сервиса: проверка узлов раз в минуту, чистка истории раз в час (ТЗ 02).
+    if (status && process.env.STATUS_MONITOR !== '0') {
+      setInterval(safe('status', () => status.tick()), 60 * 1000)
+      setTimeout(safe('status-first', () => status.tick()), 5 * 1000)
+      setInterval(safe('status-cleanup', () => status.cleanup()), 60 * 60 * 1000)
+    }
+    if (achievements) setInterval(safe('achievements', achievementsSweep), 6 * 60 * 60 * 1000)
     // После перезапуска (например, добавили инбаунд в H1_PANELS) обновляем клиентов на панелях.
     if (process.env.SYNC_ON_START !== '0') {
       setTimeout(
@@ -103,5 +142,5 @@ export function createJobs(deps: { prisma: PrismaClient; tg: Telegram; billing: 
     }
   }
 
-  return { start, sendBroadcast }
+  return { start, sendBroadcast, achievementsSweep }
 }
