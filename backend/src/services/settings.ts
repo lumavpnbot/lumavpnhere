@@ -41,6 +41,8 @@ export interface AppSettings {
   welcomeMessage: string
   /** Премиум-эмодзи (custom_emoji_id) на кнопках /start. Пусто = обычные эмодзи 🚀 / 🔁. */
   buttonEmoji: { open: string; transfer: string }
+  /** Фото / видео / GIF приветствия (file_id бота); null = только текст. */
+  welcomeMedia: { type: 'photo' | 'video' | 'animation'; fileId: string } | null
   defaultPromo: string
   /** Достижения: награды, изменённые из админки (код → награды). */
   achievementRewards: Record<string, RewardSpec[]>
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     'Ты можешь перенести свою старую подписку на наш сервис одним нажатием\n\n' +
     '<b>Готов начать?</b>',
   buttonEmoji: { open: '', transfer: '' },
+  welcomeMedia: null,
   defaultPromo: '',
   achievementRewards: {},
   achievementDiscountDays: 90,

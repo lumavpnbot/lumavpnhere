@@ -29,7 +29,8 @@ import {
   type View,
 } from './adminUi'
 import { can, type Staff, type StaffRole } from './staff'
-import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity } from './tg'
+import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity, type TgMedia } from './tg'
+import { sendWelcome } from './welcome'
 
 /**
  * Админ-меню в боте (ТЗ раздел 6). Открывается командой /admin для ролей
@@ -544,6 +545,7 @@ export function createAdmin(deps: {
       `Реф. проценты: <b>${s.referralPercents.join(' / ')}%</b>\n` +
       `Курс Stars: <b>1 ⭐ = ${s.starsRubRate} ₽</b>\n` +
       `Промокод для новых: <b>${s.defaultPromo ? esc(s.defaultPromo) : 'нет'}</b>\n` +
+      `Приветствие: <b>${s.welcomeMedia ? { photo: 'фото', video: 'видео', animation: 'GIF' }[s.welcomeMedia.type] + ' с подписью' : 'текст'}</b>\n` +
       `Премиум-эмодзи кнопок: <b>${[s.buttonEmoji.open && 'Открыть', s.buttonEmoji.transfer && 'Перенести'].filter(Boolean).join(', ') || 'нет'}</b>\n` +
       `Техрежим: <b>${s.maintenance ? '🔴 включён, платежи не принимаются' : '🟢 выключен'}</b>`
     return {
@@ -959,7 +961,15 @@ export function createAdmin(deps: {
         if (b === 'pct') return void (await ask(ctx, 'set_pct', 'Проценты для уровней через пробел: Базовый Серебро Золото Платина. Например: 30 35 40 45', {}, 'adm:set'))
         if (b === 'stars') return void (await ask(ctx, 'set_stars', 'Сколько рублей стоит 1 Star для покупателя? Например 1.8', {}, 'adm:set'))
         if (b === 'promo') return void (await ask(ctx, 'set_promo', 'Промокод, который автоматически получают новые пользователи. Отправьте «-», чтобы убрать.', {}, 'adm:set'))
-        if (b === 'welcome') return void (await ask(ctx, 'set_welcome', 'Новый текст приветствия для /start. Можно форматирование Telegram, HTML и премиум-эмодзи.', {}, 'adm:set'))
+        if (b === 'welcome') {
+          return void (await ask(
+            ctx,
+            'set_welcome',
+            'Отправьте приветствие для /start так, как оно должно выглядеть: текст или фото (видео, GIF) с подписью. Можно форматирование Telegram, HTML и премиум-эмодзи.\n\n<i>Подпись к фото до 1024 символов, более длинный текст придёт отдельным сообщением под фото. Чтобы убрать фото, пришлите приветствие без него.</i>',
+            {},
+            'adm:set',
+          ))
+        }
         if (b === 'btnemoji') {
           return void (await ask(
             ctx,
@@ -1057,7 +1067,7 @@ export function createAdmin(deps: {
   // ── пошаговый ввод ────────────────────────────────────────────────────────
 
   /** entities: разметка сообщения админа (в т.ч. премиум-эмодзи), сохраняем её в текстах для пользователей. */
-  async function onText(ctx: Ctx, text: string, entities: TgEntity[] = []): Promise<boolean> {
+  async function onText(ctx: Ctx, text: string, entities: TgEntity[] = [], media: TgMedia | null = null): Promise<boolean> {
     const state = fsm.get(ctx.tgId)
     if (!state) return false
     const v = text.trim()
@@ -1067,6 +1077,8 @@ export function createAdmin(deps: {
     const retry = (msg: string) => tg.send(ctx.chatId, `⚠️ ${msg}`, { keyboard: [[btn('Отмена', 'adm:cancel')]] })
     const n = Number(v.replace(',', '.'))
     const done = () => fsm.delete(ctx.tgId)
+    // Фото принимает только приветствие; в остальных полях оно молча потерялось бы.
+    if (media && state.kind !== 'set_welcome') { await retry('Здесь можно только текст, без фото и видео'); return true }
 
     switch (state.kind) {
       case 'user_search': {
@@ -1282,11 +1294,14 @@ export function createAdmin(deps: {
         return true
       }
       case 'set_welcome': {
-        await settings.set('welcomeMessage', html)
-        await staff.audit(ctx.tgId, 'set_welcome')
+        // Новое приветствие целиком заменяет старое: без фото в сообщении фото убирается.
+        if (!v && !media) { await retry('Пришлите текст или фото (видео, GIF) с подписью'); return true }
+        await settings.set('welcomeMessage', html.trim())
+        await settings.set('welcomeMedia', media)
+        await staff.audit(ctx.tgId, 'set_welcome', undefined, { media: media?.type ?? null })
         done()
         await tg.send(ctx.chatId, 'Готово. Так теперь выглядит приветствие:')
-        await tg.send(ctx.chatId, html).catch((e: Error) => tg.send(ctx.chatId, `Ошибка разметки: ${esc(e.message)}`))
+        await sendWelcome(tg, ctx.chatId, await settings.get()).catch((e: Error) => tg.send(ctx.chatId, `Ошибка: ${esc(e.message)}`))
         return true
       }
       case 'set_btn_emoji': {

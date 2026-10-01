@@ -9,7 +9,8 @@ import type { VpnService } from '@/services/vpn'
 import { recordError } from '@/lib/errors'
 import type { Admin } from './admin'
 import type { Staff } from './staff'
-import { esc, type InlineButton, type InlineKeyboard, type TgMessage, type TgUpdate, type Telegram } from './tg'
+import { sendWelcome } from './welcome'
+import { esc, mediaOf, type InlineButton, type InlineKeyboard, type TgMessage, type TgUpdate, type Telegram } from './tg'
 
 /** Публичная страница статуса: STATUS_PAGE_URL (например https://status.lynk.io) или <PUBLIC_URL>/status. */
 export function statusPageUrl(env: NodeJS.ProcessEnv) {
@@ -70,7 +71,7 @@ export function registerBot(
     }
     const extra = attached && user.referrerId ? `\n\n🎁 Тебя пригласил друг: пробный период <b>${s.trialDaysReferral} дней</b>.` : ''
     if (attached && user.referrerId && achievements) void achievements.evaluateById(user.referrerId).catch(() => undefined)
-    await tg.send(msg.chat.id, s.welcomeMessage + extra, { keyboard: startKeyboard(s) })
+    await sendWelcome(tg, msg.chat.id, s, { extra, keyboard: startKeyboard(s) })
   }
 
   /** Любое обычное сообщение пользователя: это обращение в поддержку. */
@@ -162,7 +163,9 @@ export function registerBot(
 
     const role = await staff.roleOf(msg.from.id)
     if (role && admin.hasState(msg.from.id)) {
-      await admin.onText({ chatId: msg.chat.id, tgId: msg.from.id, role }, text, msg.entities)
+      // Фото / видео / GIF с подписью: текст в caption, разметка в caption_entities.
+      const media = mediaOf(msg)
+      await admin.onText({ chatId: msg.chat.id, tgId: msg.from.id, role }, media ? (msg.caption ?? '') : text, media ? msg.caption_entities : msg.entities, media)
       return
     }
     if (command.startsWith('/')) {

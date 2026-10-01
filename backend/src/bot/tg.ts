@@ -37,6 +37,12 @@ export interface TgMessage {
   from?: TgUser
   text?: string
   entities?: TgEntity[]
+  /** Фото (несколько размеров, последний самый большой), видео, GIF и подпись к ним. */
+  photo?: { file_id: string; width: number; height: number }[]
+  video?: { file_id: string }
+  animation?: { file_id: string }
+  caption?: string
+  caption_entities?: TgEntity[]
   successful_payment?: {
     currency: string
     total_amount: number
@@ -60,6 +66,23 @@ export class TgError extends Error {
     super(message)
   }
 }
+
+/** Картинка к сообщению: file_id из Telegram (принадлежит этому боту). */
+export interface TgMedia {
+  type: 'photo' | 'video' | 'animation'
+  fileId: string
+}
+
+/** Фото / видео / GIF из сообщения (у фото берём самый большой размер). */
+export function mediaOf(msg: TgMessage): TgMedia | null {
+  if (msg.photo?.length) return { type: 'photo', fileId: msg.photo[msg.photo.length - 1].file_id }
+  if (msg.animation) return { type: 'animation', fileId: msg.animation.file_id }
+  if (msg.video) return { type: 'video', fileId: msg.video.file_id }
+  return null
+}
+
+/** Лимит подписи к фото/видео у ботов (символов после разметки). */
+export const CAPTION_LIMIT = 1024
 
 export interface SendOptions {
   keyboard?: InlineKeyboard
@@ -187,6 +210,15 @@ export function createTelegram(token: string, apiBase = telegramApiBase()) {
       }
       return withFallbacks(text, opts.keyboard, (t, kb, html) =>
         call<TgMessage>('sendMessage', { ...params, ...markup(kb), text: t, ...(html ? { parse_mode: 'HTML' } : {}) }),
+      )
+    },
+
+    /** Фото / видео / GIF с подписью (HTML) и кнопками. */
+    async sendMedia(chatId: number | bigint, media: TgMedia, caption = '', opts: SendOptions = {}) {
+      const method = media.type === 'photo' ? 'sendPhoto' : media.type === 'video' ? 'sendVideo' : 'sendAnimation'
+      const params = { chat_id: Number(chatId), [media.type]: media.fileId }
+      return withFallbacks(caption, opts.keyboard, (t, kb, html) =>
+        call<TgMessage>(method, { ...params, ...markup(kb), ...(t ? { caption: t, ...(html ? { parse_mode: 'HTML' } : {}) } : {}) }),
       )
     },
 
