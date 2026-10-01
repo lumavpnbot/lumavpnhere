@@ -189,8 +189,11 @@ export function registerBot(
       allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
       drop_pending_updates: false,
     })
-    // В меню команд только /support (/start по-прежнему работает, /sub убрана: всё в приложении).
-    const userCommands = [{ command: 'support', description: 'Написать в поддержку' }]
+    // Меню команд: /start и /support (/sub убрана: всё в приложении).
+    const userCommands = [
+      { command: 'start', description: 'Открыть LYNK' },
+      { command: 'support', description: 'Написать в поддержку' },
+    ]
     await tg.call('setMyCommands', { commands: userCommands })
     // Команде показываем /admin в меню команд (только в их личных чатах).
     for (const id of await staff.staffIds('support')) {
