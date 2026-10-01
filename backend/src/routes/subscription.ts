@@ -81,7 +81,7 @@ function protoOf(link: string, params: URLSearchParams): string {
   if (scheme === 'ss') return 'Shadowsocks'
   if (scheme === 'vmess') return 'VMess'
   const type = (params.get('type') ?? 'tcp').toLowerCase()
-  return ({ tcp: 'TCP', raw: 'TCP', xhttp: 'XHTTP', splithttp: 'XHTTP', ws: 'WS', grpc: 'gRPC', httpupgrade: 'HTTPUpgrade' } as Record<string, string>)[type] ?? type.toUpperCase()
+  return ({ tcp: 'TCP', raw: 'TCP', xhttp: 'XHTTP', splithttp: 'XHTTP', ws: 'WS', grpc: 'gRPC', httpupgrade: 'HTTPUpgrade', hysteria: 'Hysteria', hysteria2: 'Hysteria' } as Record<string, string>)[type] ?? type.toUpperCase()
 }
 
 /**

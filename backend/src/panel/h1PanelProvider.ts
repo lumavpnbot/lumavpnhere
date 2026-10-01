@@ -46,7 +46,17 @@ interface H1Inbound {
   tag?: string
   remark?: string
   port?: number
+  protocol?: string
+  type?: string
 }
+
+// Hysteria (hysteria2, hy2) узнаём по протоколу, тегу или названию инбаунда.
+const HYSTERIA = /hysteria|(^|[^a-z0-9])hy2($|[^a-z0-9])/i
+const isHysteria = (i: H1Inbound) => [i.protocol, i.type, i.tag, i.remark].some((v) => HYSTERIA.test(String(v ?? '')))
+
+// Список инбаундов перечитываем раз в минуту: новый инбаунд подхватит кнопка
+// «Обновить клиентов на панелях» без перезапуска бэкенда.
+const INBOUNDS_TTL_MS = 60_000
 
 export class H1ApiError extends Error {
   constructor(
@@ -78,7 +88,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     return data
   }
 
-  let resolvedInbounds: string[] | null = cfg.inboundIds.length ? cfg.inboundIds : null
+  let resolvedInbounds: { ids: string[]; at: number } | null = null
 
   async function listInbounds(): Promise<H1Inbound[]> {
     const data = (await call<unknown>('GET', '/inbounds')) as unknown
@@ -89,8 +99,16 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
   }
 
   async function inboundIds(): Promise<string[]> {
-    if (resolvedInbounds) return resolvedInbounds
-    const all = await listInbounds()
+    if (cfg.inboundIds.length) return cfg.inboundIds
+    if (resolvedInbounds && Date.now() - resolvedInbounds.at < INBOUNDS_TTL_MS) return resolvedInbounds.ids
+    let all: H1Inbound[]
+    try {
+      all = await listInbounds()
+    } catch (err) {
+      // Панель не отдала список: работаем с прежним, чтобы не ломать выдачу.
+      if (resolvedInbounds) return resolvedInbounds.ids
+      throw err
+    }
     const tags = cfg.inboundTags ?? []
     // Теги сравниваем без учёта регистра, и по tag, и по названию (remark).
     // «selfsteal*» в конце со звёздочкой = все инбаунды, чьё имя начинается с selfsteal.
@@ -99,10 +117,12 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
       const n = name.toLowerCase()
       return wanted.some((w) => (w.endsWith('*') ? n.startsWith(w.slice(0, -1)) : n === w))
     }
-    const picked = tags.length ? all.filter((i) => matches(String(i.tag ?? '')) || matches(String(i.remark ?? ''))) : all
+    // Hysteria выдаём всегда, даже если его тега нет в списке: в подписке появляется
+    // «🇫🇮 Финляндия | Hysteria» без правки H1_PANELS.
+    const picked = tags.length ? all.filter((i) => matches(String(i.tag ?? '')) || matches(String(i.remark ?? '')) || isHysteria(i)) : all
     const ids = picked.map((i) => String(i.id ?? '')).filter(Boolean)
     if (!ids.length) throw new Error(`H1: не нашёл инбаунды ${tags.join(',') || '(любые)'} в /api/inbounds`)
-    resolvedInbounds = ids
+    resolvedInbounds = { ids, at: Date.now() }
     return ids
   }
 
@@ -140,7 +160,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     async describe() {
       const all = await listInbounds()
       return {
-        inbounds: all.map((i) => ({ id: i.id, tag: i.tag ?? i.remark, port: i.port })),
+        inbounds: all.map((i) => ({ id: i.id, tag: i.tag ?? i.remark, port: i.port, protocol: i.protocol ?? i.type })),
         using: await inboundIds().catch((e: Error) => e.message),
       }
     },
