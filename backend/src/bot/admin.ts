@@ -1268,7 +1268,7 @@ export function createAdmin(deps: {
         return true
       }
       case 'set_welcome': {
-        await settings.set('welcomeText', text)
+        await settings.set('welcomeMessage', text)
         await staff.audit(ctx.tgId, 'set_welcome')
         done()
         await tg.send(ctx.chatId, 'Готово. Так теперь выглядит приветствие:')

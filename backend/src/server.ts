@@ -160,7 +160,7 @@ registerTransferRoutes(app, { prisma, transfer, settings, users })
 registerAchievementRoutes(app, { achievements, users, tg, env })
 registerStatusRoutes(app, status)
 let botSetup = 'ещё не запускалась'
-const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, panel, achievements, status, env })
+const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, achievements, env })
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null

@@ -37,7 +37,8 @@ export interface AppSettings {
   /** Сколько рублей стоит 1 Telegram Star для покупателя (для пересчёта цены). */
   starsRubRate: number
   maintenance: boolean
-  welcomeText: string
+  /** Приветствие /start (HTML). Ключ сменён с welcomeText: старое значение из админки больше не используется. */
+  welcomeMessage: string
   defaultPromo: string
   /** Достижения: награды, изменённые из админки (код → награды). */
   achievementRewards: Record<string, RewardSpec[]>
@@ -64,8 +65,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoRenewDiscount: 5,
   starsRubRate: 1.8,
   maintenance: false,
-  welcomeText:
-    '<b>LYNK</b>: быстрое и защищённое соединение прямо в Telegram.\n\nОткройте приложение кнопкой ниже: первые 7 дней бесплатно, настройка занимает минуту.',
+  welcomeMessage:
+    '<b>Привет, это Линк!</b>\n\n' +
+    'Мы обеспечиваем стабильное и защищённое соединение доступа к Интернету и зарубежным сервисам для тебя. ' +
+    'Ты можешь перенести свою старую подписку на наш сервис одним нажатием\n\n' +
+    '<b>Готов начать?</b>',
   defaultPromo: '',
   achievementRewards: {},
   achievementDiscountDays: 90,
