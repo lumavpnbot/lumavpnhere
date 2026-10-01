@@ -1,4 +1,5 @@
 import net from 'node:net'
+import { disabledCountries } from '@/lib/countries'
 
 export interface ServerStatus {
   country: string
@@ -12,16 +13,23 @@ interface Entry {
   url: string
 }
 
-/** Список серверов берём из той же переменной, что и панели (H1_PANELS). Токены сюда не попадают. */
+/**
+ * Список серверов берём из той же переменной, что и панели (H1_PANELS). Токены сюда не попадают.
+ * Страны из DISABLED_COUNTRIES пропускаем.
+ */
 export function entries(env: NodeJS.ProcessEnv): Entry[] {
+  const off = disabledCountries(env)
+  let list: Entry[] = []
   if (env.H1_PANELS) {
     try {
-      return (JSON.parse(env.H1_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))
+      list = (JSON.parse(env.H1_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))
     } catch {
       return []
     }
+  } else if (env.H1_PANEL_URL) {
+    list = [{ country: env.H1_COUNTRY ?? 'fi', url: env.H1_PANEL_URL }]
   }
-  return env.H1_PANEL_URL ? [{ country: env.H1_COUNTRY ?? 'fi', url: env.H1_PANEL_URL }] : []
+  return list.filter((e) => !off.has(String(e.country).toLowerCase()))
 }
 
 /** Время TCP-подключения к серверу с нашего бэкенда (не пинг пользователя, но показывает, жив ли узел). */

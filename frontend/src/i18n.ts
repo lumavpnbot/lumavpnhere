@@ -320,7 +320,7 @@ const ru = {
   'status.widgetOk': 'Серверов онлайн: {n} из {total}',
   'status.widgetOpen': 'Подробнее',
   'status.row': 'Статус сервиса',
-  'status.rowHint': 'Работает ли VPN прямо сейчас',
+  'status.rowHint': 'Работает ли сервис прямо сейчас',
   'status.noData': 'нет данных',
   'status.publicPage': 'Открыть публичную страницу',
 
@@ -723,7 +723,7 @@ const en: Record<Key, string> = {
   'status.widgetOk': 'Servers online: {n} of {total}',
   'status.widgetOpen': 'Details',
   'status.row': 'Service status',
-  'status.rowHint': 'Is the VPN working right now',
+  'status.rowHint': 'Is the service working right now',
   'status.noData': 'no data',
   'status.publicPage': 'Open the public page',
 

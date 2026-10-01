@@ -1,3 +1,4 @@
+import { disabledCountries } from '@/lib/countries'
 import type { PanelProvider } from './types'
 import { createMockPanelProvider } from './mockPanelProvider'
 import { createH1PanelProvider } from './h1PanelProvider'
@@ -45,6 +46,11 @@ export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
       },
     ]
   }
+
+  // Панели убранных стран (DISABLED_COUNTRIES, по умолчанию США) не используем.
+  const off = disabledCountries(env)
+  const enabled = entries.filter((e) => !off.has(String(e.country).toLowerCase()))
+  if (enabled.length) entries = enabled
 
   const panels = entries.map((e) => {
     if (!e.url || !e.token) throw new Error(`H1 (${e.country}): нужны url и token`)

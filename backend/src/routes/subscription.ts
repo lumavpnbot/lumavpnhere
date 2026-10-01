@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
+import { disabledCountries } from '@/lib/countries'
 import { recordError, recordSubRequest } from '@/lib/errors'
 import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
 
@@ -83,8 +84,11 @@ function protoOf(link: string, params: URLSearchParams): string {
   return ({ tcp: 'TCP', raw: 'TCP', xhttp: 'XHTTP', splithttp: 'XHTTP', ws: 'WS', grpc: 'gRPC', httpupgrade: 'HTTPUpgrade' } as Record<string, string>)[type] ?? type.toUpperCase()
 }
 
-/** Переименование конфигов: «🇫🇮 Финляндия | TCP», «🇫🇮 Финляндия | Hysteria», и сортировка по стране. */
-function renameLinks(links: string[]): string[] {
+/**
+ * Переименование конфигов: «🇫🇮 Финляндия | TCP», «🇫🇮 Финляндия | Hysteria», и сортировка по стране.
+ * Конфиги убранных стран (off, DISABLED_COUNTRIES) выбрасываем: панели H1 связаны и могут их подтянуть.
+ */
+export function renameLinks(links: string[], off: Set<string> = new Set()): string[] {
   const rows = links.map((link) => {
     const [body, fragment = ''] = link.split('#')
     const oldName = (() => {
@@ -113,7 +117,7 @@ function renameLinks(links: string[]): string[] {
       /* без порта */
     }
     return { body, oldName, country, proto }
-  })
+  }).filter((r) => !r.country || !off.has(r.country))
   rows.sort((a, b) => {
     const ca = a.country ? COUNTRY_ORDER.indexOf(a.country) : 99
     const cb = b.country ? COUNTRY_ORDER.indexOf(b.country) : 99
@@ -272,6 +276,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         seen.add(key)
         return true
       }),
+      disabledCountries(env),
     )
     reply.header('content-type', 'text/plain; charset=utf-8')
     return reply.send(b64(links.join('\n')))

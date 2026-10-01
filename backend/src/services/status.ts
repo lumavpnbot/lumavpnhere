@@ -1,4 +1,5 @@
 import type { Incident, PrismaClient } from '@prisma/client'
+import { disabledCountries, isDisabledNode } from '@/lib/countries'
 import { recordError } from '@/lib/errors'
 import { entries, tcpPing } from './servers'
 
@@ -29,6 +30,11 @@ export function createStatusService(deps: {
   alert: (text: string) => Promise<void>
 }) {
   const { prisma, env, alert } = deps
+  /** Узлы убранных стран (DISABLED_COUNTRIES) не проверяем и не показываем. */
+  const off = disabledCountries(env)
+  const hidden = (id: string, country?: string | null) => isDisabledNode(off, id, country)
+  /** Инциденты узлов убранных стран тоже не показываем (ручные инциденты без узла остаются). */
+  const visibleIncident = { OR: [{ node: null }, { node: { notIn: [...off] } }] }
   const fails = new Map<string, number>()
   /** Когда менялись инциденты: по нему сбрасываются кэши статуса. */
   let changedAt = Date.now()
@@ -50,7 +56,8 @@ export function createStatusService(deps: {
     // Дополнительные узлы: STATUS_NODES='[{"name":"nl","host":"nl1.example.com","port":443}]'
     try {
       for (const n of JSON.parse(env.STATUS_NODES || '[]') as { name: string; host: string; port?: number; country?: string }[]) {
-        list.push({ id: n.name, country: n.country ?? (/^[a-z]{2}$/.test(n.name) ? n.name : null), host: n.host, port: n.port ?? 443 })
+        const country = n.country ?? (/^[a-z]{2}$/.test(n.name) ? n.name : null)
+        if (!hidden(n.name, country)) list.push({ id: n.name, country, host: n.host, port: n.port ?? 443 })
       }
     } catch {
       recordError('status', new Error('STATUS_NODES: не удалось разобрать JSON'))
@@ -74,7 +81,8 @@ export function createStatusService(deps: {
     const list = (beats as { heartbeatList?: Record<string, { status: number; ping: number | null }[]> }).heartbeatList ?? {}
     return Object.entries(list).flatMap(([id, arr]) => {
       const last = arr[arr.length - 1]
-      return last ? [{ id: names.get(Number(id)) ?? `monitor-${id}`, ok: last.status === 1, pingMs: last.ping ?? null }] : []
+      const name = names.get(Number(id)) ?? `monitor-${id}`
+      return last && !hidden(name) ? [{ id: name, ok: last.status === 1, pingMs: last.ping ?? null }] : []
     })
   }
 
@@ -85,6 +93,14 @@ export function createStatusService(deps: {
       : await Promise.all(builtinNodes().map(async (n) => ({ id: n.id, ...(await tcpPing(n.host, n.port).then((ms) => ({ ok: ms != null, pingMs: ms }))) })))
     if (!results.length) return results
     await prisma.statusCheck.createMany({ data: results.map((r) => ({ node: r.id, ok: r.ok, pingMs: r.pingMs })) })
+
+    // Узел убрали из мониторинга (страну отключили, панель удалили): его авто-инцидент
+    // больше некому закрыть, и статус навсегда оставался «есть проблемы». Закрываем сами.
+    const orphaned = await prisma.incident.updateMany({
+      where: { auto: true, status: 'open', node: { notIn: results.map((r) => r.id) } },
+      data: { status: 'resolved', resolvedAt: new Date() },
+    })
+    if (orphaned.count) touch()
 
     const allDown = results.every((r) => !r.ok)
     for (const r of results) {
@@ -120,7 +136,7 @@ export function createStatusService(deps: {
   async function knownNodes(): Promise<{ id: string; country: string | null }[]> {
     if (!kuma()) return builtinNodes().map((n) => ({ id: n.id, country: n.country }))
     const rows = await prisma.statusCheck.findMany({ where: { at: { gte: new Date(Date.now() - DAY) } }, distinct: ['node'], select: { node: true } })
-    return rows.map((r) => ({ id: r.node, country: /^[a-z]{2}$/.test(r.node) ? r.node : null }))
+    return rows.filter((r) => !hidden(r.node)).map((r) => ({ id: r.node, country: /^[a-z]{2}$/.test(r.node) ? r.node : null }))
   }
 
   function incidentView(i: Incident) {
@@ -175,8 +191,8 @@ export function createStatusService(deps: {
       })
     }
     const [open, history] = await Promise.all([
-      prisma.incident.findMany({ where: { status: 'open' }, orderBy: { startedAt: 'desc' } }),
-      prisma.incident.findMany({ orderBy: { startedAt: 'desc' }, take: 20 }),
+      prisma.incident.findMany({ where: { status: 'open', ...visibleIncident }, orderBy: { startedAt: 'desc' } }),
+      prisma.incident.findMany({ where: visibleIncident, orderBy: { startedAt: 'desc' }, take: 20 }),
     ])
     const down = out.filter((n) => !n.online).length
     const overall: Overall =
@@ -193,7 +209,7 @@ export function createStatusService(deps: {
   }
 
   async function history(limit = 20) {
-    return (await prisma.incident.findMany({ orderBy: { startedAt: 'desc' }, take: limit })).map(incidentView)
+    return (await prisma.incident.findMany({ where: visibleIncident, orderBy: { startedAt: 'desc' }, take: limit })).map(incidentView)
   }
 
   /** Короткий статус для бота и виджета (кэш 30 секунд). */
