@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m } from 'framer-motion'
 import { PageTitle, Section, StatusPill, TopBar } from '@/components/ui'
 import { CheckIcon, ChevronDown, TransferIcon } from '@/components/icons'
 import { useLang, useT, type TKey } from '@/i18n'
@@ -263,7 +263,7 @@ function ChecksList({ checks, open = false }: { checks: Check[]; open?: boolean 
       </button>
       <AnimatePresence initial={false}>
         {expanded && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
+          <m.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
             <div className="mt-3 space-y-1.5">
               {checks.map((c) => (
                 <div key={c.key} className="flex items-start gap-2.5 rounded-xl bg-white/[0.03] px-3 py-2">
@@ -275,7 +275,7 @@ function ChecksList({ checks, open = false }: { checks: Check[]; open?: boolean 
                 </div>
               ))}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

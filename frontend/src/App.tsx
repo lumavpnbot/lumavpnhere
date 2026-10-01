@@ -1,25 +1,40 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, LazyMotion, m } from 'framer-motion'
 import AmbientBackground from '@/components/AmbientBackground'
 import BottomNav from '@/components/BottomNav'
 import { TAB_PATHS, useTelegramBackButton } from '@/lib/navigation'
 import { onAppVisible } from '@/lib/telegram'
 import { useAppStore } from '@/store/useAppStore'
+// Вкладки таб-бара грузятся сразу, остальные экраны отдельными файлами (первый запуск быстрее).
 import HomePage from '@/pages/HomePage'
 import PlansPage from '@/pages/PlansPage'
 import DevicesPage from '@/pages/DevicesPage'
-import ConnectPage from '@/pages/ConnectPage'
 import ReferralsPage from '@/pages/ReferralsPage'
 import AccountPage from '@/pages/AccountPage'
-import BalancePage from '@/pages/BalancePage'
-import NotificationsPage from '@/pages/NotificationsPage'
-import LoginsPage from '@/pages/LoginsPage'
-import SupportPage from '@/pages/SupportPage'
-import DocPage from '@/pages/DocPage'
-import StatusPage from '@/pages/StatusPage'
-import TransferPage from '@/pages/TransferPage'
-import AchievementsPage from '@/pages/AchievementsPage'
+
+const LAZY_PAGES = {
+  connect: () => import('@/pages/ConnectPage'),
+  balance: () => import('@/pages/BalancePage'),
+  notifications: () => import('@/pages/NotificationsPage'),
+  logins: () => import('@/pages/LoginsPage'),
+  support: () => import('@/pages/SupportPage'),
+  doc: () => import('@/pages/DocPage'),
+  status: () => import('@/pages/StatusPage'),
+  transfer: () => import('@/pages/TransferPage'),
+  achievements: () => import('@/pages/AchievementsPage'),
+}
+const ConnectPage = lazy(LAZY_PAGES.connect)
+const BalancePage = lazy(LAZY_PAGES.balance)
+const NotificationsPage = lazy(LAZY_PAGES.notifications)
+const LoginsPage = lazy(LAZY_PAGES.logins)
+const SupportPage = lazy(LAZY_PAGES.support)
+const DocPage = lazy(LAZY_PAGES.doc)
+const StatusPage = lazy(LAZY_PAGES.status)
+const TransferPage = lazy(LAZY_PAGES.transfer)
+const AchievementsPage = lazy(LAZY_PAGES.achievements)
+
+const loadMotionFeatures = () => import('@/lib/motionFeatures').then((r) => r.default)
 
 export default function App() {
   const location = useLocation()
@@ -33,6 +48,18 @@ export default function App() {
   useEffect(() => {
     void bootstrap()
   }, [bootstrap])
+
+  // Когда первый экран показан и браузер свободен, подгружаем остальные экраны в фоне:
+  // переходы остаются мгновенными, но не тормозят запуск.
+  useEffect(() => {
+    const preload = () => Object.values(LAZY_PAGES).forEach((load) => void load().catch(() => undefined))
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(preload, { timeout: 4000 })
+      return () => window.cancelIdleCallback(id)
+    }
+    const id = setTimeout(preload, 2000)
+    return () => clearTimeout(id)
+  }, [])
 
   // Подписка и баланс меняются вне приложения (оплата в CryptoBot, продление из админки,
   // бонусы). Раньше /me грузился один раз при запуске, и данные «не обновлялись» до перезапуска.
@@ -55,11 +82,11 @@ export default function App() {
   }, [refresh, loadStatus])
 
   return (
-    <>
+    <LazyMotion features={loadMotionFeatures} strict>
       <AmbientBackground />
       {/* Скролл сбрасываем ПОСЛЕ того, как старый экран исчез, иначе он дёргается вверх во время анимации. */}
       <AnimatePresence mode="wait" initial={false} onExitComplete={() => window.scrollTo(0, 0)}>
-        <motion.main
+        <m.main
           key={location.pathname}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -67,26 +94,28 @@ export default function App() {
           transition={{ duration: 0.14, ease: 'easeOut' }}
           className={`page ${nested ? 'page--nested' : ''}`}
         >
-          <Routes location={location}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/plans" element={<PlansPage />} />
-            <Route path="/devices" element={<DevicesPage />} />
-            <Route path="/connect" element={<ConnectPage />} />
-            <Route path="/referrals" element={<ReferralsPage />} />
-            <Route path="/balance" element={<BalancePage />} />
-            <Route path="/account" element={<AccountPage />} />
-            <Route path="/account/notifications" element={<NotificationsPage />} />
-            <Route path="/account/logins" element={<LoginsPage />} />
-            <Route path="/support" element={<SupportPage />} />
-            <Route path="/docs/:doc" element={<DocPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="/account/transfer" element={<TransferPage />} />
-            <Route path="/account/achievements" element={<AchievementsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </motion.main>
+          <Suspense fallback={null}>
+            <Routes location={location}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/plans" element={<PlansPage />} />
+              <Route path="/devices" element={<DevicesPage />} />
+              <Route path="/connect" element={<ConnectPage />} />
+              <Route path="/referrals" element={<ReferralsPage />} />
+              <Route path="/balance" element={<BalancePage />} />
+              <Route path="/account" element={<AccountPage />} />
+              <Route path="/account/notifications" element={<NotificationsPage />} />
+              <Route path="/account/logins" element={<LoginsPage />} />
+              <Route path="/support" element={<SupportPage />} />
+              <Route path="/docs/:doc" element={<DocPage />} />
+              <Route path="/status" element={<StatusPage />} />
+              <Route path="/account/transfer" element={<TransferPage />} />
+              <Route path="/account/achievements" element={<AchievementsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </m.main>
       </AnimatePresence>
       <BottomNav />
-    </>
+    </LazyMotion>
   )
 }

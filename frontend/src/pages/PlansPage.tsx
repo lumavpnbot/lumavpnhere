@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m } from 'framer-motion'
 import Sheet from '@/components/Sheet'
 import { Toggle } from '@/components/controls'
 import { PageTitle, Section, TopBar } from '@/components/ui'
@@ -274,7 +274,7 @@ export default function PlansPage() {
           </button>
           <AnimatePresence initial={false}>
             {promoOpen && (
-              <motion.div
+              <m.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -297,7 +297,7 @@ export default function PlansPage() {
                   </button>
                 </div>
                 {promoError && <p className="px-5 pb-4 text-[13px] text-bad">{promoError}</p>}
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div>
@@ -391,14 +391,14 @@ export default function PlansPage() {
       <Sheet open={result !== null} onClose={() => setResult(null)}>
         {result?.kind === 'success' ? (
           <div className="flex flex-col items-center pb-2 pt-3 text-center">
-            <motion.span
+            <m.span
               initial={{ scale: 0.6, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 260, damping: 18 }}
               className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-[#0b0b0d] shadow-[0_0_40px_rgba(255,255,255,0.35)]"
             >
               <CheckIcon className="h-8 w-8" strokeWidth={2.6} />
-            </motion.span>
+            </m.span>
             <div className="mt-5 text-[22px] font-semibold">{t('plans.successTitle')}</div>
             <p className="mt-1.5 max-w-[280px] text-[14px] text-dim">{t('plans.successText')}</p>
             <button

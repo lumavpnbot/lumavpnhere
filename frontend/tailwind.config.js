@@ -15,7 +15,8 @@ export default {
         bad: '#ff8a8a',
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        // Inter Variable отдаётся вместе с приложением (@fontsource-variable/inter), без Google Fonts.
+        sans: ['Inter Variable', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       borderRadius: {
         card: '24px',

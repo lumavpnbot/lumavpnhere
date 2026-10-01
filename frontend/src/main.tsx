@@ -2,6 +2,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import App from './App'
+// Шрифт лежит рядом с приложением: раньше CSS Google Fonts блокировал запуск (из РФ он отвечает медленно).
+import '@fontsource-variable/inter'
 import './styles/index.css'
 import { initTelegram } from './lib/telegram'
 import { useAppStore } from './store/useAppStore'

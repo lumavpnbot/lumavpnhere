@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
+import { AnimatePresence, m, type PanInfo } from 'framer-motion'
 import { haptic } from '@/lib/telegram'
 
 /**
@@ -35,7 +35,7 @@ export default function Sheet({
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50">
-          <motion.button
+          <m.button
             aria-label="close"
             className="absolute inset-0 bg-black/60"
             initial={{ opacity: 0 }}
@@ -47,7 +47,7 @@ export default function Sheet({
               onClose()
             }}
           />
-          <motion.div
+          <m.div
             role="dialog"
             className="glass glass-nav absolute inset-x-0 bottom-0 mx-auto max-w-[560px] !rounded-b-none !rounded-t-[28px] px-5 pt-3"
             style={{ paddingBottom: 'calc(var(--safe-bottom) + 20px)' }}
@@ -63,7 +63,7 @@ export default function Sheet({
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25" />
             {title && <h3 className="mb-4 text-[19px] font-semibold">{title}</h3>}
             {children}
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>,

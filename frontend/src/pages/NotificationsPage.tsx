@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m } from 'framer-motion'
 import { Stepper, Toggle } from '@/components/controls'
 import { PageTitle, TopBar } from '@/components/ui'
 import { BellIcon, BoltIcon, GiftIcon, MegaphoneIcon } from '@/components/icons'
@@ -88,7 +88,7 @@ function Pref({
       </div>
       <AnimatePresence initial={false}>
         {children && checked && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -96,7 +96,7 @@ function Pref({
             className="overflow-hidden"
           >
             {children}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

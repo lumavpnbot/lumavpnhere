@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, m } from 'framer-motion'
 import Sheet from '@/components/Sheet'
 import { PageTitle, Section, StatusPill, TopBar } from '@/components/ui'
 import { ChatIcon, ChevronDown, TelegramIcon } from '@/components/icons'
@@ -135,7 +135,7 @@ export default function SupportPage() {
                   </button>
                   <AnimatePresence initial={false}>
                     {open && (
-                      <motion.div
+                      <m.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -166,7 +166,7 @@ export default function SupportPage() {
                             {tk.status === 'closed' ? t('support.reopen') : t('support.reply')}
                           </button>
                         </div>
-                      </motion.div>
+                      </m.div>
                     )}
                   </AnimatePresence>
                 </div>
