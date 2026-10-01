@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Sheet from '@/components/Sheet'
 import { Toggle } from '@/components/controls'
 import { PageTitle, Section, TopBar } from '@/components/ui'
-import { CheckIcon, ChevronDown, GiftIcon, SparkIcon, WalletIcon } from '@/components/icons'
+import { CheckIcon, ChevronDown, GiftIcon, QrIcon, SparkIcon, WalletIcon } from '@/components/icons'
 import { PLANS, type PlanId } from '@/config'
 import { useT, type TKey } from '@/i18n'
 import { formatRub } from '@/lib/format'
@@ -13,12 +13,13 @@ import { api, apiEnabled } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
 
 type Period = 'month' | 'year'
-// ЮKassa (карта/СБП) появится, когда её подключит сокомандник: бэкенд
+// СБП принимаем через Platega. ЮKassa (карта) появится, когда её подключит сокомандник: бэкенд
 // уже отдаёт список методов через GET /payments/methods.
-type Method = 'stars' | 'crypto_usdt' | 'balance'
+type Method = 'stars' | 'platega_sbp' | 'crypto_usdt' | 'balance'
 
 const METHODS: { id: Method; label: TKey; hint: TKey }[] = [
   { id: 'stars', label: 'plans.stars', hint: 'plans.starsHint' },
+  { id: 'platega_sbp', label: 'plans.sbp', hint: 'plans.sbpHint' },
   { id: 'crypto_usdt', label: 'plans.crypto', hint: 'plans.cryptoHint' },
   { id: 'balance', label: 'plans.balance', hint: 'plans.balanceHint' },
 ]
@@ -317,7 +318,15 @@ export default function PlansPage() {
                 className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors active:bg-white/5"
               >
                 <span className="tile !h-10 !w-10 !rounded-[13px]">
-                  {m.id === 'balance' ? <WalletIcon className="h-[18px] w-[18px]" /> : m.id === 'stars' ? <SparkIcon className="h-[18px] w-[18px]" /> : <span className="text-[13px] font-bold">₮</span>}
+                  {m.id === 'balance' ? (
+                    <WalletIcon className="h-[18px] w-[18px]" />
+                  ) : m.id === 'stars' ? (
+                    <SparkIcon className="h-[18px] w-[18px]" />
+                  ) : m.id === 'platega_sbp' ? (
+                    <QrIcon className="h-[18px] w-[18px]" />
+                  ) : (
+                    <span className="text-[13px] font-bold">₮</span>
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-medium">{t(m.label)}</span>

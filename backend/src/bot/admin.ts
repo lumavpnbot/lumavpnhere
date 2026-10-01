@@ -320,7 +320,9 @@ export function createAdmin(deps: {
         ? { method: 'stars' }
         : filter === 'crypto'
           ? { method: { in: ['crypto_usdt', 'crypto_ton'] } }
-          : filter === 'balance'
+          : filter === 'sbp'
+            ? { method: 'platega_sbp' }
+            : filter === 'balance'
             ? { method: 'balance' }
             : filter === 'pending' || filter === 'paid' || filter === 'refunded'
               ? { status: filter }
@@ -329,7 +331,7 @@ export function createAdmin(deps: {
     const list = rows.slice(0, PAGE)
     const icon = (s: string) => (s === 'paid' ? '✅' : s === 'pending' ? '⏳' : s === 'refunded' ? '↩️' : '✖️')
     const kb: InlineKeyboard = [
-      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
+      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('СБП', 'adm:pay:sbp:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
       [btn('Оплачены', 'adm:pay:paid:0'), btn('Ожидают', 'adm:pay:pending:0'), btn('Возвраты', 'adm:pay:refunded:0')],
       ...list.map((p) => [btn(`${icon(p.status)} ${rub(Number(p.amountRub) + Number(p.balanceUsedRub))} · ${p.user.username ? '@' + p.user.username : p.user.tgId} · ${day(p.createdAt)}`, `adm:p:${p.id}`)]),
       pager(`adm:pay:${filter}`, page, rows.length > PAGE),
@@ -348,7 +350,7 @@ export function createAdmin(deps: {
       header('🧾', `Платёж #${p.id}`, p.orderId) +
       `Пользователь: ${who(p.user)}\n` +
       `Тариф: <b>${planName(p.planPurchased)}</b>, ${p.periodDays === 365 ? '12 мес' : '1 мес'}\n` +
-      `Способ: <b>${p.method}</b>${p.starsAmount ? ` (${p.starsAmount} ⭐)` : ''}\n` +
+      `Способ: <b>${p.method}</b>${p.starsAmount ? ` (${p.starsAmount} ⭐)` : ''}${p.externalId ? ` · id: <code>${esc(p.externalId)}</code>` : ''}\n` +
       `К оплате: <b>${rub(p.amountRub)}</b> · с баланса ${rub(p.balanceUsedRub)} · скидка ${rub(p.discountRub)}${p.promoCode ? ` (${esc(p.promoCode.code)})` : ''}\n` +
       `Статус: <b>${p.status}</b>${stuck ? ' · ⚠️ доступ не выдан' : ''}\nСоздан: ${dt(p.createdAt)} · оплачен: ${dt(p.paidAt)}\n` +
       `Реферальное начисление: ${p.referralPayout ? `${rub(p.referralPayout.amountRub)} (${p.referralPayout.status})` : 'нет'}`
@@ -761,7 +763,7 @@ export function createAdmin(deps: {
         return show(ctx, await expiringList(Number(b ?? 0)))
 
       case 'pay':
-        if (b === 'search') return void (await ask(ctx, 'pay_search', 'Введите orderId, id платежа или tg_id пользователя.', {}, 'adm:pay:all:0'))
+        if (b === 'search') return void (await ask(ctx, 'pay_search', 'Введите orderId, id платежа, id транзакции Platega или tg_id пользователя.', {}, 'adm:pay:all:0'))
         if (b === 'csv') {
           const rows = await prisma.payment.findMany({ include: { user: true }, orderBy: { createdAt: 'desc' }, take: 5000 })
           const body = csv([

@@ -108,6 +108,10 @@ const payments = createPaymentRegistry({
   CRYPTOBOT_API_TOKEN: env.CRYPTOBOT_API_TOKEN,
   YOOKASSA_SHOP_ID: env.YOOKASSA_SHOP_ID,
   YOOKASSA_SECRET_KEY: env.YOOKASSA_SECRET_KEY,
+  PLATEGA_MERCHANT_ID: env.PLATEGA_MERCHANT_ID,
+  PLATEGA_SECRET: env.PLATEGA_SECRET,
+  // После оплаты СБП возвращаем покупателя в бота (Mini App тем временем ждёт подтверждения).
+  PLATEGA_RETURN_URL: env.PLATEGA_RETURN_URL || `https://t.me/${picked.username ?? botUsername}`,
 })
 const panel = createPanelProvider(env)
 const owners = ownerIds(env)

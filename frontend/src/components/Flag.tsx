@@ -88,19 +88,6 @@ function FlagSvg({ code }: { code: FlagCode }) {
           <path d="M8.5 20.5 Q15 16.8 21.5 20.5 Q15 19.2 8.5 20.5 Z" fill="#FEC50C" />
         </svg>
       )
-    case 'us':
-      return (
-        <svg viewBox="0 0 30 30" className="block h-full w-full">
-          <rect width="30" height="30" fill="#FFFFFF" />
-          {Array.from({ length: 7 }, (_, i) => (
-            <rect key={i} y={(i * 2 * 30) / 13} width="30" height={30 / 13} fill="#B22234" />
-          ))}
-          <rect width="15" height={(7 * 30) / 13} fill="#3C3B6E" />
-          {Array.from({ length: 12 }, (_, i) => (
-            <circle key={i} cx={2.3 + (i % 4) * 3.5} cy={2.5 + Math.floor(i / 4) * 4.4} r="0.75" fill="#FFFFFF" />
-          ))}
-        </svg>
-      )
     case 'gb':
       return (
         <svg viewBox="15 0 30 30" className="block h-full w-full">

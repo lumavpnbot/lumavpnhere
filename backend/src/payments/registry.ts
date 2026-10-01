@@ -2,6 +2,7 @@ import type { PaymentProvider, PaymentMethodId } from './types'
 import { createStarsProvider } from './starsProvider'
 import { createCryptoBotProvider } from './cryptoBotProvider'
 import { createYooKassaProvider } from './yookassaProvider'
+import { createPlategaProvider } from './plategaProvider'
 
 /**
  * Реестр включённых способов оплаты. PlansPage на фронте запрашивает этот
@@ -15,10 +16,15 @@ export function createPaymentRegistry(env: {
   CRYPTOBOT_API_TOKEN?: string
   YOOKASSA_SHOP_ID?: string
   YOOKASSA_SECRET_KEY?: string
+  PLATEGA_MERCHANT_ID?: string
+  PLATEGA_SECRET?: string
+  /** Куда Platega вернёт покупателя после оплаты. */
+  PLATEGA_RETURN_URL: string
 }) {
   const providers: PaymentProvider[] = [
     createStarsProvider(env.TELEGRAM_BOT_TOKEN ?? '', env.TELEGRAM_API_URL),
     createCryptoBotProvider(env.CRYPTOBOT_API_TOKEN ?? ''),
+    createPlategaProvider(env.PLATEGA_MERCHANT_ID ?? '', env.PLATEGA_SECRET ?? '', env.PLATEGA_RETURN_URL),
     createYooKassaProvider(env.YOOKASSA_SHOP_ID ?? '', env.YOOKASSA_SECRET_KEY ?? ''),
   ]
 

@@ -1,4 +1,4 @@
-export type PaymentMethodId = 'stars' | 'crypto_usdt' | 'crypto_ton' | 'yookassa_card' | 'yookassa_sbp'
+export type PaymentMethodId = 'stars' | 'crypto_usdt' | 'crypto_ton' | 'yookassa_card' | 'yookassa_sbp' | 'platega_sbp'
 
 export interface CreateInvoiceParams {
   orderId: string
@@ -10,19 +10,24 @@ export interface CreateInvoiceParams {
 export interface CreateInvoiceResult {
   /** Ссылка или payload, который фронт использует, чтобы открыть оплату (invoice link, deeplink и т.д.) */
   payload: string
+  /** Id платежа у провайдера (если он известен сразу), для поиска в админке. */
+  externalId?: string
 }
 
 /** Событие, пришедшее в вебхуке от платёжного провайдера, уже нормализованное. */
 export interface WebhookEvent {
   orderId: string
-  status: 'paid' | 'failed'
+  /** ignored: промежуточный или неизвестный статус — подтверждаем приём, заказ не трогаем. */
+  status: 'paid' | 'failed' | 'ignored'
   amountRub: number
+  /** Id транзакции у провайдера: сохраняется в платеже, по нему ищут в админке. */
+  externalId?: string
   raw: unknown
 }
 
 /**
  * Единый интерфейс платёжного провайдера. Каждый способ оплаты (Stars,
- * CryptoBot, позже ЮKassa) реализует его одинаково — роуты и бизнес-логика
+ * CryptoBot, Platega, позже ЮKassa) реализует его одинаково — роуты и бизнес-логика
  * в src/routes/payments.ts работают с провайдером через этот контракт
  * и не знают, что внутри конкретная реализация.
  */

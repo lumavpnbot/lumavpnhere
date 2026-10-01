@@ -28,6 +28,7 @@ enum PaymentMethod {
   crypto_ton
   yookassa_card
   yookassa_sbp
+  platega_sbp
 }
 
 enum PaymentStatus {

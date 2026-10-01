@@ -8,7 +8,7 @@ import { rateLimit } from '@/plugins/rateLimit'
 const orderSchema = z.object({
   plan: z.enum(['start', 'pro']),
   period: z.enum(['month', 'year']),
-  method: z.enum(['stars', 'crypto_usdt', 'balance']),
+  method: z.enum(['stars', 'crypto_usdt', 'platega_sbp', 'balance']),
   promo: z.string().max(40).optional(),
   useBalance: z.boolean().optional(),
   autoRenew: z.boolean().optional(),
@@ -106,21 +106,26 @@ export function registerPaymentRoutes(
     }
   })
 
-  // Вебхук CryptoBot (и позже ЮKassa). Stars подтверждается апдейтом бота, не сюда.
+  // Вебхуки CryptoBot и Platega (СБП). Stars подтверждается апдейтом бота, не сюда.
   app.post('/payments/webhook/:method', async (request, reply) => {
-    const method = (request.params as { method: string }).method as 'crypto_usdt' | 'yookassa_sbp'
+    const method = (request.params as { method: string }).method as 'crypto_usdt' | 'platega_sbp' | 'yookassa_sbp'
     const provider = payments.get(method)
-    if (!provider) return reply.code(404).send()
+    // Выключенный провайдер (нет ключей в .env) вебхуки не принимает.
+    if (!provider?.enabled) return reply.code(404).send()
 
     // Подпись считается по исходному телу запроса (сохраняем его в server.ts).
     const rawBody = request.rawBody ?? JSON.stringify(request.body)
     const event = provider.verifyWebhook(request.headers as Record<string, string>, rawBody)
+    // Если провайдер не вернул наш orderId, находим заказ по id его транзакции.
+    if (event && !event.orderId && event.externalId) {
+      event.orderId = (await prisma.payment.findFirst({ where: { externalId: event.externalId }, select: { orderId: true } }))?.orderId ?? ''
+    }
     await prisma.paymentLog.create({
-      data: { orderId: event?.orderId ?? 'unknown', event: event ? `webhook_${event.status}` : 'invalid_signature', payload: request.body as object },
+      data: { orderId: event?.orderId || 'unknown', event: event ? `webhook_${event.status}` : 'invalid_signature', payload: request.body as object },
     })
     if (!event) return reply.code(400).send({ error: 'Невалидная подпись вебхука' })
-    if (event.status === 'paid') await billing.completePayment(event.orderId)
-    else await prisma.payment.updateMany({ where: { orderId: event.orderId, status: 'pending' }, data: { status: 'failed' } })
+    if (event.status === 'paid') await billing.completePayment(event.orderId, event.externalId)
+    else if (event.status === 'failed') await prisma.payment.updateMany({ where: { orderId: event.orderId, status: 'pending' }, data: { status: 'failed' } })
     return reply.send({ ok: true })
   })
 }

@@ -19,7 +19,7 @@ interface PaymentRow {
   at: string
 }
 
-const METHOD_LABEL: Record<string, string> = { stars: 'Telegram Stars', crypto_usdt: 'USDT', crypto_ton: 'TON', balance: 'LYNK', yookassa_card: 'Карта', yookassa_sbp: 'СБП' }
+const METHOD_LABEL: Record<string, string> = { stars: 'Telegram Stars', crypto_usdt: 'USDT', crypto_ton: 'TON', balance: 'LYNK', yookassa_card: 'Карта', yookassa_sbp: 'СБП', platega_sbp: 'СБП' }
 
 /**
  * Баланс по ТЗ: пополняется реферальными начислениями, тратится только на подписку.

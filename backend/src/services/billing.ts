@@ -134,6 +134,8 @@ export function createBillingService(
       description: `LYNK: ${title}`,
       tgUserId: Number(params.user.tgId),
     })
+    // Id у провайдера (транзакция Platega): по нему платёж ищется в админке ещё до оплаты.
+    if (invoice.externalId) await prisma.payment.update({ where: { id: payment.id }, data: { externalId: invoice.externalId } })
     await prisma.paymentLog.create({ data: { orderId, event: 'created', payload: { method, toPay: q.toPay, stars: q.stars } } })
     return { orderId, status: 'pending' as const, quote: q, payload: invoice.payload, paymentId: payment.id.toString() }
   }
@@ -169,7 +171,7 @@ export function createBillingService(
     const done = await prisma.$transaction(async (tx) => {
       const claimed = await tx.payment.updateMany({
         where: { orderId, status: 'pending' },
-        data: { status: 'paid', paidAt: new Date(), externalId: externalId ?? null },
+        data: { status: 'paid', paidAt: new Date(), ...(externalId ? { externalId } : {}) },
       })
       if (claimed.count === 0) return null
       const payment = await tx.payment.findUniqueOrThrow({ where: { orderId } })
