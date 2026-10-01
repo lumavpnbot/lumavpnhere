@@ -8,6 +8,9 @@ export interface InlineButton {
   callback_data?: string
   url?: string
   web_app?: { url: string }
+  /** Премиум-эмодзи перед текстом кнопки (Bot API 9.4, нужен Telegram Premium у владельца бота). */
+  icon_custom_emoji_id?: string
+  style?: 'primary' | 'success' | 'danger'
 }
 export type InlineKeyboard = InlineButton[][]
 
@@ -17,11 +20,23 @@ export interface TgUser {
   first_name?: string
 }
 
+/** Разметка сообщения: жирный, ссылки, премиум-эмодзи (custom_emoji) и т.д. Смещения в UTF-16, как в JS. */
+export interface TgEntity {
+  type: string
+  offset: number
+  length: number
+  url?: string
+  user?: { id: number }
+  language?: string
+  custom_emoji_id?: string
+}
+
 export interface TgMessage {
   message_id: number
   chat: { id: number; type: string }
   from?: TgUser
   text?: string
+  entities?: TgEntity[]
   successful_payment?: {
     currency: string
     total_amount: number
@@ -72,6 +87,72 @@ export function plainText(html: string, max = 4000) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
+const attr = (v: unknown) => esc(v).replace(/"/g, '&quot;')
+
+function entityTags(e: TgEntity): [string, string] | null {
+  switch (e.type) {
+    case 'bold': return ['<b>', '</b>']
+    case 'italic': return ['<i>', '</i>']
+    case 'underline': return ['<u>', '</u>']
+    case 'strikethrough': return ['<s>', '</s>']
+    case 'spoiler': return ['<tg-spoiler>', '</tg-spoiler>']
+    case 'code': return ['<code>', '</code>']
+    case 'pre': return e.language ? [`<pre><code class="language-${attr(e.language)}">`, '</code></pre>'] : ['<pre>', '</pre>']
+    case 'text_link': return e.url ? [`<a href="${attr(e.url)}">`, '</a>'] : null
+    case 'text_mention': return e.user ? [`<a href="tg://user?id=${e.user.id}">`, '</a>'] : null
+    case 'custom_emoji': return e.custom_emoji_id ? [`<tg-emoji emoji-id="${attr(e.custom_emoji_id)}">`, '</tg-emoji>'] : null
+    case 'blockquote': return ['<blockquote>', '</blockquote>']
+    case 'expandable_blockquote': return ['<blockquote expandable>', '</blockquote>']
+    default: return null // url, mention, hashtag… Telegram распознаёт сам
+  }
+}
+
+/**
+ * Текст сообщения + entities → HTML для parse_mode=HTML. Так сохраняются премиум-эмодзи
+ * (<tg-emoji>) и форматирование, сделанное средствами Telegram.
+ * escapeText=false: остальной текст не экранируем (поля, куда админ пишет HTML руками).
+ */
+export function entitiesToHtml(text: string, entities: TgEntity[] = [], escapeText = true): string {
+  const starts = new Map<number, { e: TgEntity; i: number; tags: [string, string] }[]>()
+  const ends = new Map<number, { e: TgEntity; i: number; tags: [string, string] }[]>()
+  entities.forEach((e, i) => {
+    const tags = entityTags(e)
+    if (!tags || e.length <= 0) return
+    const item = { e, i, tags }
+    starts.set(e.offset, [...(starts.get(e.offset) ?? []), item])
+    ends.set(e.offset + e.length, [...(ends.get(e.offset + e.length) ?? []), item])
+  })
+  let out = ''
+  for (let pos = 0; pos <= text.length; pos++) {
+    // Сначала закрываем вложенные (начались позже), потом открываем внешние (длиннее).
+    for (const x of (ends.get(pos) ?? []).sort((a, b) => b.e.offset - a.e.offset || b.i - a.i)) out += x.tags[1]
+    for (const x of (starts.get(pos) ?? []).sort((a, b) => b.e.length - a.e.length || a.i - b.i)) out += x.tags[0]
+    if (pos < text.length) out += escapeText ? esc(text[pos]) : text[pos]
+  }
+  return out
+}
+
+/** Премиум-эмодзи → обычные (их символы внутри <tg-emoji>). */
+export const stripPremiumEmoji = (html: string) => html.replace(/<tg-emoji[^>]*>([\s\S]*?)<\/tg-emoji>/g, '$1')
+const hasPremium = (text: string, kb?: InlineKeyboard) => /<tg-emoji/.test(text) || !!kb?.some((r) => r.some((b) => b.icon_custom_emoji_id))
+const stripIcons = (kb?: InlineKeyboard) => kb?.map((r) => r.map(({ icon_custom_emoji_id: _, ...b }) => b))
+
+/**
+ * Отправка с запасными вариантами: премиум-эмодзи работают, только если у владельца бота
+ * Telegram Premium, иначе повторяем с обычными эмодзи. Битая разметка: простым текстом.
+ */
+async function withFallbacks<T>(text: string, kb: InlineKeyboard | undefined, attempt: (text: string, kb: InlineKeyboard | undefined, html: boolean) => Promise<T>): Promise<T> {
+  try {
+    return await attempt(text, kb, true)
+  } catch (e) {
+    if (e instanceof TgError && e.code === 400 && !isFormatError(e) && hasPremium(text, kb)) {
+      return withFallbacks(stripPremiumEmoji(text), stripIcons(kb), attempt)
+    }
+    if (!isFormatError(e)) throw e
+    return attempt(plainText(text), kb, false)
+  }
+}
+
 export function createTelegram(token: string, apiBase = telegramApiBase()) {
   const base = `${apiBase}/bot${token}`
 
@@ -103,28 +184,20 @@ export function createTelegram(token: string, apiBase = telegramApiBase()) {
         // Строка — это @канал или числовой id канала из переменной окружения.
         chat_id: typeof chatId === 'string' && !/^-?\d+$/.test(chatId) ? chatId : Number(chatId),
         link_preview_options: { is_disabled: opts.disablePreview ?? true },
-        ...markup(opts.keyboard),
       }
-      try {
-        return await call<TgMessage>('sendMessage', { ...params, text, parse_mode: 'HTML' })
-      } catch (e) {
-        if (!isFormatError(e)) throw e
-        return call<TgMessage>('sendMessage', { ...params, text: plainText(text) })
-      }
+      return withFallbacks(text, opts.keyboard, (t, kb, html) =>
+        call<TgMessage>('sendMessage', { ...params, ...markup(kb), text: t, ...(html ? { parse_mode: 'HTML' } : {}) }),
+      )
     },
 
     /** Правка сообщения меню. «message is not modified» не считаем ошибкой. */
     async edit(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard) {
-      const params = { chat_id: chatId, message_id: messageId, link_preview_options: { is_disabled: true }, ...markup(keyboard) }
-      try {
-        await call('editMessageText', { ...params, text, parse_mode: 'HTML' })
-      } catch (e) {
-        if (e instanceof TgError && /not modified/.test(e.message)) return
-        if (!isFormatError(e)) throw e
-        await call('editMessageText', { ...params, text: plainText(text) }).catch((err: unknown) => {
+      const params = { chat_id: chatId, message_id: messageId, link_preview_options: { is_disabled: true } }
+      await withFallbacks(text, keyboard, (t, kb, html) =>
+        call('editMessageText', { ...params, ...markup(kb), text: t, ...(html ? { parse_mode: 'HTML' } : {}) }).catch((err: unknown) => {
           if (!(err instanceof TgError && /not modified/.test(err.message))) throw err
-        })
-      }
+        }),
+      )
     },
 
     answerCallback(id: string, text?: string, alert = false) {

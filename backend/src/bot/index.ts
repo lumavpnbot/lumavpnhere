@@ -3,13 +3,13 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { AchievementService } from '@/services/achievements'
 import type { BillingService } from '@/services/billing'
-import type { SettingsService } from '@/services/settings'
+import type { AppSettings, SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
 import type { VpnService } from '@/services/vpn'
 import { recordError } from '@/lib/errors'
 import type { Admin } from './admin'
 import type { Staff } from './staff'
-import { esc, type InlineKeyboard, type TgMessage, type TgUpdate, type Telegram } from './tg'
+import { esc, type InlineButton, type InlineKeyboard, type TgMessage, type TgUpdate, type Telegram } from './tg'
 
 /** Публичная страница статуса: STATUS_PAGE_URL (например https://status.lynk.io) или <PUBLIC_URL>/status. */
 export function statusPageUrl(env: NodeJS.ProcessEnv) {
@@ -51,8 +51,13 @@ export function registerBot(
     u.hash = ''
     return u.toString()
   }
-  const openApp = { text: '🚀 Открыть LYNK', web_app: { url: webAppUrl } }
-  const startKeyboard: InlineKeyboard = [[openApp], [{ text: '🔁 Перенести подписку', web_app: { url: screenUrl('transfer') } }]]
+  /** Кнопка Mini App: с премиум-эмодзи из настроек (админка → «Эмодзи кнопок») или с обычным. */
+  const appButton = (label: string, emoji: string, iconId: string, url: string): InlineButton =>
+    iconId ? { text: label, icon_custom_emoji_id: iconId, web_app: { url } } : { text: `${emoji} ${label}`, web_app: { url } }
+  const startKeyboard = (s: AppSettings): InlineKeyboard => [
+    [appButton('Открыть LYNK', '🚀', s.buttonEmoji.open, webAppUrl)],
+    [appButton('Перенести подписку', '🔁', s.buttonEmoji.transfer, screenUrl('transfer'))],
+  ]
   const SUPPORT_PROMPT = '✍️ Опишите вопрос одним сообщением: что не работает, какое устройство и приложение. Мы ответим здесь.'
 
   async function onStart(msg: TgMessage, payload: string | null) {
@@ -65,7 +70,7 @@ export function registerBot(
     }
     const extra = attached && user.referrerId ? `\n\n🎁 Тебя пригласил друг: пробный период <b>${s.trialDaysReferral} дней</b>.` : ''
     if (attached && user.referrerId && achievements) void achievements.evaluateById(user.referrerId).catch(() => undefined)
-    await tg.send(msg.chat.id, s.welcomeMessage + extra, { keyboard: startKeyboard })
+    await tg.send(msg.chat.id, s.welcomeMessage + extra, { keyboard: startKeyboard(s) })
   }
 
   /** Любое обычное сообщение пользователя: это обращение в поддержку. */
@@ -157,7 +162,7 @@ export function registerBot(
 
     const role = await staff.roleOf(msg.from.id)
     if (role && admin.hasState(msg.from.id)) {
-      await admin.onText({ chatId: msg.chat.id, tgId: msg.from.id, role }, text)
+      await admin.onText({ chatId: msg.chat.id, tgId: msg.from.id, role }, text, msg.entities)
       return
     }
     if (command.startsWith('/')) {

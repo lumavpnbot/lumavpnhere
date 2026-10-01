@@ -29,7 +29,7 @@ import {
   type View,
 } from './adminUi'
 import { can, type Staff, type StaffRole } from './staff'
-import { esc, type InlineKeyboard, type Telegram } from './tg'
+import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity } from './tg'
 
 /**
  * Админ-меню в боте (ТЗ раздел 6). Открывается командой /admin для ролей
@@ -544,6 +544,7 @@ export function createAdmin(deps: {
       `Реф. проценты: <b>${s.referralPercents.join(' / ')}%</b>\n` +
       `Курс Stars: <b>1 ⭐ = ${s.starsRubRate} ₽</b>\n` +
       `Промокод для новых: <b>${s.defaultPromo ? esc(s.defaultPromo) : 'нет'}</b>\n` +
+      `Премиум-эмодзи кнопок: <b>${[s.buttonEmoji.open && 'Открыть', s.buttonEmoji.transfer && 'Перенести'].filter(Boolean).join(', ') || 'нет'}</b>\n` +
       `Техрежим: <b>${s.maintenance ? '🔴 включён, платежи не принимаются' : '🟢 выключен'}</b>`
     return {
       text,
@@ -552,7 +553,7 @@ export function createAdmin(deps: {
         [btn('Премиум / мес', 'adm:set:price:pro:month'), btn('Премиум / год', 'adm:set:price:pro:year')],
         [btn('Trial', 'adm:set:trial'), btn('Trial реф.', 'adm:set:trialref'), btn('% уровней', 'adm:set:pct')],
         [btn('Курс Stars', 'adm:set:stars'), btn('Промокод новым', 'adm:set:promo')],
-        [btn('Приветствие бота', 'adm:set:welcome')],
+        [btn('Приветствие бота', 'adm:set:welcome'), btn('Эмодзи кнопок', 'adm:set:btnemoji')],
         [btn(s.maintenance ? '🟢 Выключить техрежим' : '🔴 Включить техрежим', 'adm:set:maint')],
         [btn('👮 Роли', 'adm:roles')],
         back(),
@@ -694,7 +695,7 @@ export function createAdmin(deps: {
           await show(ctx, await userCard(id, ctx.role))
           return c === 'ban' ? 'Заблокирован' : 'Разблокирован'
         }
-        if (c === 'msg') return void (await ask(ctx, 'user_msg', 'Текст сообщения пользователю (можно HTML).', { userId: b }, `adm:u:${b}`))
+        if (c === 'msg') return void (await ask(ctx, 'user_msg', 'Текст сообщения пользователю (можно HTML и премиум-эмодзи).', { userId: b }, `adm:u:${b}`))
         if (ctx.role !== 'owner') return 'Только для владельца'
         if (c === 'bal') return void (await ask(ctx, 'user_bal', d === 'add' ? 'Сколько рублей начислить?' : 'Сколько рублей списать?', { userId: b, sign: d === 'add' ? 1 : -1 }, `adm:u:${b}`))
         if (c === 'refreset')
@@ -930,7 +931,7 @@ export function createAdmin(deps: {
       case 'bc': {
         if (b === 'seg') {
           const count = await prisma.user.count({ where: segmentWhere(c) })
-          return void (await ask(ctx, 'bc_text', `Аудитория: <b>${SEGMENTS[c]}</b> (${count} чел.)\nВведите текст рассылки. Поддерживается HTML-разметка Telegram.`, { segment: c }, 'adm:bc'))
+          return void (await ask(ctx, 'bc_text', `Аудитория: <b>${SEGMENTS[c]}</b> (${count} чел.)\nВведите текст рассылки. Поддерживаются форматирование Telegram, HTML и премиум-эмодзи.`, { segment: c }, 'adm:bc'))
         }
         if (b === 'nobtn') return previewBroadcast(ctx)
         if (b === 'send' || b === 'sched') {
@@ -958,7 +959,16 @@ export function createAdmin(deps: {
         if (b === 'pct') return void (await ask(ctx, 'set_pct', 'Проценты для уровней через пробел: Базовый Серебро Золото Платина. Например: 30 35 40 45', {}, 'adm:set'))
         if (b === 'stars') return void (await ask(ctx, 'set_stars', 'Сколько рублей стоит 1 Star для покупателя? Например 1.8', {}, 'adm:set'))
         if (b === 'promo') return void (await ask(ctx, 'set_promo', 'Промокод, который автоматически получают новые пользователи. Отправьте «-», чтобы убрать.', {}, 'adm:set'))
-        if (b === 'welcome') return void (await ask(ctx, 'set_welcome', 'Новый текст приветствия для /start (HTML).', {}, 'adm:set'))
+        if (b === 'welcome') return void (await ask(ctx, 'set_welcome', 'Новый текст приветствия для /start. Можно форматирование Telegram, HTML и премиум-эмодзи.', {}, 'adm:set'))
+        if (b === 'btnemoji') {
+          return void (await ask(
+            ctx,
+            'set_btn_emoji',
+            'Отправьте одним сообщением два премиум-эмодзи: первое для кнопки «Открыть LYNK», второе для «Перенести подписку». «-» вернёт обычные 🚀 и 🔁.\n\n<i>Премиум-эмодзи видны, если у владельца бота есть Telegram Premium.</i>',
+            {},
+            'adm:set',
+          ))
+        }
         if (b === 'maint') {
           const s = await settings.get()
           return show(ctx, confirm(s.maintenance ? 'Снова принимать платежи?' : 'Остановить приём платежей? Пользователи увидят сообщение о техработах.', 'adm:set:maintok', 'adm:set'))
@@ -999,11 +1009,12 @@ export function createAdmin(deps: {
 
   // ── помощники для действий ────────────────────────────────────────────────
 
-  async function replyTicket(ctx: Ctx, id: bigint, text: string) {
+  /** html: ответ с разметкой и премиум-эмодзи (текст уже экранирован); в истории обращения хранится простой текст. */
+  async function replyTicket(ctx: Ctx, id: bigint, text: string, html = esc(text)) {
     const t = await prisma.supportTicket.findUniqueOrThrow({ where: { id }, include: { user: true } })
     await prisma.ticketMessage.create({ data: { ticketId: id, fromStaff: true, authorTgId: BigInt(ctx.tgId), text } })
     await prisma.supportTicket.update({ where: { id }, data: { status: 'answered', firstReplyAt: t.firstReplyAt ?? new Date(), assigneeTgId: t.assigneeTgId ?? BigInt(ctx.tgId) } })
-    await staff.notify(t.user.tgId, `🛟 <b>Ответ поддержки</b> · обращение #${id}\n\n${esc(text)}\n\n<i>Ответить можно прямо здесь, в чате.</i>`)
+    await staff.notify(t.user.tgId, `🛟 <b>Ответ поддержки</b> · обращение #${id}\n\n${html}\n\n<i>Ответить можно прямо здесь, в чате.</i>`)
     await staff.audit(ctx.tgId, 'ticket_reply', `ticket:${id}`)
   }
 
@@ -1045,10 +1056,13 @@ export function createAdmin(deps: {
 
   // ── пошаговый ввод ────────────────────────────────────────────────────────
 
-  async function onText(ctx: Ctx, text: string): Promise<boolean> {
+  /** entities: разметка сообщения админа (в т.ч. премиум-эмодзи), сохраняем её в текстах для пользователей. */
+  async function onText(ctx: Ctx, text: string, entities: TgEntity[] = []): Promise<boolean> {
     const state = fsm.get(ctx.tgId)
     if (!state) return false
     const v = text.trim()
+    // Поля, где админ пишет HTML руками: текст не экранируем, добавляем только разметку Telegram.
+    const html = entitiesToHtml(text, entities, false)
     const data = state.data
     const retry = (msg: string) => tg.send(ctx.chatId, `⚠️ ${msg}`, { keyboard: [[btn('Отмена', 'adm:cancel')]] })
     const n = Number(v.replace(',', '.'))
@@ -1066,7 +1080,7 @@ export function createAdmin(deps: {
         const u = await userById(BigInt(String(data.userId)))
         done()
         if (u) {
-          await tg.send(u.tgId, `💬 <b>Сообщение от LYNK</b>\n\n${v}`).then(
+          await tg.send(u.tgId, `💬 <b>Сообщение от LYNK</b>\n\n${html.trim()}`).then(
             () => tg.send(ctx.chatId, '✅ Доставлено', { keyboard: [back(`adm:u:${u.id}`, '‹ К пользователю')] }),
             (e: Error) => tg.send(ctx.chatId, `Не доставлено: ${esc(e.message)}`),
           )
@@ -1180,7 +1194,7 @@ export function createAdmin(deps: {
       }
       case 'ticket_reply': {
         const id = BigInt(String(data.ticketId))
-        await replyTicket(ctx, id, v)
+        await replyTicket(ctx, id, v, entitiesToHtml(text, entities).trim())
         done()
         await show({ ...ctx, messageId: undefined }, await ticketView(id))
         return true
@@ -1193,7 +1207,7 @@ export function createAdmin(deps: {
         return true
       }
       case 'bc_text': {
-        data.text = text
+        data.text = html
         state.kind = 'bc_button'
         await tg.send(ctx.chatId, 'Добавить кнопку со ссылкой? Отправьте «Текст | https://ссылка» или нажмите «Без кнопки».', {
           keyboard: [[btn('Без кнопки', 'adm:bc:nobtn'), btn('Отмена', 'adm:cancel')]],
@@ -1268,11 +1282,20 @@ export function createAdmin(deps: {
         return true
       }
       case 'set_welcome': {
-        await settings.set('welcomeMessage', text)
+        await settings.set('welcomeMessage', html)
         await staff.audit(ctx.tgId, 'set_welcome')
         done()
         await tg.send(ctx.chatId, 'Готово. Так теперь выглядит приветствие:')
-        await tg.send(ctx.chatId, text).catch((e: Error) => tg.send(ctx.chatId, `Ошибка разметки: ${esc(e.message)}`))
+        await tg.send(ctx.chatId, html).catch((e: Error) => tg.send(ctx.chatId, `Ошибка разметки: ${esc(e.message)}`))
+        return true
+      }
+      case 'set_btn_emoji': {
+        const ids = entities.filter((e) => e.type === 'custom_emoji' && e.custom_emoji_id).map((e) => e.custom_emoji_id!)
+        if (v !== '-' && !ids.length) { await retry('Не нашёл премиум-эмодзи в сообщении. Отправьте эмодзи из премиум-набора или «-»'); return true }
+        await settings.set('buttonEmoji', v === '-' ? { open: '', transfer: '' } : { open: ids[0] ?? '', transfer: ids[1] ?? '' })
+        await staff.audit(ctx.tgId, 'set_button_emoji', undefined, { ids })
+        done()
+        await show({ ...ctx, messageId: undefined }, await settingsView())
         return true
       }
       case 'role_add': {

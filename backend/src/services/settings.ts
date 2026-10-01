@@ -39,6 +39,8 @@ export interface AppSettings {
   maintenance: boolean
   /** Приветствие /start (HTML). Ключ сменён с welcomeText: старое значение из админки больше не используется. */
   welcomeMessage: string
+  /** Премиум-эмодзи (custom_emoji_id) на кнопках /start. Пусто = обычные эмодзи 🚀 / 🔁. */
+  buttonEmoji: { open: string; transfer: string }
   defaultPromo: string
   /** Достижения: награды, изменённые из админки (код → награды). */
   achievementRewards: Record<string, RewardSpec[]>
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     'Мы обеспечиваем стабильное и защищённое соединение доступа к Интернету и зарубежным сервисам для тебя. ' +
     'Ты можешь перенести свою старую подписку на наш сервис одним нажатием\n\n' +
     '<b>Готов начать?</b>',
+  buttonEmoji: { open: '', transfer: '' },
   defaultPromo: '',
   achievementRewards: {},
   achievementDiscountDays: 90,
