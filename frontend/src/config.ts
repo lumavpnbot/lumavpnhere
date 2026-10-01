@@ -54,12 +54,43 @@ export const COUNTRIES: CountryCode[] = ['fi', 'nl', 'de', 'ru', 'se', 'pl', 'gb
 /** Что показать, пока бэкенд не ответил или в демо-режиме. */
 export const DEFAULT_LIVE: CountryCode[] = ['fi']
 
-// Клиент, через который пользователь подключается (ссылки проверены).
-export const CLIENT_APP = {
-  name: 'Happ',
-  ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
-  android: 'https://play.google.com/store/apps/details?id=com.happproxy',
-  site: 'https://www.happ.su/main',
-  /** Импорт подписки в один тап (работает вне Telegram; внутри Mini App используем happUrl с бэкенда). */
-  deeplink: (subUrl: string) => `happ://add/${subUrl}`,
+export type ClientId = 'happ' | 'incy' | 'hiddify'
+
+export interface ClientApp {
+  id: ClientId
+  name: string
+  ios: string
+  android: string
+  /** Сайт или страница загрузок для остальных ОС. */
+  site: string
+  /** Импорт подписки в один тап (работает вне Telegram; внутри Mini App используем openUrls с бэкенда). */
+  deeplink: (subUrl: string) => string
 }
+
+// Клиенты, через которые пользователь подключается. Первый: по умолчанию.
+export const CLIENT_APPS: ClientApp[] = [
+  {
+    id: 'happ',
+    name: 'Happ',
+    ios: 'https://apps.apple.com/app/happ-proxy-utility/id6504287215',
+    android: 'https://play.google.com/store/apps/details?id=com.happproxy',
+    site: 'https://www.happ.su/main',
+    deeplink: (subUrl) => `happ://add/${subUrl}`,
+  },
+  {
+    id: 'incy',
+    name: 'INCY',
+    ios: 'https://apps.apple.com/ru/app/incy/id6756943388',
+    android: 'https://play.google.com/store/apps/details?id=llc.itdev.incy',
+    site: 'https://github.com/INCY-DEV/incy-platforms#downloads',
+    deeplink: (subUrl) => `incy://add/${subUrl}`,
+  },
+  {
+    id: 'hiddify',
+    name: 'Hiddify',
+    ios: 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532',
+    android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
+    site: 'https://github.com/hiddify/hiddify-app/releases/latest',
+    deeplink: (subUrl) => `hiddify://import/${subUrl}#${BRAND}`,
+  },
+]

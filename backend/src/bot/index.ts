@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
-import { happOpenUrl, subscriptionUrl } from '@/routes/subscription'
+import { CLIENT_APPS, clientOpenUrls, subscriptionUrl } from '@/routes/subscription'
 import type { AchievementService } from '@/services/achievements'
 import type { BillingService } from '@/services/billing'
 import type { StatusService } from '@/services/status'
@@ -126,8 +126,9 @@ export function registerBot(
       )
       const link = subscriptionUrl(env, user.subToken)
       if (link) lines.push('', '🔗 Ссылка подписки (нажмите, чтобы скопировать):', `<code>${esc(link)}</code>`)
-      const happ = happOpenUrl(env, user.subToken)
-      if (happ?.startsWith('https://')) kb.push([{ text: '📲 Добавить в Happ', url: happ }])
+      // Кнопки добавления подписки в каждый клиент: Happ, INCY, Hiddify.
+      const open = Object.entries(clientOpenUrls(env, user.subToken)).filter((e): e is [keyof typeof CLIENT_APPS, string] => Boolean(e[1]?.startsWith('https://')))
+      if (open.length) kb.push(open.map(([id, url]) => ({ text: `📲 ${CLIENT_APPS[id].name}`, url })))
     } else if (last) {
       lines.push(`Статус: 🔴 <b>Закончилась ${dateMsk(last.expiresAt)}</b>`, '', 'Продлите подписку в приложении: это займёт минуту.')
     } else {

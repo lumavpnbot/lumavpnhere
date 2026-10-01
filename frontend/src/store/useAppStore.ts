@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_LIVE, PRICES_RUB, type CountryCode, type PlanId } from '@/config'
+import { DEFAULT_LIVE, PRICES_RUB, type ClientId, type CountryCode, type PlanId } from '@/config'
 import type { Lang } from '@/i18n'
 import { getTelegramUser } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
@@ -17,6 +17,8 @@ export interface Subscription {
   subscriptionUrl: string | null
   /** https-страница бэкенда, которая открывает happ://add/... во внешнем браузере. */
   happUrl?: string | null
+  /** То же для каждого клиента: /open/happ|incy|hiddify/<токен>. */
+  openUrls?: Partial<Record<ClientId, string | null>> | null
   autoRenew?: boolean
 }
 

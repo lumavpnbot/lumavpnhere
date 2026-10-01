@@ -7,7 +7,7 @@ import type { AchievementService } from '@/services/achievements'
 import { LEVEL_NAMES, type SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
 import { LATEST_FIRST, PLAN_LIMITS, type VpnService } from '@/services/vpn'
-import { happOpenUrl, subscriptionUrl } from './subscription'
+import { clientOpenUrls, happOpenUrl, subscriptionUrl } from './subscription'
 
 const TX_KIND: Record<string, string> = { referral: 'referral', purchase: 'purchase', admin: 'bonus', bonus: 'bonus', refund: 'refund' }
 
@@ -136,6 +136,8 @@ export function registerMeRoutes(
         trafficLimitGb: isAdmin ? null : (limits?.trafficGb ?? null),
         subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
         happUrl: active ? happOpenUrl(env, user.subToken) : null,
+        // Страницы «Открыть в Happ / INCY / Hiddify» (экран «Подключение»).
+        openUrls: active ? clientOpenUrls(env, user.subToken) : null,
       },
       devices: devices.map((d) => ({
         id: d.id.toString(),

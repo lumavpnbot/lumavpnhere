@@ -10,6 +10,15 @@ const GB = 1024 ** 3
 
 const b64 = (s: string) => Buffer.from(s).toString('base64')
 
+/** Клиенты, в которые подписка добавляется одной кнопкой (страница /open/<клиент>/<токен>). */
+export const CLIENT_APPS = {
+  happ: { name: 'Happ', deeplink: (url: string) => `happ://add/${url}` },
+  incy: { name: 'INCY', deeplink: (url: string) => `incy://add/${url}` },
+  hiddify: { name: 'Hiddify', deeplink: (url: string) => `hiddify://import/${url}#${encodeURIComponent(BRAND)}` },
+} as const
+export type ClientAppId = keyof typeof CLIENT_APPS
+const isClientAppId = (v: string): v is ClientAppId => Object.hasOwn(CLIENT_APPS, v)
+
 /** «upload=1; download=2; total=3; expire=4» → объект. */
 export function parseUserInfo(v: string | null): Record<string, number> {
   const out: Record<string, number> = {}
@@ -156,7 +165,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     }
     const ua = header('user-agent') ?? ''
     // Если клиент не прислал HWID (старые версии, другие приложения), узнаём устройство по user-agent.
-    const isClientApp = /happ|v2ray|hiddify|streisand|v2box|nekobox|sing-?box|clash|karing|shadowrocket|foxray/i.test(ua)
+    const isClientApp = /happ|incy|v2ray|hiddify|streisand|v2box|nekobox|sing-?box|clash|karing|shadowrocket|foxray/i.test(ua)
     const hwid = header('x-hwid') ?? (isClientApp ? `ua:${ua.slice(0, 100)}` : null)
     recordSubRequest({ at: new Date(), tgId, ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
 
@@ -269,15 +278,17 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
   })
 
   /**
-   * Кнопка «Открыть в Happ». Telegram на iOS не открывает из Mini App свои схемы
-   * вроде happ://, поэтому Mini App открывает эту https-страницу во внешнем
-   * браузере, а она уже переходит в happ://add/<ссылка подписки>.
+   * Кнопка «Открыть в Happ / INCY / Hiddify». Telegram на iOS не открывает из Mini App
+   * свои схемы вроде happ://, поэтому Mini App открывает эту https-страницу во внешнем
+   * браузере, а она уже переходит в happ://add/<ссылка подписки> (incy://add/…, hiddify://import/…).
    */
-  app.get('/open/happ/:token', async (request, reply) => {
-    const { token } = request.params as { token: string }
+  app.get('/open/:app/:token', async (request, reply) => {
+    const { app: appId, token } = request.params as { app: string; token: string }
+    if (!isClientAppId(appId)) return reply.code(404).send('unknown app')
+    const client = CLIENT_APPS[appId]
     const url = subscriptionUrl(env, token)
     if (!url) return reply.code(500).send('PUBLIC_URL is not set')
-    const deeplink = `happ://add/${url}`
+    const deeplink = client.deeplink(url)
     const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
     reply.header('content-type', 'text/html; charset=utf-8')
     return reply.send(`<!doctype html><html lang="ru"><head><meta charset="utf-8">
@@ -289,9 +300,9 @@ main{max-width:360px;padding:24px;text-align:center}
 a.btn{display:block;margin-top:20px;padding:15px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;text-decoration:none;font-weight:600}
 p{color:#a1a1aa}
 </style></head><body><main>
-<h2>Открываем Happ…</h2>
-<p>Если приложение не открылось само, нажмите кнопку. Happ должен быть установлен.</p>
-<a class="btn" href="${esc(deeplink)}">Открыть в Happ</a>
+<h2>Открываем ${client.name}…</h2>
+<p>Если приложение не открылось само, нажмите кнопку. ${client.name} должен быть установлен.</p>
+<a class="btn" href="${esc(deeplink)}">Открыть в ${client.name}</a>
 </main><script>location.href=${JSON.stringify(deeplink)}</script></body></html>`)
   })
 }
@@ -301,7 +312,14 @@ export function subscriptionUrl(env: NodeJS.ProcessEnv, subToken: string) {
   return base ? `${base}/sub/${subToken}` : null
 }
 
-export function happOpenUrl(env: NodeJS.ProcessEnv, subToken: string) {
+export function clientOpenUrl(env: NodeJS.ProcessEnv, app: ClientAppId, subToken: string) {
   const base = (env.PUBLIC_URL ?? '').replace(/\/+$/, '')
-  return base ? `${base}/open/happ/${subToken}` : null
+  return base ? `${base}/open/${app}/${subToken}` : null
+}
+
+export const happOpenUrl = (env: NodeJS.ProcessEnv, subToken: string) => clientOpenUrl(env, 'happ', subToken)
+
+/** Ссылки «Открыть в …» для всех клиентов: { happ, incy, hiddify }. */
+export function clientOpenUrls(env: NodeJS.ProcessEnv, subToken: string) {
+  return Object.fromEntries((Object.keys(CLIENT_APPS) as ClientAppId[]).map((id) => [id, clientOpenUrl(env, id, subToken)])) as Record<ClientAppId, string | null>
 }
