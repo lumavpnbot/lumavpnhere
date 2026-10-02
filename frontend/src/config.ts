@@ -88,7 +88,7 @@ export const CLIENT_APPS: ClientApp[] = [
   {
     id: 'hiddify',
     name: 'Hiddify',
-    ios: 'https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532',
+    ios: 'https://apps.apple.com/app/id6596777532',
     android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
     site: 'https://github.com/hiddify/hiddify-app/releases/latest',
     deeplink: (subUrl) => `hiddify://import/${subUrl}#${BRAND}`,

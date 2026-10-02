@@ -490,7 +490,7 @@ export function createAdminFeatures(
         return
       }
       case 'trp':
-        if (b === 'add') return void (await ask(ctx, 'tr_provider', 'Домен для чёрного списка. Можно добавить название.\nНапример: provider.com Provider VPN', {}, 'adm:trp'))
+        if (b === 'add') return void (await ask(ctx, 'tr_provider', 'Домен для чёрного списка. Можно добавить название.\nНапример: provider.com Provider', {}, 'adm:trp'))
         return show(ctx, await providersView())
       case 'trpc': {
         const row = await prisma.transferProvider.findUnique({ where: { id: BigInt(b) } })

@@ -208,7 +208,7 @@ function demo(now = Date.now()) {
       expiresAt: new Date(now + 23 * DAY).toISOString(),
       trafficUsedGb: 0,
       trafficLimitGb: null,
-      subscriptionUrl: 'https://sub.lynkvpn.example/demo',
+      subscriptionUrl: 'https://sub.lynk.example/demo',
     } satisfies Subscription,
     devices: [
       { id: 'd1', label: 'iPhone', platform: 'iOS', lastSeenAt: new Date(now - 12 * 60 * 1000).toISOString() },

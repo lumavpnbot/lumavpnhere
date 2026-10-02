@@ -90,7 +90,7 @@ const ru = {
   'devices.full': 'Достигнут лимит тарифа. Удалите устройство в приложении.',
 
   'connect.title': 'Подключение',
-  'connect.subtitle': 'Три шага, и VPN работает через {app}',
+  'connect.subtitle': 'Три шага, и сервис работает через {app}',
   'connect.needSub': 'Сначала нужна подписка',
   'connect.needSubText': 'Ссылка для подключения появится сразу после оформления.',
   'connect.clientHint': 'Подписка одна и та же: выберите любое приложение',
@@ -101,7 +101,7 @@ const ru = {
   'connect.s2text': '{app} откроется и сам добавит ваш профиль',
   'connect.open': 'Открыть в {app}',
   'connect.copyManual': 'Скопировать ссылку вручную',
-  'connect.s3': 'Включите VPN',
+  'connect.s3': 'Включите сервис',
   'connect.s3text': 'Нажмите кнопку подключения в приложении, устройство появится в списке',
 
   'friends.title': 'Друзья',
@@ -151,7 +151,7 @@ const ru = {
   'notif.title': 'Уведомления',
   'notif.subtitle': 'Сообщения приходят в бот LYNK',
   'notif.expiry': 'Окончание подписки',
-  'notif.expiryHint': 'Напомним заранее, чтобы VPN не отключился',
+  'notif.expiryHint': 'Напомним заранее, чтобы сервис не отключился',
   'notif.expiryDays': 'За сколько дней',
   'notif.traffic': 'Расход трафика',
   'notif.trafficHint': 'Когда лимит почти исчерпан',
@@ -339,7 +339,7 @@ const ru = {
 
   // ── ТЗ v6.3 · Перенос подписок ──
   'transfer.title': 'Перенос подписки',
-  'transfer.subtitle': 'Остались дни в другом VPN? Перенесём их в LYNK бесплатно',
+  'transfer.subtitle': 'Остались дни в другом сервисе? Перенесём их в LYNK бесплатно',
   'transfer.row': 'Перенос подписки',
   'transfer.rowHint': 'Дни из другого сервиса, до 90 дней',
   'transfer.rules': 'Правила',
@@ -506,7 +506,7 @@ const en: Record<Key, string> = {
   'devices.full': 'Plan limit reached. Remove a device in the app.',
 
   'connect.title': 'Connect',
-  'connect.subtitle': 'Three steps and the VPN runs through {app}',
+  'connect.subtitle': 'Three steps and the service runs through {app}',
   'connect.needSub': 'You need a subscription first',
   'connect.needSubText': 'The connection link appears right after you subscribe.',
   'connect.clientHint': 'Same subscription in every app: pick any of them',
@@ -517,7 +517,7 @@ const en: Record<Key, string> = {
   'connect.s2text': '{app} opens and adds your profile by itself',
   'connect.open': 'Open in {app}',
   'connect.copyManual': 'Copy the link manually',
-  'connect.s3': 'Turn the VPN on',
+  'connect.s3': 'Turn the service on',
   'connect.s3text': 'Tap connect in the app and the device shows up in your list',
 
   'friends.title': 'Friends',
@@ -567,7 +567,7 @@ const en: Record<Key, string> = {
   'notif.title': 'Notifications',
   'notif.subtitle': 'Messages arrive in the LYNK bot',
   'notif.expiry': 'Subscription ending',
-  'notif.expiryHint': 'We remind you in advance so the VPN stays on',
+  'notif.expiryHint': 'We remind you in advance so the service stays on',
   'notif.expiryDays': 'Days before',
   'notif.traffic': 'Traffic usage',
   'notif.trafficHint': 'When the limit is almost used up',
@@ -753,7 +753,7 @@ const en: Record<Key, string> = {
   'status.publicPage': 'Open the public page',
 
   'transfer.title': 'Transfer subscription',
-  'transfer.subtitle': 'Days left in another VPN? Move them to LYNK for free',
+  'transfer.subtitle': 'Days left in another service? Move them to LYNK for free',
   'transfer.row': 'Transfer subscription',
   'transfer.rowHint': 'Days from another service, up to 90',
   'transfer.rules': 'Rules',

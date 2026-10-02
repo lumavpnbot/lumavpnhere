@@ -70,9 +70,9 @@ export function registerAchievementRoutes(
         result: {
           type: 'article',
           id: crypto.randomBytes(8).toString('hex'),
-          title: 'LYNK: быстрый VPN в Telegram',
+          title: 'LYNK: быстрый и защищённый сервис в Telegram',
           description: 'Пробный период по моей ссылке длиннее',
-          input_message_content: { message_text: `Пользуюсь LYNK: быстрый и защищённый VPN прямо в Telegram. По моей ссылке пробный период длиннее 👇\n${link}` },
+          input_message_content: { message_text: `Пользуюсь LYNK: быстрый и защищённый сервис прямо в Telegram. По моей ссылке пробный период длиннее 👇\n${link}` },
           reply_markup: { inline_keyboard: [[{ text: '🚀 Открыть LYNK', url: link }]] },
         },
         allow_user_chats: true,
