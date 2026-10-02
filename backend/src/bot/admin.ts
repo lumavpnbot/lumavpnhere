@@ -321,8 +321,8 @@ export function createAdmin(deps: {
         ? { method: 'stars' }
         : filter === 'crypto'
           ? { method: { in: ['crypto_usdt', 'crypto_ton'] } }
-          : filter === 'sbp'
-            ? { method: 'platega_sbp' }
+          : filter === 'platega'
+            ? { method: { in: ['platega', 'platega_sbp'] } }
             : filter === 'balance'
             ? { method: 'balance' }
             : filter === 'pending' || filter === 'paid' || filter === 'refunded'
@@ -332,7 +332,7 @@ export function createAdmin(deps: {
     const list = rows.slice(0, PAGE)
     const icon = (s: string) => (s === 'paid' ? '✅' : s === 'pending' ? '⏳' : s === 'refunded' ? '↩️' : '✖️')
     const kb: InlineKeyboard = [
-      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('СБП', 'adm:pay:sbp:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
+      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('Platega', 'adm:pay:platega:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
       [btn('Оплачены', 'adm:pay:paid:0'), btn('Ожидают', 'adm:pay:pending:0'), btn('Возвраты', 'adm:pay:refunded:0')],
       ...list.map((p) => [btn(`${icon(p.status)} ${rub(Number(p.amountRub) + Number(p.balanceUsedRub))} · ${p.user.username ? '@' + p.user.username : p.user.tgId} · ${day(p.createdAt)}`, `adm:p:${p.id}`)]),
       pager(`adm:pay:${filter}`, page, rows.length > PAGE),

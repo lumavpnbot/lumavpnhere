@@ -11,7 +11,8 @@ import { rateLimit } from '@/plugins/rateLimit'
 const orderSchema = z.object({
   plan: z.enum(['start', 'pro']),
   period: z.enum(['month', 'year']),
-  method: z.enum(['stars', 'crypto_usdt', 'platega_sbp', 'balance']),
+  // platega_sbp: старое имя Platega из закэшированной версии Mini App.
+  method: z.enum(['stars', 'crypto_usdt', 'platega', 'platega_sbp', 'balance']).transform((m) => (m === 'platega_sbp' ? 'platega' : m)),
   promo: z.string().max(40).optional(),
   useBalance: z.boolean().optional(),
   autoRenew: z.boolean().optional(),
@@ -40,7 +41,7 @@ export function registerPaymentRoutes(
    */
   const lastCheck = new Map<string, { at: number; details: ProviderTxDetails | null }>()
   async function syncWithProvider(p: Payment): Promise<ProviderTxDetails | null> {
-    const provider = payments.get(p.method as 'platega_sbp')
+    const provider = payments.get(p.method as 'platega')
     if (p.status !== 'pending' || !p.externalId || !provider?.enabled || !provider.details) return null
     const cached = lastCheck.get(p.orderId)
     if (cached && Date.now() - cached.at < 3_000) return cached.details
@@ -196,9 +197,9 @@ p{color:#a1a1aa}
     }
   })
 
-  // Вебхуки CryptoBot и Platega (СБП). Stars подтверждается апдейтом бота, не сюда.
+  // Вебхуки CryptoBot и Platega (/platega и прежний /platega_sbp). Stars подтверждается апдейтом бота, не сюда.
   app.post('/payments/webhook/:method', async (request, reply) => {
-    const method = (request.params as { method: string }).method as 'crypto_usdt' | 'platega_sbp' | 'yookassa_sbp'
+    const method = (request.params as { method: string }).method as 'crypto_usdt' | 'platega' | 'platega_sbp' | 'yookassa_sbp'
     const provider = payments.get(method)
     // Выключенный провайдер (нет ключей в .env) вебхуки не принимает.
     if (!provider?.enabled) return reply.code(404).send()

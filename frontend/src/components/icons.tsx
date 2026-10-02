@@ -250,6 +250,12 @@ export const ClockIcon = (p: P) => (
     <path d="M12 7.5V12l3 2" />
   </Base>
 )
+export const CardIcon = (p: P) => (
+  <Base {...p}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+    <path d="M3 10h18M7 15h3" />
+  </Base>
+)
 export const QrIcon = (p: P) => (
   <Base {...p}>
     <rect x="4" y="4" width="6" height="6" rx="1.2" />

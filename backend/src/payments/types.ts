@@ -1,4 +1,4 @@
-export type PaymentMethodId = 'stars' | 'crypto_usdt' | 'crypto_ton' | 'yookassa_card' | 'yookassa_sbp' | 'platega_sbp'
+export type PaymentMethodId = 'stars' | 'crypto_usdt' | 'crypto_ton' | 'yookassa_card' | 'yookassa_sbp' | 'platega'
 
 export interface CreateInvoiceParams {
   orderId: string

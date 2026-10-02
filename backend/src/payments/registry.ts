@@ -33,6 +33,7 @@ export function createPaymentRegistry(env: {
   return {
     /** Только реально включённые методы — то, что показываем пользователю. */
     listEnabled: () => providers.filter((p) => p.enabled),
-    get: (id: PaymentMethodId) => byId.get(id),
+    // platega_sbp: прежнее имя Platega (старые платежи и адрес вебхука в кабинете Platega).
+    get: (id: PaymentMethodId | 'platega_sbp') => byId.get(id === 'platega_sbp' ? 'platega' : id),
   }
 }

@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import type { PaymentProvider, CreateInvoiceParams, ProviderTxDetails, WebhookEvent } from './types'
 
 const API = 'https://app.platega.io'
-/** paymentMethod в API Platega: 2 = СБП (QR / приложение банка). */
+/** paymentMethod в API Platega: 2 = СБП. Нужен только для запасного v1-запроса. */
 const SBP = 2
 
 /** Статус Platega → наш: CONFIRMED оплачен, CANCELED/FAILED/EXPIRED нет, остальное ещё в процессе. */
@@ -12,39 +12,45 @@ const mapStatus = (raw: unknown): ProviderTxDetails['status'] => {
 }
 
 /**
- * Platega (СБП). Авторизация: заголовки X-MerchantId и X-Secret (ID мерчанта и API-ключ
- * из личного кабинета Platega). Ссылка на оплату: POST /transaction/process, подтверждение
- * приходит callback'ом на <PUBLIC_URL>/payments/webhook/platega_sbp — адрес указывается
- * в кабинете Platega. В callback Platega присылает те же X-MerchantId и X-Secret,
- * по ним и проверяем, что запрос настоящий.
+ * Platega: СБП и карта на их странице оплаты. Авторизация: заголовки X-MerchantId и X-Secret
+ * (ID мерчанта и API-ключ из кабинета Platega). Ссылка на оплату: POST /v2/transaction/process
+ * без paymentMethod, способ (СБП, карта) покупатель выбирает на странице Platega.
+ * Подтверждение приходит callback'ом на <PUBLIC_URL>/payments/webhook/platega (старый адрес
+ * …/platega_sbp тоже работает) — адрес указывается в кабинете Platega. В callback Platega
+ * присылает те же X-MerchantId и X-Secret, по ним и проверяем, что запрос настоящий.
  */
 export function createPlategaProvider(merchantId: string, secret: string, returnUrl: string): PaymentProvider {
   const enabled = Boolean(merchantId && secret)
 
   return {
-    id: 'platega_sbp',
+    id: 'platega',
     enabled,
 
     async createInvoice({ orderId, amountRub, description, tgUserId }: CreateInvoiceParams) {
-      const res = await fetch(`${API}/transaction/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-MerchantId': merchantId, 'X-Secret': secret },
-        body: JSON.stringify({
-          paymentMethod: SBP,
-          paymentDetails: { amount: amountRub, currency: 'RUB' },
-          description,
-          return: returnUrl,
-          failedUrl: returnUrl,
-          payload: orderId,
-          // Platega просит передавать id покупателя для антифрода.
-          metadata: { userId: String(tgUserId) },
-        }),
-        signal: AbortSignal.timeout(15_000),
-      })
+      const body = {
+        paymentDetails: { amount: amountRub, currency: 'RUB' },
+        description,
+        return: returnUrl,
+        failedUrl: returnUrl,
+        payload: orderId,
+        // Platega просит передавать id покупателя для антифрода.
+        metadata: { userId: String(tgUserId) },
+      }
+      const post = (path: string, extra: object = {}) =>
+        fetch(`${API}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-MerchantId': merchantId, 'X-Secret': secret },
+          body: JSON.stringify({ ...extra, ...body }),
+          signal: AbortSignal.timeout(15_000),
+        })
+      // v2 без paymentMethod: на странице Platega покупатель выбирает СБП или карту.
+      // Если v2 у аккаунта недоступен, создаём платёж по-старому (v1, только СБП).
+      let res = await post('/v2/transaction/process')
+      if (res.status === 404 || res.status === 405) res = await post('/transaction/process', { paymentMethod: SBP })
       const data = (await res.json().catch(() => ({}))) as { transactionId?: string; redirect?: string; url?: string; message?: string }
       // В v1 ссылка в redirect, в v2 переименована в url: читаем оба поля.
       const link = data.redirect || data.url
-      if (!res.ok || !link) throw new Error(`Не удалось создать платёж СБП${data.message ? `: ${data.message}` : ''}`)
+      if (!res.ok || !link) throw new Error(`Не удалось создать платёж Platega${data.message ? `: ${data.message}` : ''}`)
       return { payload: link, externalId: data.transactionId }
     },
 
