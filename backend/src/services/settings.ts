@@ -43,6 +43,8 @@ export interface AppSettings {
   buttonEmoji: { open: string; transfer: string }
   /** Фото / видео / GIF приветствия (file_id бота); null = только текст. */
   welcomeMedia: { type: 'photo' | 'video' | 'animation'; fileId: string } | null
+  /** Когда включили чеки «Мой налог» (ISO): чеки выдаются только по оплатам после этого момента. */
+  npdEnabledAt: string
   defaultPromo: string
   /** Достижения: награды, изменённые из админки (код → награды). */
   achievementRewards: Record<string, RewardSpec[]>
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     '<b>Готов начать?</b>',
   buttonEmoji: { open: '', transfer: '' },
   welcomeMedia: null,
+  npdEnabledAt: '',
   defaultPromo: '',
   achievementRewards: {},
   achievementDiscountDays: 90,

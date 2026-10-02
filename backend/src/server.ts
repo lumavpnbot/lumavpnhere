@@ -22,6 +22,7 @@ import { registerStatusRoutes } from '@/routes/status'
 import { createAchievementService } from '@/services/achievements'
 import { createTransferService } from '@/services/transfer'
 import { createStatusService } from '@/services/status'
+import { createNpdReceipts } from '@/services/npdReceipts'
 import { createTelegram, telegramApiBase, type InlineKeyboard } from '@/bot/tg'
 import { createStaff, ownerIds } from '@/bot/staff'
 import { createAdmin } from '@/bot/admin'
@@ -125,7 +126,12 @@ const panel = createPanelProvider(env)
 const owners = ownerIds(env)
 const vpn = createVpnService(prisma, panel, (tgId) => owners.has(tgId))
 const achievements = createAchievementService({ prisma, settings, vpn, notify: staff.notify })
-const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'), achievements)
+// Чеки самозанятого в «Мой налог» после оплаты рублями (MOY_NALOG_INN / MOY_NALOG_PASSWORD).
+const receipts = createNpdReceipts({ prisma, settings, env, notifyUser: staff.notify, notifyStaff: (t) => staff.notifyStaff(t, 'admin') })
+await receipts.init().catch((err) => app.log.error({ err }, 'npd init failed'))
+const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'), achievements, (id) => {
+  void receipts.issue(id)
+})
 const users = createUserService(prisma, (t) => staff.notifyStaff(t, 'owner'))
 const servers = createServerStatus(env)
 /** Сообщение команде (админам и владельцам) с кнопками, например «Открыть заявку». */
@@ -143,7 +149,7 @@ const status = createStatusService({
   },
 })
 const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
-const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements })
+const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements, receipts })
 const admin = createAdmin({
   prisma,
   tg,
@@ -153,6 +159,7 @@ const admin = createAdmin({
   vpn,
   panel,
   servers,
+  receipts,
   sendBroadcast: jobs.sendBroadcast,
   features: (api) =>
     createAdminFeatures({ prisma, tg, staff, settings, vpn, transfer, achievements, status, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env) }, api),
@@ -182,6 +189,7 @@ app.get('/health', async () => {
     // так видно, выкатился ли деплой и подхватились ли ключи (например, ЮKassa → yookassa_sbp).
     version: env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
     payments: payments.listEnabled().map((p) => p.id),
+    receipts: receipts.enabled ? 'moy-nalog' : null,
     botIds: botTokens.map(botIdOf),
     bot: { username: picked.username, id: botIdOf(botToken), setup: botSetup, webhook },
     panel: panel.kind,

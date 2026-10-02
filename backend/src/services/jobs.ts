@@ -5,6 +5,7 @@ import { TgError, type Telegram } from '@/bot/tg'
 import { recordError } from '@/lib/errors'
 import type { AchievementService } from './achievements'
 import type { BillingService } from './billing'
+import type { NpdReceipts } from './npdReceipts'
 import type { StatusService } from './status'
 import type { VpnService } from './vpn'
 
@@ -24,8 +25,9 @@ export function createJobs(deps: {
   webAppUrl: string
   status?: StatusService
   achievements?: AchievementService
+  receipts?: NpdReceipts
 }) {
-  const { prisma, tg, billing, vpn, log, webAppUrl, status, achievements } = deps
+  const { prisma, tg, billing, vpn, log, webAppUrl, status, achievements, receipts } = deps
 
   /** Достижения за лояльность (6/12/24 месяца) наступают со временем: проверяем всех, кто платил. */
   async function achievementsSweep() {
@@ -121,6 +123,7 @@ export function createJobs(deps: {
       await step('holds', () => billing.releaseHolds())
       await step('autorenew', () => billing.autoRenewFromBalance())
       await step('activations', () => billing.retryFailedActivations())
+      if (receipts) await step('receipts', () => receipts.retryMissing())
       await step('remind', remind)
     }
     setInterval(safe('ten-minutes', every10), 10 * 60 * 1000)

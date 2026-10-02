@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, User } from '@prisma/client'
+import type { PaymentMethod, Prisma, PrismaClient, User } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
 import type { BillingService } from '@/services/billing'
 import type { ServerStatusService } from '@/services/servers'
@@ -30,6 +30,7 @@ import {
 } from './adminUi'
 import { can, type Staff, type StaffRole } from './staff'
 import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity, type TgMedia } from './tg'
+import type { NpdReceipts } from '@/services/npdReceipts'
 import { sendWelcome } from './welcome'
 
 /**
@@ -99,6 +100,8 @@ export function createAdmin(deps: {
   panel: PanelProvider
   servers: ServerStatusService
   sendBroadcast: (id: bigint) => Promise<void>
+  /** Чеки самозанятого в «Мой налог». */
+  receipts?: NpdReceipts
   /** Разделы ТЗ v6.3: переносы, достижения, статус, устройства пользователя. */
   features?: (api: AdminApi) => AdminFeatures
 }) {
@@ -356,14 +359,28 @@ export function createAdmin(deps: {
       `Способ: <b>${p.method}</b>${p.starsAmount ? ` (${p.starsAmount} ⭐)` : ''}${p.externalId ? ` · id: <code>${esc(p.externalId)}</code>` : ''}\n` +
       `К оплате: <b>${rub(p.amountRub)}</b> · с баланса ${rub(p.balanceUsedRub)} · скидка ${rub(p.discountRub)}${p.promoCode ? ` (${esc(p.promoCode.code)})` : ''}\n` +
       `Статус: <b>${p.status}</b>${stuck ? ' · ⚠️ доступ не выдан' : ''}\nСоздан: ${dt(p.createdAt)} · оплачен: ${dt(p.paidAt)}\n` +
-      `Реферальное начисление: ${p.referralPayout ? `${rub(p.referralPayout.amountRub)} (${p.referralPayout.status})` : 'нет'}`
+      `Реферальное начисление: ${p.referralPayout ? `${rub(p.referralPayout.amountRub)} (${p.referralPayout.status})` : 'нет'}` +
+      receiptLine(p)
     const kb: InlineKeyboard = []
+    const receipts = deps.receipts
+    if (receipts?.enabled && p.status === 'paid' && receipts.isRubMethod(p.method) && Number(p.amountRub) > 0) {
+      if (!p.receiptUuid) kb.push([btn('🧾 Выдать чек «Мой налог»', `adm:p:${id}:receipt`)])
+      else if (!p.receiptCanceledAt) kb.push([btn('🧾 Аннулировать чек', `adm:p:${id}:rcancel`)])
+    }
     if (stuck) kb.push([btn('♻️ Выдать доступ повторно', `adm:p:${id}:reactivate`)])
     if (p.status === 'paid') kb.push([btn('↩️ Возврат на баланс', `adm:p:${id}:refund`)])
     if (p.status === 'pending') kb.push([btn('✅ Отметить оплаченным', `adm:p:${id}:markpaid`)])
     kb.push([btn('👤 Пользователь', `adm:u:${p.userId}`)])
     kb.push(back('adm:pay:all:0'))
     return { text, kb }
+  }
+
+  /** Строка про чек «Мой налог» в карточке платежа. */
+  function receiptLine(p: { receiptUrl: string | null; receiptCanceledAt: Date | null; status: string; method: PaymentMethod; amountRub: unknown }) {
+    if (!deps.receipts?.enabled) return ''
+    if (p.receiptUrl) return `\nЧек «Мой налог»: <a href="${esc(p.receiptUrl)}">открыть</a>${p.receiptCanceledAt ? ` · аннулирован ${dt(p.receiptCanceledAt)}` : ''}`
+    if (p.status === 'paid' && deps.receipts.isRubMethod(p.method) && Number(p.amountRub) > 0) return '\nЧек «Мой налог»: <b>не выдан</b>'
+    return ''
   }
 
   async function referralsMenu(): Promise<View> {
@@ -800,6 +817,26 @@ export function createAdmin(deps: {
           await staff.audit(ctx.tgId, 'reactivate', `payment:${id}`, { ok })
           await show(ctx, await paymentCard(id))
           return ok ? 'Доступ выдан' : 'Выдавать нечего: доступ уже выдан'
+        }
+        if (c === 'receipt') {
+          const url = await deps.receipts?.issue(id, { force: true }).catch((e: Error) => e)
+          if (url instanceof Error) return `Чек не выдан: ${url.message}`.slice(0, 190)
+          await staff.audit(ctx.tgId, 'npd_receipt', `payment:${id}`)
+          await show(ctx, await paymentCard(id))
+          return url ? 'Чек выдан' : 'Чек не нужен или уже есть'
+        }
+        if (c === 'rcancel') {
+          return show(ctx, {
+            text: 'Аннулировать чек в «Мой налог»? Выберите причину.',
+            kb: [[btn('Возврат средств', `adm:p:${b}:rcancel_refund`), btn('Чек ошибочный', `adm:p:${b}:rcancel_mistake`)], [btn('‹ Назад', `adm:p:${b}`)]],
+          })
+        }
+        if (c === 'rcancel_refund' || c === 'rcancel_mistake') {
+          const err = await deps.receipts?.cancel(id, c === 'rcancel_refund' ? 'refund' : 'mistake').then(() => null, (e: Error) => e)
+          if (err) return `Не аннулирован: ${err.message}`.slice(0, 190)
+          await staff.audit(ctx.tgId, 'npd_cancel', `payment:${id}`, { reason: c })
+          await show(ctx, await paymentCard(id))
+          return 'Чек аннулирован'
         }
         if (c === 'markpaid') return show(ctx, confirm('Платёж будет считаться оплаченным, подписка выдастся сразу.', `adm:p:${b}:markpaidok`, `adm:p:${b}`))
         if (c === 'markpaidok') {

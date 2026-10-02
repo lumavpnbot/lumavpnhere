@@ -35,6 +35,8 @@ export function createBillingService(
   notify: Notifier,
   notifyStaff: (text: string) => Promise<void>,
   achievements?: AchievementService,
+  /** После выдачи оплаченного заказа (чек «Мой налог»). Ошибки внутри не должны ломать оплату. */
+  onPaid?: (paymentId: bigint) => void,
 ) {
   async function findPromo(code: string, userId: bigint) {
     const normalized = code.trim().toUpperCase()
@@ -229,6 +231,7 @@ export function createBillingService(
     }
     // Событие 'paid' пишем последним: по нему фронт понимает, что подписка уже выдана (GET /payments/order/:id).
     await prisma.paymentLog.create({ data: { orderId, event: 'paid', payload: { externalId: externalId ?? null } } })
+    onPaid?.(payment.id)
     if (user.referrerId) await updateReferrerLevel(user.referrerId).catch(() => undefined)
     const title = `Тариф «${plan === 'pro' ? 'Премиум' : 'Старт'}» на ${payment.periodDays === 365 ? '12 месяцев' : '1 месяц'}`
     await notify(
