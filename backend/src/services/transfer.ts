@@ -36,7 +36,7 @@ export const CHECK_TITLES: Record<string, string> = {
   format: 'Формат ссылки',
   type: 'Тип ссылки',
   unique: 'Уникальность ссылки',
-  provider: 'Провайдер в белом списке',
+  provider: 'Провайдер не в чёрном списке',
   http: 'HTTP-запрос успешен',
   content: 'Конфиги получены',
   meta: 'Метаданные извлечены',
@@ -210,14 +210,11 @@ export function createTransferService(deps: {
       set('unique', dup ? 'fail' : 'ok', dup ? `уже подавалась в заявке ${transferCode(dup)}` : 'не подавалась')
     } else set('unique', 'skip', SKIPPED)
 
-    // Провайдер: белый / серый / чёрный список.
+    // Провайдер: разрешены все, кроме чёрного списка.
     if (formatOk && out.provider) {
-      const row = await prisma.transferProvider.findFirst({ where: { domain: { in: [out.provider, out.parsed!.host] } } })
-      out.providerList = row?.list ?? null
-      if (!row) set('provider', 'warn', `${out.provider} нет в базе: решение за модератором`)
-      else if (row.list === 'white') set('provider', 'ok', `белый список (${row.domain})`)
-      else if (row.list === 'gray') set('provider', 'warn', `серый список (${row.domain})`)
-      else set('provider', 'fail', `чёрный список (${row.domain})`)
+      const row = await prisma.transferProvider.findFirst({ where: { domain: { in: [out.provider, out.parsed!.host] }, list: 'black' } })
+      out.providerList = row ? 'black' : null
+      set('provider', row ? 'fail' : 'ok', row ? `чёрный список (${row.domain})` : `${out.provider} не в чёрном списке`)
     } else set('provider', 'skip', SKIPPED)
 
     // ── Этап 2–3: запрос к провайдеру и метаданные ──

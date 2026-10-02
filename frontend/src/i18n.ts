@@ -356,7 +356,6 @@ const ru = {
   'transfer.reason': 'Причина: {reason}',
   'transfer.again': 'Подать новую ссылку',
   'transfer.done': 'Перенос уже выполнен. Он доступен один раз на аккаунт.',
-  'transfer.providers': 'Проверенные провайдеры',
   'transfer.checksTitle': 'Проверки ({ok} из {total})',
 
   // ── ТЗ v6.3 · Достижения ──
@@ -758,7 +757,6 @@ const en: Record<Key, string> = {
   'transfer.reason': 'Reason: {reason}',
   'transfer.again': 'Submit a new link',
   'transfer.done': 'Transfer already completed. It is available once per account.',
-  'transfer.providers': 'Verified providers',
   'transfer.checksTitle': 'Checks ({ok} of {total})',
 
   'ach.title': 'Achievements',

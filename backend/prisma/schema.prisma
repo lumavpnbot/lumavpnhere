@@ -398,7 +398,7 @@ model TransferRequest {
   linkHash       String           @map("link_hash") // SHA-256 нормализованной ссылки
   linkType       String           @map("link_type") // subscription | vless | vmess | trojan | ss
   provider       String? // домен провайдера (или сервера для vless/vmess/…)
-  providerList   ProviderList?    @map("provider_list") // null = домена нет в базе
+  providerList   ProviderList?    @map("provider_list") // black = в чёрном списке, null = разрешён
   status         TransferStatus   @default(checking)
   verdict        TransferVerdict?
   days           Int? // рассчитанный остаток дней (до ограничения 90)

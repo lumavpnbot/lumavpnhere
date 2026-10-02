@@ -89,7 +89,7 @@ export function createAdminFeatures(
         [btn('В обработке', 'adm:trl:checking:all:-:date:0'), btn('Запрошена ссылка', 'adm:trl:need_link:all:-:date:0')],
         [btn('👶 Аккаунт < 3 дн', 'adm:trl:all:all:young:date:0'), btn('💳 Была платная LYNK', 'adm:trl:all:all:paid:date:0')],
         [btn('🔎 Поиск', 'adm:tr:search'), btn('📊 Аналитика', 'adm:trs:month')],
-        [btn('📄 CSV', 'adm:trx:csv'), btn('📗 XLSX', 'adm:trx:xlsx'), btn('🏷 Провайдеры', 'adm:trp')],
+        [btn('📄 CSV', 'adm:trx:csv'), btn('📗 XLSX', 'adm:trx:xlsx'), btn('⛔ Чёрный список', 'adm:trp')],
         back(),
       ],
     }
@@ -139,7 +139,7 @@ export function createAdminFeatures(
     const lines = [
       `<b>Юзер:</b> ${who(t.user)} (tg_id <code>${t.user.tgId}</code>, регистрация ${day(t.user.createdAt)}, аккаунту ${t.accountAgeDays} дн${t.accountAgeDays < 3 ? ' ⚠️' : ''})`,
       `<b>Ссылка:</b> <code>${esc(link)}</code>`,
-      `<b>Тип:</b> ${t.linkType === 'subscription' ? 'Subscription URL' : `${t.linkType}://`} · <b>провайдер:</b> ${esc(t.provider ?? '?')} (${t.providerList ? { white: 'белый', gray: 'серый', black: 'чёрный' }[t.providerList] : 'нет в базе'})`,
+      `<b>Тип:</b> ${t.linkType === 'subscription' ? 'Subscription URL' : `${t.linkType}://`} · <b>провайдер:</b> ${esc(t.provider ?? '?')}${t.providerList === 'black' ? ' (чёрный список ⚠️)' : ''}`,
       `<b>HTTP:</b> ${t.httpStatus ?? '—'} · ${t.responseMs != null ? `${t.responseMs} мс` : '—'} · ${t.bodyBytes != null ? `${t.bodyBytes} Б` : '—'} · конфигов ${t.configsCount ?? '—'}`,
       `<b>subscription-userinfo:</b> <code>${esc(t.userInfo ?? 'нет')}</code>`,
       `<b>Остаток дней:</b> ${t.days ?? '?'}${t.expireAt ? ` (до ${day(t.expireAt)})` : ''}${t.creditedDays ? ` · начислено ${t.creditedDays}` : ''}`,
@@ -219,28 +219,23 @@ export function createAdminFeatures(
   async function transfersExportRows() {
     const rows = await prisma.transferRequest.findMany({ include: { user: true }, orderBy: { createdAt: 'desc' }, take: 10000 })
     return [
-      ['ID', 'Статус', 'Автопометка', 'tg_id', 'username', 'Возраст аккаунта', 'Тип', 'Провайдер', 'Список', 'Дней', 'Начислено', 'HTTP', 'Мс', 'Была платная', 'Причина', 'Подана', 'Решение', 'Ссылка'],
+      ['ID', 'Статус', 'Автопометка', 'tg_id', 'username', 'Возраст аккаунта', 'Тип', 'Провайдер', 'В ЧС', 'Дней', 'Начислено', 'HTTP', 'Мс', 'Была платная', 'Причина', 'Подана', 'Решение', 'Ссылка'],
       ...rows.map((t: TransferWithUser) => [
-        transferCode(t), ST_NAMES[t.status], t.verdict ? VERDICT_NAMES[t.verdict] : '', String(t.user.tgId), t.user.username, t.accountAgeDays, t.linkType, t.provider, t.providerList,
+        transferCode(t), ST_NAMES[t.status], t.verdict ? VERDICT_NAMES[t.verdict] : '', String(t.user.tgId), t.user.username, t.accountAgeDays, t.linkType, t.provider, t.providerList === 'black' ? 'да' : 'нет',
         t.days, t.creditedDays, t.httpStatus, t.responseMs, t.hadPaidSub ? 'да' : 'нет', t.rejectReason, t.createdAt.toISOString(), t.decidedAt?.toISOString(), t.link,
       ]),
     ]
   }
 
+  /** Перенос разрешён от любого провайдера, кроме чёрного списка. */
   async function providersView(): Promise<View> {
-    const [rows, usage] = await Promise.all([
-      prisma.transferProvider.findMany({ orderBy: { domain: 'asc' }, take: 40 }),
-      prisma.transferRequest.groupBy({ by: ['provider'], _count: true, orderBy: { _count: { provider: 'desc' } }, take: 10 }),
-    ])
-    const icon = { white: '⚪️', gray: '🔘', black: '⚫️' }
-    const unknown = usage.filter((u) => u.provider && !rows.some((r) => r.domain === u.provider))
+    const rows = await prisma.transferProvider.findMany({ where: { list: 'black' }, orderBy: { domain: 'asc' }, take: 40 })
     return {
       text:
-        header('🏷', 'Провайдеры', 'белый ⚪️ · серый 🔘 · чёрный ⚫️') +
-        (rows.length ? 'Нажмите на провайдера, чтобы сменить список.' : '<i>Список пуст: все провайдеры уходят на ручную модерацию.</i>') +
-        (unknown.length ? `\n\n<b>Встречаются в заявках, но нет в базе</b>\n${unknown.map((u) => `${esc(u.provider!)} · ${u._count}`).join('\n')}` : ''),
+        header('⛔', 'Чёрный список провайдеров', 'остальные разрешены') +
+        (rows.length ? 'Заявки с этих доменов отклоняются автоматически. Нажмите на домен, чтобы убрать его из списка.' : '<i>Список пуст: перенос разрешён от любого провайдера.</i>'),
       kb: [
-        ...rows.map((r) => [btn(`${icon[r.list]} ${r.domain}${r.name ? ` (${r.name})` : ''}`, `adm:trpc:${r.id}`)]),
+        ...rows.map((r) => [btn(`⚫️ ${r.domain}${r.name ? ` (${r.name})` : ''}`, `adm:trpc:${r.id}`)]),
         [btn('➕ Добавить', 'adm:trp:add')],
         back('adm:tr'),
       ],
@@ -495,16 +490,15 @@ export function createAdminFeatures(
         return
       }
       case 'trp':
-        if (b === 'add') return void (await ask(ctx, 'tr_provider', 'Домен и список через пробел: white, gray или black. Можно добавить название.\nНапример: provider.com white Provider VPN', {}, 'adm:trp'))
+        if (b === 'add') return void (await ask(ctx, 'tr_provider', 'Домен для чёрного списка. Можно добавить название.\nНапример: provider.com Provider VPN', {}, 'adm:trp'))
         return show(ctx, await providersView())
       case 'trpc': {
         const row = await prisma.transferProvider.findUnique({ where: { id: BigInt(b) } })
         if (!row) return 'Не найден'
-        const next = row.list === 'white' ? 'gray' : row.list === 'gray' ? 'black' : 'white'
-        await prisma.transferProvider.update({ where: { id: row.id }, data: { list: next } })
-        await staff.audit(ctx.tgId, 'provider_list', row.domain, { list: next })
+        await prisma.transferProvider.delete({ where: { id: row.id } })
+        await staff.audit(ctx.tgId, 'provider_unblacklist', row.domain)
         await show(ctx, await providersView())
-        return `${row.domain}: ${next}`
+        return `${row.domain} убран из чёрного списка`
       }
 
       case 'ach':
@@ -670,18 +664,18 @@ export function createAdminFeatures(
         return true
       }
       case 'tr_provider': {
-        const [domain, list, ...name] = v.split(/\s+/)
-        if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain) || !['white', 'gray', 'black'].includes(list ?? '')) {
-          await retry('Формат: provider.com white [название]')
+        const [domain, ...name] = v.split(/\s+/)
+        if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+          await retry('Формат: provider.com [название]')
           return true
         }
         done()
         await prisma.transferProvider.upsert({
           where: { domain: domain.toLowerCase() },
-          create: { domain: domain.toLowerCase(), list: list as 'white', name: name.join(' ') || null },
-          update: { list: list as 'white', name: name.join(' ') || undefined },
+          create: { domain: domain.toLowerCase(), list: 'black', name: name.join(' ') || null },
+          update: { list: 'black', name: name.join(' ') || undefined },
         })
-        await staff.audit(ctx.tgId, 'provider_add', domain, { list })
+        await staff.audit(ctx.tgId, 'provider_blacklist', domain)
         await show(fresh, await providersView())
         return true
       }

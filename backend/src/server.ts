@@ -156,7 +156,7 @@ registerPaymentRoutes(app, prisma, payments, billing)
 registerSubscriptionRoutes(app, prisma, panel, vpn, env)
 registerApiRoutes(app, { prisma, settings, servers, staff, vpn, env })
 registerEmailRoutes(app, prisma, env)
-registerTransferRoutes(app, { prisma, transfer, settings, users })
+registerTransferRoutes(app, { transfer, settings, users })
 registerAchievementRoutes(app, { achievements, users, tg, env })
 registerStatusRoutes(app, status)
 let botSetup = 'ещё не запускалась'

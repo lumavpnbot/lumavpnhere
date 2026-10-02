@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { rateLimit } from '@/plugins/rateLimit'
 import type { SettingsService } from '@/services/settings'
@@ -11,9 +10,9 @@ const linkSchema = z.object({ link: z.string().trim().min(8).max(4096) })
 /** ТЗ v6.3 · 04: перенос подписок. */
 export function registerTransferRoutes(
   app: FastifyInstance,
-  deps: { prisma: PrismaClient; transfer: TransferService; settings: SettingsService; users: UserService },
+  deps: { transfer: TransferService; settings: SettingsService; users: UserService },
 ) {
-  const { prisma, transfer, settings, users } = deps
+  const { transfer, settings, users } = deps
   const me = async (tgId: number, username: string | null) => (await users.ensureUser({ tgId, username })).user
   const ctxOf = (req: { ip: string; headers: Record<string, string | string[] | undefined> }) => ({
     ip: req.ip || null,
@@ -59,11 +58,5 @@ export function registerTransferRoutes(
       rules: { minAccountDays: s.transferMinAccountDays, minDays: s.transferMinDays, maxDays: s.transferMaxDays },
       accountAgeDays: Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
     }
-  })
-
-  /** Провайдеры из белого списка (для подсказки в Mini App). */
-  app.get('/api/transfer/providers', async () => {
-    const rows = await prisma.transferProvider.findMany({ where: { list: 'white' }, orderBy: { domain: 'asc' } })
-    return { providers: rows.map((r) => ({ domain: r.domain, name: r.name })) }
   })
 }

@@ -62,8 +62,6 @@ export default function TransferPage() {
   const [result, setResult] = useState<CheckResult | null>(null)
   const [busy, setBusy] = useState<'check' | 'submit' | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [providers, setProviders] = useState<{ domain: string; name: string | null }[]>([])
-  const [providersOpen, setProvidersOpen] = useState(false)
   const poll = useRef<number | null>(null)
 
   const load = useCallback(async () => {
@@ -78,7 +76,6 @@ export default function TransferPage() {
 
   useEffect(() => {
     void load()
-    if (apiEnabled) api.get<{ providers: { domain: string; name: string | null }[] }>('/api/transfer/providers').then((r) => setProviders(r.providers)).catch(() => undefined)
     return () => {
       if (poll.current) window.clearInterval(poll.current)
     }
@@ -223,26 +220,6 @@ export default function TransferPage() {
           ))}
         </div>
       </Section>
-
-      {providers.length > 0 && (
-        <Section>
-          <div className="glass overflow-hidden">
-            <button onClick={() => setProvidersOpen((v) => !v)} className="flex w-full items-center justify-between px-4 py-3.5 text-left">
-              <span className="text-[15px] font-medium">{t('transfer.providers')}</span>
-              <ChevronDown className="h-5 w-5 text-dim transition-transform duration-300" style={{ transform: providersOpen ? 'rotate(180deg)' : 'none' }} />
-            </button>
-            {providersOpen && (
-              <div className="flex flex-wrap gap-2 px-4 pb-4">
-                {providers.map((p) => (
-                  <span key={p.domain} className="rounded-pill bg-white/[0.06] px-3 py-1 text-[13px] text-dim">
-                    {p.name ?? p.domain}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </Section>
-      )}
     </>
   )
 }
