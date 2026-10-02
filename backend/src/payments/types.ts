@@ -25,6 +25,13 @@ export interface WebhookEvent {
   raw: unknown
 }
 
+/** Состояние транзакции у провайдера (для оплаты внутри приложения и сверки без вебхука). */
+export interface ProviderTxDetails {
+  status: 'pending' | 'paid' | 'failed'
+  /** Данные для оплаты по СБП: ссылка https://qr.nspk.ru/… или картинка QR (base64). */
+  qr: string | null
+}
+
 /**
  * Единый интерфейс платёжного провайдера. Каждый способ оплаты (Stars,
  * CryptoBot, Platega, позже ЮKassa) реализует его одинаково — роуты и бизнес-логика
@@ -37,4 +44,6 @@ export interface PaymentProvider {
   createInvoice(params: CreateInvoiceParams): Promise<CreateInvoiceResult>
   /** Проверяет подпись/HMAC вебхука и превращает тело запроса в нормализованное событие. */
   verifyWebhook(headers: Record<string, string>, rawBody: string): WebhookEvent | null
+  /** Запрос транзакции у провайдера по её id (externalId). Есть не у всех провайдеров. */
+  details?(externalId: string): Promise<ProviderTxDetails | null>
 }

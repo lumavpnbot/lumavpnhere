@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { PrismaClient } from '@prisma/client'
+import type { Payment, PrismaClient } from '@prisma/client'
 import type { createPaymentRegistry } from '@/payments/registry'
+import type { ProviderTxDetails } from '@/payments/types'
+import { recordError } from '@/lib/errors'
 import { BillingError, type BillingService } from '@/services/billing'
 import { rateLimit } from '@/plugins/rateLimit'
 
@@ -29,6 +31,28 @@ export function registerPaymentRoutes(
   const fail = (err: unknown) => {
     if (err instanceof BillingError) return { status: 400, body: { error: err.message } }
     throw err
+  }
+
+  /**
+   * Сверка заказа с провайдером (Platega): статус и данные СБП. Запрос к провайдеру
+   * не чаще раза в 3 секунды на заказ. Оплату засчитываем, даже если вебхук не дошёл.
+   */
+  const lastCheck = new Map<string, { at: number; details: ProviderTxDetails | null }>()
+  async function syncWithProvider(p: Payment): Promise<ProviderTxDetails | null> {
+    const provider = payments.get(p.method as 'platega_sbp')
+    if (p.status !== 'pending' || !p.externalId || !provider?.enabled || !provider.details) return null
+    const cached = lastCheck.get(p.orderId)
+    if (cached && Date.now() - cached.at < 3_000) return cached.details
+    const details = await provider.details(p.externalId).catch((err) => (recordError('payment details', err), null))
+    lastCheck.set(p.orderId, { at: Date.now(), details })
+    if (lastCheck.size > 2000) lastCheck.delete(lastCheck.keys().next().value!)
+    if (details?.status === 'paid') {
+      await prisma.paymentLog.create({ data: { orderId: p.orderId, event: 'provider_paid', payload: { externalId: p.externalId } } })
+      await billing.completePayment(p.orderId, p.externalId)
+    } else if (details?.status === 'failed') {
+      await prisma.payment.updateMany({ where: { orderId: p.orderId, status: 'pending' }, data: { status: 'failed' } })
+    }
+    return details
   }
 
   // Список включённых способов оплаты: фронт показывает только то, что реально работает.
@@ -73,8 +97,12 @@ export function registerPaymentRoutes(
   app.get('/payments/order/:orderId', auth, async (request, reply) => {
     const { orderId } = request.params as { orderId: string }
     const user = await me(request.tgUser!.tgId)
-    const p = await prisma.payment.findUnique({ where: { orderId } })
+    let p = await prisma.payment.findUnique({ where: { orderId } })
     if (!p || p.userId !== user.id) return reply.code(404).send({ error: 'Заказ не найден' })
+    // СБП: если провайдер уже подтвердил оплату, а вебхук ещё не пришёл, засчитываем сами.
+    if (p.status === 'pending' && p.externalId && (await syncWithProvider(p))?.status !== 'pending') {
+      p = (await prisma.payment.findUnique({ where: { orderId } })) ?? p
+    }
     // Статус paid ставится до выдачи доступа на панели. Если отдать его сразу, фронт
     // перезагружал /me раньше, чем создавалась подписка, и показывал старую.
     // Событие 'paid' в логе пишется последним, после выдачи.
@@ -87,6 +115,28 @@ export function registerPaymentRoutes(
       return { orderId, status: 'paid', activated: activated > 0 || failed === 0 }
     }
     return { orderId, status: p.status, activated: false }
+  })
+
+  /**
+   * Оплата по СБП внутри Mini App: QR-код и ссылка в приложение банка (без страницы Platega).
+   * qrLink: https://qr.nspk.ru/… (открывает банк, из неё же рисуем QR); qrImage: готовая картинка QR.
+   * Пока провайдер не выдал QR, оба null: фронт спрашивает ещё раз.
+   */
+  app.get('/payments/order/:orderId/sbp', auth, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string }
+    const user = await me(request.tgUser!.tgId)
+    const p = await prisma.payment.findUnique({ where: { orderId } })
+    if (!p || p.userId !== user.id) return reply.code(404).send({ error: 'Заказ не найден' })
+    const details = p.status === 'pending' ? await syncWithProvider(p) : null
+    const qr = details?.qr ?? null
+    const isLink = !!qr && /^https?:\/\//i.test(qr)
+    const isImage = !!qr && !isLink && (qr.startsWith('data:image/') || /^[A-Za-z0-9+/=\s]{100,}$/.test(qr))
+    return {
+      status: p.status === 'failed' || details?.status === 'failed' ? 'failed' : p.status === 'pending' && details?.status !== 'paid' ? 'pending' : 'paid',
+      amount: Number(p.amountRub),
+      qrLink: isLink ? qr : null,
+      qrImage: isImage ? (qr!.startsWith('data:') ? qr : `data:image/png;base64,${qr!.replace(/\s+/g, '')}`) : null,
+    }
   })
 
   /** История платежей пользователя. */

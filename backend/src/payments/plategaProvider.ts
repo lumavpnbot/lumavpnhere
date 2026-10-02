@@ -1,9 +1,15 @@
 import crypto from 'node:crypto'
-import type { PaymentProvider, CreateInvoiceParams, WebhookEvent } from './types'
+import type { PaymentProvider, CreateInvoiceParams, ProviderTxDetails, WebhookEvent } from './types'
 
 const API = 'https://app.platega.io'
 /** paymentMethod в API Platega: 2 = СБП (QR / приложение банка). */
 const SBP = 2
+
+/** Статус Platega → наш: CONFIRMED оплачен, CANCELED/FAILED/EXPIRED нет, остальное ещё в процессе. */
+const mapStatus = (raw: unknown): ProviderTxDetails['status'] => {
+  const s = String(raw ?? '').toUpperCase()
+  return s === 'CONFIRMED' ? 'paid' : ['CANCELED', 'FAILED', 'EXPIRED'].includes(s) ? 'failed' : 'pending'
+}
 
 /**
  * Platega (СБП). Авторизация: заголовки X-MerchantId и X-Secret (ID мерчанта и API-ключ
@@ -47,15 +53,31 @@ export function createPlategaProvider(merchantId: string, secret: string, return
       if (!same(headers['x-merchantid'], merchantId) || !same(headers['x-secret'], secret)) return null
 
       const body = JSON.parse(rawBody) as { id?: string; amount?: number | string; status?: string; payload?: string | null }
-      const status = String(body.status ?? '').toUpperCase()
+      const status = mapStatus(body.status)
       return {
         orderId: body.payload ?? '',
         // Возвраты и чарджбэки (REFUNDED, CHARGEBACKED) и промежуточные статусы заказ не меняют.
-        status: status === 'CONFIRMED' ? 'paid' : ['CANCELED', 'FAILED', 'EXPIRED'].includes(status) ? 'failed' : 'ignored',
+        status: status === 'pending' ? 'ignored' : status,
         amountRub: Number(body.amount ?? 0),
         externalId: body.id,
         raw: body,
       }
+    },
+
+    /**
+     * GET /transaction/{id}: статус и поле qr (ссылка СБП qr.nspk.ru или картинка QR).
+     * Нужен для оплаты внутри Mini App (без страницы Platega) и сверки, если вебхук не дошёл.
+     */
+    async details(externalId: string): Promise<ProviderTxDetails | null> {
+      if (!enabled) return null
+      const res = await fetch(`${API}/transaction/${encodeURIComponent(externalId)}`, {
+        headers: { 'X-MerchantId': merchantId, 'X-Secret': secret },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!res.ok) return null
+      const data = (await res.json().catch(() => null)) as { status?: string; qr?: string | null } | null
+      if (!data) return null
+      return { status: mapStatus(data.status), qr: typeof data.qr === 'string' && data.qr.trim() ? data.qr.trim() : null }
     },
   }
 }

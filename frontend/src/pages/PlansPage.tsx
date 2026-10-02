@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m } from 'framer-motion'
 import Sheet from '@/components/Sheet'
@@ -31,7 +31,15 @@ interface OrderResponse {
   quote: { toPay: number; stars: number }
 }
 
-type Result = { kind: 'success' } | { kind: 'waiting'; orderId: string } | null
+type Result =
+  | { kind: 'success' }
+  | { kind: 'waiting'; orderId: string }
+  /** Оплата по СБП внутри приложения: QR и кнопка в банк (без страницы Platega). */
+  | { kind: 'sbp'; orderId: string; amount: number; payUrl: string }
+  | null
+
+// Окно СБП с QR-кодом грузится только при оплате по СБП.
+const SbpPay = lazy(() => import('@/components/SbpPay'))
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -99,8 +107,9 @@ export default function PlansPage() {
     }
   }
 
-  const waitForPayment = (orderId: string) => {
-    setResult({ kind: 'waiting', orderId })
+  /** keepSheet: окно оплаты (СБП) остаётся открытым, пока ждём подтверждения банка (до 30 минут). */
+  const waitForPayment = (orderId: string, keepSheet = false) => {
+    if (!keepSheet) setResult({ kind: 'waiting', orderId })
     let tries = 0
     if (poll.current) window.clearInterval(poll.current)
     poll.current = window.setInterval(async () => {
@@ -125,7 +134,7 @@ export default function PlansPage() {
       } catch {
         /* повторим */
       }
-      if (tries > 90) {
+      if (tries > (keepSheet ? 450 : 90)) {
         window.clearInterval(poll.current!)
         void refresh()
       }
@@ -156,6 +165,9 @@ export default function PlansPage() {
         const status = await openInvoice(order.payload)
         if (status === 'paid') waitForPayment(order.orderId)
         else if (status === 'failed') notify(t('plans.payFailed'))
+      } else if (method === 'platega_sbp' && order.payload) {
+        setResult({ kind: 'sbp', orderId: order.orderId, amount: order.quote.toPay, payUrl: order.payload })
+        waitForPayment(order.orderId, true)
       } else if (order.payload) {
         openExternal(order.payload)
         waitForPayment(order.orderId)
@@ -411,6 +423,10 @@ export default function PlansPage() {
               {t('plans.connectNow')}
             </button>
           </div>
+        ) : result?.kind === 'sbp' ? (
+          <Suspense fallback={<div className="flex h-40 items-center justify-center"><span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-white" /></div>}>
+            <SbpPay orderId={result.orderId} amount={result.amount} payUrl={result.payUrl} onClose={() => setResult(null)} />
+          </Suspense>
         ) : result?.kind === 'waiting' ? (
           <div className="flex flex-col items-center pb-2 pt-3 text-center">
             <span className="h-14 w-14 animate-spin rounded-full border-[3px] border-white/15 border-t-white" />
