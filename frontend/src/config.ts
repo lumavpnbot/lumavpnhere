@@ -41,7 +41,7 @@ export const PLANS = [
 
 export type PlanId = (typeof PLANS)[number]['id']
 
-export const REFERRAL = { percent: 30, holdDays: 7, trialBonusDays: 3 }
+export const REFERRAL = { percent: 30, holdDays: 7 }
 
 export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'gb' | 'tr' | 'kz' | 'jp'
 

@@ -102,6 +102,11 @@ app.log.info(`bot: @${picked.username ?? '?'} (id ${botIdOf(botToken)})`)
 const tg = createTelegram(botToken, telegramApiBase(env))
 const staff = createStaff(prisma, tg, env)
 const settings = createSettingsService(prisma)
+// 02.10.2026 пробный период стал 3 дня (по приглашению 4): значения, сохранённые в админке раньше
+// (7 и 10), больше не действуют. Изменения из админки после этой даты сохраняются как обычно.
+await prisma.setting
+  .deleteMany({ where: { key: { in: ['trialDays', 'trialDaysReferral'] }, updatedAt: { lt: new Date('2026-10-02T13:00:00Z') } } })
+  .catch((err) => app.log.error({ err }, 'trial settings reset failed'))
 const payments = createPaymentRegistry({
   TELEGRAM_BOT_TOKEN: botToken,
   TELEGRAM_API_URL: telegramApiBase(env),

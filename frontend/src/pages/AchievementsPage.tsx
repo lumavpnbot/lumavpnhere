@@ -6,6 +6,7 @@ import { PageTitle, Section, TopBar } from '@/components/ui'
 import { ChatIcon, ClockIcon, DevicesIcon, PercentIcon, PlusIcon, ShareIcon, StarIcon } from '@/components/icons'
 import { BOT_USERNAME } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
+import { useTrialVars } from '@/lib/trial'
 import { formatDate } from '@/lib/format'
 import { api, apiEnabled } from '@/lib/api'
 import { shareReferral } from '@/lib/share'
@@ -64,6 +65,7 @@ function demoData(): { achievements: Achievement[]; rewards: Rewards } {
 export default function AchievementsPage() {
   const t = useT()
   const lang = useLang()
+  const trialVars = useTrialVars()
   const profile = useAppStore((s) => s.profile)
   const refresh = useAppStore((s) => s.refresh)
   const [items, setItems] = useState<Achievement[]>([])
@@ -119,7 +121,7 @@ export default function AchievementsPage() {
   const share = async () => {
     haptic('light')
     const link = profile.referralLink ?? `https://t.me/${BOT_USERNAME}`
-    const unlockedNow = await shareReferral(link, t('friends.shareText'))
+    const unlockedNow = await shareReferral(link, t('friends.shareText', trialVars))
     if (unlockedNow) {
       haptic('success')
       notify(t('ach.shareDone'))

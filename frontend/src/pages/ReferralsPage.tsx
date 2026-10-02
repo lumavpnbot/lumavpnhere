@@ -3,6 +3,7 @@ import { PageTitle, Section, TopBar } from '@/components/ui'
 import { CheckIcon, CopyIcon, GiftIcon, PercentIcon, ReferralsIcon, ShareIcon, WalletIcon } from '@/components/icons'
 import { BOT_USERNAME, REFERRAL } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
+import { useTrialVars } from '@/lib/trial'
 import { formatDate, formatRub } from '@/lib/format'
 import { copyText, haptic, notify } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
@@ -55,6 +56,7 @@ const LEVEL_TINT = ['rgba(255,255,255,0.10)', 'rgba(210,214,224,0.22)', 'rgba(23
 export default function ReferralsPage() {
   const t = useT()
   const lang = useLang()
+  const trialVars = useTrialVars()
   const profile = useAppStore((s) => s.profile)
   const refresh = useAppStore((s) => s.refresh)
   const [copied, setCopied] = useState(false)
@@ -90,7 +92,7 @@ export default function ReferralsPage() {
   // Нативное «Поделиться» Telegram: если сообщение отправлено, засчитывается бейдж «Шеринг».
   const share = async () => {
     haptic('light')
-    if (await shareReferral(link, t('friends.shareText'))) {
+    if (await shareReferral(link, t('friends.shareText', trialVars))) {
       haptic('success')
       notify(t('ach.shareDone'))
       void refresh()
@@ -179,7 +181,7 @@ export default function ReferralsPage() {
           {(['friends.how1', 'friends.how2', 'friends.how3', 'friends.how4'] as const).map((k, i) => (
             <div key={k} className="flex items-start gap-3.5 py-3.5">
               <span className="tile !h-7 !w-7 !rounded-[9px] text-[12px] font-semibold">{i + 1}</span>
-              <span className="pt-0.5 text-[14px] leading-snug text-dim">{t(k, { percent, days: info?.holdDays ?? REFERRAL.holdDays, bonus: REFERRAL.trialBonusDays })}</span>
+              <span className="pt-0.5 text-[14px] leading-snug text-dim">{t(k, { percent, days: info?.holdDays ?? REFERRAL.holdDays, bonus: trialVars.bonus })}</span>
             </div>
           ))}
         </div>

@@ -13,6 +13,24 @@ import DevicesPage from '@/pages/DevicesPage'
 import ReferralsPage from '@/pages/ReferralsPage'
 import AccountPage from '@/pages/AccountPage'
 
+/**
+ * После деплоя старые файлы экранов удаляются с GitHub Pages. Если Telegram открыл
+ * закэшированную версию приложения, файл экрана не загрузится: перезагружаем приложение
+ * один раз (иначе экран оставался пустым).
+ */
+function reloadOnce(err: unknown): never {
+  let reloaded = false
+  try {
+    reloaded = sessionStorage.getItem('lynk.chunkReload') === '1'
+    if (!reloaded) sessionStorage.setItem('lynk.chunkReload', '1')
+  } catch {
+    reloaded = true
+  }
+  if (!reloaded) window.location.reload()
+  throw err
+}
+const page = <T,>(load: () => Promise<T>) => lazy(() => load().catch(reloadOnce) as Promise<{ default: React.ComponentType }>)
+
 const LAZY_PAGES = {
   connect: () => import('@/pages/ConnectPage'),
   balance: () => import('@/pages/BalancePage'),
@@ -24,17 +42,17 @@ const LAZY_PAGES = {
   transfer: () => import('@/pages/TransferPage'),
   achievements: () => import('@/pages/AchievementsPage'),
 }
-const ConnectPage = lazy(LAZY_PAGES.connect)
-const BalancePage = lazy(LAZY_PAGES.balance)
-const NotificationsPage = lazy(LAZY_PAGES.notifications)
-const LoginsPage = lazy(LAZY_PAGES.logins)
-const SupportPage = lazy(LAZY_PAGES.support)
-const DocPage = lazy(LAZY_PAGES.doc)
-const StatusPage = lazy(LAZY_PAGES.status)
-const TransferPage = lazy(LAZY_PAGES.transfer)
-const AchievementsPage = lazy(LAZY_PAGES.achievements)
+const ConnectPage = page(LAZY_PAGES.connect)
+const BalancePage = page(LAZY_PAGES.balance)
+const NotificationsPage = page(LAZY_PAGES.notifications)
+const LoginsPage = page(LAZY_PAGES.logins)
+const SupportPage = page(LAZY_PAGES.support)
+const DocPage = page(LAZY_PAGES.doc)
+const StatusPage = page(LAZY_PAGES.status)
+const TransferPage = page(LAZY_PAGES.transfer)
+const AchievementsPage = page(LAZY_PAGES.achievements)
 
-const loadMotionFeatures = () => import('@/lib/motionFeatures').then((r) => r.default)
+const loadMotionFeatures = () => import('@/lib/motionFeatures').then((r) => r.default, reloadOnce)
 
 export default function App() {
   const location = useLocation()
@@ -52,6 +70,7 @@ export default function App() {
   // Когда первый экран показан и браузер свободен, подгружаем остальные экраны в фоне:
   // переходы остаются мгновенными, но не тормозят запуск.
   useEffect(() => {
+    // Фоновая подгрузка без перезагрузки: перезагружаем, только если экран реально открыли.
     const preload = () => Object.values(LAZY_PAGES).forEach((load) => void load().catch(() => undefined))
     if ('requestIdleCallback' in window) {
       const id = window.requestIdleCallback(preload, { timeout: 4000 })

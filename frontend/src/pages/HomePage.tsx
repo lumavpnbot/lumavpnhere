@@ -8,6 +8,7 @@ import { COUNTRIES, LINKS, PLANS } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
 import mark from '@/assets/lynk-mark.png'
 import { daysWord, formatDate, formatRub } from '@/lib/format'
+import { useTrialVars } from '@/lib/trial'
 import { haptic, openExternal } from '@/lib/telegram'
 import { daysLeft, periodProgress, useAppStore } from '@/store/useAppStore'
 
@@ -18,6 +19,7 @@ import { daysLeft, periodProgress, useAppStore } from '@/store/useAppStore'
 export default function HomePage() {
   const t = useT()
   const lang = useLang()
+  const trialVars = useTrialVars()
   const navigate = useNavigate()
   const subscription = useAppStore((s) => s.subscription)
   const profile = useAppStore((s) => s.profile)
@@ -107,7 +109,7 @@ export default function HomePage() {
           </>
         ) : (
           <>
-            <p className="mt-4 text-[15px] leading-snug text-dim">{t('home.noneText')}</p>
+            <p className="mt-4 text-[15px] leading-snug text-dim">{t('home.noneText', trialVars)}</p>
             <button onClick={() => go('/plans')} className="btn-glass-strong mt-5 w-full">
               {t('home.choose')}
             </button>

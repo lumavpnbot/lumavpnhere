@@ -69,7 +69,9 @@ export function registerBot(
     if (attached && !created && user.trialUsed) {
       await vpn.grant(user, 'start', Math.max(0, s.trialDaysReferral - s.trialDays)).catch(() => undefined)
     }
-    const extra = attached && user.referrerId ? `\n\n🎁 Тебя пригласил друг: пробный период <b>${s.trialDaysReferral} дней</b>.` : ''
+    const n = s.trialDaysReferral
+    const word = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'дня' : 'дней'
+    const extra = attached && user.referrerId ? `\n\n🎁 Тебя пригласил друг: пробный период <b>${n} ${word}</b>.` : ''
     if (attached && user.referrerId && achievements) void achievements.evaluateById(user.referrerId).catch(() => undefined)
     await sendWelcome(tg, msg.chat.id, s, { extra, keyboard: startKeyboard(s) })
   }

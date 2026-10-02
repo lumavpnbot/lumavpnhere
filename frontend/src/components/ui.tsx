@@ -162,10 +162,16 @@ export function DemoBadge() {
   const t = useT()
   const demo = useAppStore((s) => s.demo)
   const error = useAppStore((s) => s.error)
+  const refresh = useAppStore((s) => s.refresh)
   if (error)
     return (
-      <div className="mb-4 rounded-2xl bg-bad/10 px-4 py-3 text-[13px] leading-snug text-bad">
-        {t('common.loadError')}: {error}
+      <div className="mb-4 flex items-center gap-3 rounded-2xl bg-bad/10 px-4 py-3 text-[13px] leading-snug text-bad">
+        <span className="min-w-0 flex-1">
+          {t('common.loadError')}: {error}
+        </span>
+        <button onClick={() => void refresh()} className="shrink-0 rounded-pill bg-bad/15 px-3 py-1.5 text-[12px] font-semibold active:opacity-70">
+          {t('common.retry')}
+        </button>
       </div>
     )
   if (!demo) return null

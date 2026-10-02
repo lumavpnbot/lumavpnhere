@@ -30,11 +30,44 @@ export function registerMeRoutes(
   const { prisma, panel, vpn, users, settings, achievements, env } = deps
   const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
 
+  /**
+   * Сколько /me ждёт панель H1. Если панель тормозит или не отвечает (каждый запрос к ней
+   * ждёт до 10 с), приложение раньше по 20+ секунд показывало пустой экран. Теперь отвечаем
+   * данными из БД, а выдача и сверка на панели доделываются в фоне.
+   */
+  const PANEL_WAIT_MS = 2500
+  // Панель только что не уложилась в лимит: следующую минуту почти не ждём её.
+  let panelSlowUntil = 0
+  const within = <T>(work: Promise<T>, fallback: T, deadline: number) => {
+    const wait = Math.max(0, Math.min(deadline - Date.now(), Date.now() < panelSlowUntil ? 300 : PANEL_WAIT_MS))
+    let timer: NodeJS.Timeout | undefined
+    return Promise.race([
+      work.finally(() => clearTimeout(timer)),
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => {
+          panelSlowUntil = Date.now() + 60_000
+          resolve(fallback)
+        }, wait)
+      }),
+    ])
+  }
+  // Фоновая работа с панелью по пользователю: повторный /me не запускает её второй раз.
+  const inFlight = new Map<string, Promise<unknown>>()
+  const once = <T>(key: string, run: () => Promise<T>): Promise<T> => {
+    const running = inFlight.get(key) as Promise<T> | undefined
+    if (running) return running
+    const p = run().finally(() => inFlight.delete(key))
+    inFlight.set(key, p)
+    return p
+  }
+
   app.get('/me', { preHandler: [app.authenticate, rateLimit(60, 60_000, 'api')] }, async (request, reply) => {
     const { tgId, username, startParam } = request.tgUser!
     const s = await settings.get()
     const isAdmin = ownerIds(env).has(tgId)
 
+    // Общий лимит ожидания панели на весь запрос.
+    const panelDeadline = Date.now() + PANEL_WAIT_MS
     const ensured = await users.ensureUser({ tgId, username, refPayload: startParam })
     let user = ensured.user
     if (user.banned) return reply.code(403).send({ error: 'Доступ к сервису ограничен. Напишите в поддержку.' })
@@ -48,18 +81,30 @@ export function registerMeRoutes(
     if (!isAdmin && !user.trialUsed) {
       const hasAny = await prisma.subscription.count({ where: { userId: user.id } })
       if (!hasAny) {
-        await vpn
-          .startTrial(user, user.referrerId ? s.trialDaysReferral : s.trialDays)
-          .catch((err) => request.log.error({ err }, 'trial provisioning failed'))
+        const trialUser = user
+        await within(
+          once(`trial:${user.id}`, () =>
+            vpn.startTrial(trialUser, trialUser.referrerId ? s.trialDaysReferral : s.trialDays).catch((err) => request.log.error({ err }, 'trial provisioning failed')),
+          ),
+          null,
+          panelDeadline,
+        )
       }
     }
     // Для команды показываем ошибку выдачи прямо в приложении: так проще отлаживать панель.
     let provisionError: string | null = null
     if (isAdmin) {
-      await vpn.ensureAdmin(user).catch((err: Error) => {
-        request.log.error({ err }, 'admin provisioning failed')
-        provisionError = err.message
-      })
+      const adminUser = user
+      await within(
+        once(`admin:${user.id}`, () =>
+          vpn.ensureAdmin(adminUser).catch((err: Error) => {
+            request.log.error({ err }, 'admin provisioning failed')
+            provisionError = err.message
+          }),
+        ),
+        null,
+        panelDeadline,
+      )
     }
 
     // Действующая подписка, а если её нет, последняя истёкшая (чтобы показать «закончилась»).
@@ -67,7 +112,7 @@ export function registerMeRoutes(
       (await vpn.current(user.id)) ?? (await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: LATEST_FIRST }))
     const active = !!subscription && subscription.status !== 'expired' && subscription.expiresAt > new Date()
     const [panelClient, referrals, referralsActive, earned, txs, devices] = await Promise.all([
-      panel.getClient(Number(tgId)).catch(() => null),
+      within(panel.getClient(Number(tgId)).catch(() => null), null, panelDeadline),
       prisma.user.count({ where: { referrerId: user.id } }),
       prisma.user.count({ where: { referrerId: user.id, payments: { some: { status: 'paid' } } } }),
       prisma.referralPayout.aggregate({ where: { referrerId: user.id, status: { in: ['hold', 'paid'] } }, _sum: { amountRub: true } }),
@@ -78,12 +123,19 @@ export function registerMeRoutes(
     // иначе оплаченное продление не доходит до VPN («подписка не обновляется»).
     let client = panelClient
     if (active && !isAdmin) {
-      client = await vpn.sync(user, panelClient).then(
-        (r) => r.client,
-        (err: Error) => {
-          request.log.error({ err }, 'panel sync failed')
-          return panelClient
-        },
+      const syncUser = user
+      client = await within(
+        once(`sync:${user.id}`, () =>
+          vpn.sync(syncUser, panelClient).then(
+            (r) => r.client,
+            (err: Error) => {
+              request.log.error({ err }, 'panel sync failed')
+              return panelClient
+            },
+          ),
+        ),
+        panelClient,
+        panelDeadline,
       )
     }
     const limits = subscription ? PLAN_LIMITS[subscription.plan] : null
@@ -102,6 +154,8 @@ export function registerMeRoutes(
     return {
       countries: panel.countries,
       maintenance: s.maintenance,
+      // Длительность пробного периода для текстов в приложении (меняется в /admin → Настройки).
+      trial: { days: s.trialDays, referralDays: s.trialDaysReferral },
       prices: s.prices,
       profile: {
         tgId: Number(user.tgId),

@@ -131,6 +131,8 @@ interface AppState {
   status: StatusSnapshot | null
   prices: Prices
   maintenance: boolean
+  /** Пробный период, дней (с сервера, меняется в /admin → Настройки). */
+  trial: { days: number; referralDays: number }
   prefs: NotificationPrefs
   demo: boolean
   loaded: boolean
@@ -260,6 +262,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   status: null,
   prices: PRICES_RUB,
   maintenance: false,
+  trial: { days: 3, referralDays: 4 },
   prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
   loaded: false,
@@ -368,6 +371,7 @@ async function loadMe() {
       countries?: CountryCode[]
       prices?: Prices
       maintenance?: boolean
+      trial?: { days: number; referralDays: number }
     }>('/me')
     const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
     set((s) => ({
@@ -378,6 +382,7 @@ async function loadMe() {
       transactions: me.transactions ?? [],
       liveCountries: me.countries?.length ? me.countries : s.liveCountries,
       prices: me.prices ?? s.prices,
+      trial: me.trial ?? s.trial,
       maintenance: Boolean(me.maintenance),
       loaded: true,
     }))

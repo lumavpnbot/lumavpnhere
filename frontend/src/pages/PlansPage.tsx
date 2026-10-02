@@ -8,6 +8,7 @@ import { CardIcon, CheckIcon, ChevronDown, GiftIcon, SparkIcon, WalletIcon } fro
 import { PLANS, type PlanId } from '@/config'
 import { useT, type TKey } from '@/i18n'
 import { formatRub } from '@/lib/format'
+import { useTrialVars } from '@/lib/trial'
 import { haptic, notify, openExternal, openInvoice } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
@@ -41,6 +42,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 export default function PlansPage() {
   const t = useT()
   const navigate = useNavigate()
+  const trialVars = useTrialVars()
   const balance = useAppStore((s) => s.profile.balance)
   const defaultPromo = useAppStore((s) => s.profile.defaultPromo)
   const prices = useAppStore((s) => s.prices)
@@ -388,7 +390,7 @@ export default function PlansPage() {
         {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : toPay === 0 ? t('plans.payBalance') : t('plans.pay', { amount: formatRub(toPay) })}
       </button>
       {notEnough && <p className="mt-2.5 text-center text-[12px] text-faint">{t('plans.notEnough')}</p>}
-      <p className="mt-3 text-center text-[12px] text-faint">{t('plans.trialNote')}</p>
+      <p className="mt-3 text-center text-[12px] text-faint">{t('plans.trialNote', trialVars)}</p>
 
       <Sheet open={result !== null} onClose={() => setResult(null)}>
         {result?.kind === 'success' ? (

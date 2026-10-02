@@ -18,15 +18,29 @@ export class ApiError extends Error {
   }
 }
 
+/** Сколько ждём ответа сервера: зависший запрос иначе держал экран пустым без объяснений. */
+const TIMEOUT_MS = 20_000
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      'X-Telegram-Init-Data': getInitData(),
-      ...options.headers,
-    },
-  })
+  // AbortSignal.timeout есть не во всех WebView (iOS 15), поэтому вручную.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        'X-Telegram-Init-Data': getInitData(),
+        ...options.headers,
+      },
+    })
+  } catch (err) {
+    throw new ApiError(0, controller.signal.aborted ? 'сервер не ответил вовремя' : 'нет соединения с сервером')
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
