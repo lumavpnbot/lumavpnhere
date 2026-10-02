@@ -126,8 +126,16 @@ const panel = createPanelProvider(env)
 const owners = ownerIds(env)
 const vpn = createVpnService(prisma, panel, (tgId) => owners.has(tgId))
 const achievements = createAchievementService({ prisma, settings, vpn, notify: staff.notify })
-// Чеки самозанятого в «Мой налог» после оплаты рублями (MOY_NALOG_INN / MOY_NALOG_PASSWORD).
-const receipts = createNpdReceipts({ prisma, settings, env, notifyUser: staff.notify, notifyStaff: (t) => staff.notifyStaff(t, 'admin') })
+// Чеки самозанятого в «Мой налог» после оплаты рублями: ключ доступа по SMS из админки
+// (хранится в БД, шифруется токеном бота) или MOY_NALOG_INN / MOY_NALOG_PASSWORD.
+const receipts = createNpdReceipts({
+  prisma,
+  settings,
+  env,
+  secret: botToken,
+  notifyUser: staff.notify,
+  notifyStaff: (t) => staff.notifyStaff(t, 'admin'),
+})
 await receipts.init().catch((err) => app.log.error({ err }, 'npd init failed'))
 const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'), achievements, (id) => {
   void receipts.issue(id)

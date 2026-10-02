@@ -30,7 +30,7 @@ import {
 } from './adminUi'
 import { can, type Staff, type StaffRole } from './staff'
 import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity, type TgMedia } from './tg'
-import type { NpdReceipts } from '@/services/npdReceipts'
+import { normalizePhone, type NpdReceipts } from '@/services/npdReceipts'
 import { sendWelcome } from './welcome'
 
 /**
@@ -566,6 +566,7 @@ export function createAdmin(deps: {
       `Промокод для новых: <b>${s.defaultPromo ? esc(s.defaultPromo) : 'нет'}</b>\n` +
       `Приветствие: <b>${s.welcomeMedia ? { photo: 'фото', video: 'видео', animation: 'GIF' }[s.welcomeMedia.type] + ' с подписью' : 'текст'}</b>\n` +
       `Премиум-эмодзи кнопок: <b>${[s.buttonEmoji.open && 'Открыть', s.buttonEmoji.transfer && 'Перенести'].filter(Boolean).join(', ') || 'нет'}</b>\n` +
+      `Чеки «Мой налог»: <b>${npdShort()}</b>\n` +
       `Техрежим: <b>${s.maintenance ? '🔴 включён, платежи не принимаются' : '🟢 выключен'}</b>`
     return {
       text,
@@ -575,9 +576,46 @@ export function createAdmin(deps: {
         [btn('Trial', 'adm:set:trial'), btn('Trial реф.', 'adm:set:trialref'), btn('% уровней', 'adm:set:pct')],
         [btn('Курс Stars', 'adm:set:stars'), btn('Промокод новым', 'adm:set:promo')],
         [btn('Приветствие бота', 'adm:set:welcome'), btn('Эмодзи кнопок', 'adm:set:btnemoji')],
+        [btn('🧾 Чеки «Мой налог»', 'adm:set:npd')],
         [btn(s.maintenance ? '🟢 Выключить техрежим' : '🔴 Включить техрежим', 'adm:set:maint')],
         [btn('👮 Роли', 'adm:roles')],
         back(),
+      ],
+    }
+  }
+
+  /** Состояние чеков «Мой налог» одной строкой (для экрана настроек). */
+  function npdShort(): string {
+    const st = deps.receipts?.status()
+    if (st?.mode === 'key') return '✅ по ключу доступа'
+    if (st?.mode === 'password') return st.broken ? '⚠️ по паролю (ключ не действует)' : '✅ по ИНН и паролю'
+    return st?.broken ? '❌ ключ не действует' : 'не подключены'
+  }
+
+  function npdView(): View {
+    const st = deps.receipts?.status()
+    const phone = st?.phone ? `+${st.phone.slice(0, 1)} ${st.phone.slice(1, 4)} ***-**-${st.phone.slice(-2)}` : ''
+    const state =
+      st?.mode === 'key'
+        ? `✅ Подключены по ключу доступа\nИНН <code>${esc(st.inn)}</code> · ${phone} · с ${dt(st.connectedAt)}`
+        : st?.mode === 'password'
+          ? `✅ Подключены по ИНН и паролю (переменные Railway)\nИНН <code>${esc(st.inn)}</code>`
+          : 'Не подключены'
+    const broken = st?.broken
+      ? `\n\n❌ Ключ доступа больше не действует: ${esc(st.broken)}\nПодключите заново: чеки за оплаты, прошедшие за это время, выдадутся сами.`
+      : ''
+    const text =
+      header('🧾', 'Чеки «Мой налог»') +
+      `${state}${broken}\n\n` +
+      'После каждой оплаты рублями (СБП, карта) доход регистрируется в «Мой налог», покупателю в бот приходит ссылка на чек.\n\n' +
+      '<b>Подключение по ключу доступа</b>: номер телефона из «Мой налог» и код из SMS. Пароль не нужен: ' +
+      'ФНС выдаст серверу ключ доступа, и он будет выдавать чеки сам. Отключить можно здесь же.'
+    return {
+      text,
+      kb: [
+        [btn(st?.mode === 'key' || st?.broken ? '🔑 Подключить заново по SMS' : '🔑 Подключить по SMS', 'adm:set:npdsms')],
+        ...(st?.mode === 'key' || st?.broken ? [[btn('✖️ Отключить ключ', 'adm:set:npdoff')]] : []),
+        back('adm:set'),
       ],
     }
   }
@@ -1018,6 +1056,17 @@ export function createAdmin(deps: {
             'adm:set',
           ))
         }
+        if (b === 'npd') return show(ctx, npdView())
+        if (b === 'npdsms') {
+          if (!deps.receipts) return 'Чеки не настроены'
+          return void (await ask(ctx, 'npd_phone', 'Номер телефона, привязанный к «Мой налог», например +7 900 123-45-67. «Мой налог» пришлёт на него SMS с кодом.', {}, 'adm:set:npd'))
+        }
+        if (b === 'npdoff') return show(ctx, confirm('Отключить ключ доступа «Мой налог»? Чеки перестанут выдаваться (если в Railway не задан пароль).', 'adm:set:npdoffok', 'adm:set:npd'))
+        if (b === 'npdoffok') {
+          await deps.receipts?.disconnect()
+          await staff.audit(ctx.tgId, 'npd_disconnect')
+          return show(ctx, npdView())
+        }
         if (b === 'maint') {
           const s = await settings.get()
           return show(ctx, confirm(s.maintenance ? 'Снова принимать платежи?' : 'Остановить приём платежей? Пользователи увидят сообщение о техработах.', 'adm:set:maintok', 'adm:set'))
@@ -1350,6 +1399,36 @@ export function createAdmin(deps: {
         await staff.audit(ctx.tgId, 'set_button_emoji', undefined, { ids })
         done()
         await show({ ...ctx, messageId: undefined }, await settingsView())
+        return true
+      }
+      case 'npd_phone': {
+        const phone = normalizePhone(v)
+        if (!phone) { await retry('Нужен номер в формате +7 900 123-45-67'); return true }
+        const sent = await deps.receipts?.smsStart(phone).catch((e: Error) => e)
+        if (!sent) { done(); return true }
+        if (sent instanceof Error) { await retry(`«Мой налог» не отправил SMS: ${esc(sent.message)}`); return true }
+        await ask(
+          ctx,
+          'npd_code',
+          `Код из SMS, которое «Мой налог» отправил на +${phone}. Код действует ${Math.max(1, Math.round(sent.expireIn / 60))} мин.`,
+          { phone, challengeToken: sent.challengeToken },
+          'adm:set:npd',
+        )
+        return true
+      }
+      case 'npd_code': {
+        const code = v.replace(/\D/g, '')
+        if (code.length < 4) { await retry('Введите код из SMS цифрами'); return true }
+        const res = await deps.receipts?.smsVerify(String(data.phone), String(data.challengeToken), code).catch((e: Error) => e)
+        if (!res) { done(); return true }
+        if (res instanceof Error) {
+          await retry(`Не получилось: ${esc(res.message)}\nПроверьте код. Если он истёк, нажмите «Отмена» и запросите SMS заново.`)
+          return true
+        }
+        done()
+        await staff.audit(ctx.tgId, 'npd_connect', undefined, { inn: res.inn })
+        await tg.send(ctx.chatId, `✅ «Мой налог» подключён по ключу доступа (ИНН <code>${esc(res.inn)}</code>). Чеки будут приходить после каждой оплаты рублями.`)
+        await show({ ...ctx, messageId: undefined }, npdView())
         return true
       }
       case 'role_add': {
