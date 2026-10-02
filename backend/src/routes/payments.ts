@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Payment, PrismaClient } from '@prisma/client'
 import type { createPaymentRegistry } from '@/payments/registry'
 import type { ProviderTxDetails } from '@/payments/types'
+import { NSPK_LINK, bankDeeplinks, createSbpBanks, isBankPackage, isBankSchema } from '@/payments/sbpBanks'
 import { recordError } from '@/lib/errors'
 import { BillingError, type BillingService } from '@/services/billing'
 import { rateLimit } from '@/plugins/rateLimit'
@@ -137,6 +138,45 @@ export function registerPaymentRoutes(
       qrLink: isLink ? qr : null,
       qrImage: isImage ? (qr!.startsWith('data:') ? qr : `data:image/png;base64,${qr!.replace(/\s+/g, '')}`) : null,
     }
+  })
+
+  /** Банки СБП для выбора в Mini App (поиск по названию делает фронт). */
+  const sbpBanks = createSbpBanks()
+  app.get('/payments/sbp/banks', { preHandler: [rateLimit(30, 60_000, 'banks')] }, async (_request, reply) => {
+    reply.header('cache-control', 'public, max-age=3600')
+    return { banks: await sbpBanks.list() }
+  })
+
+  /**
+   * Переход в приложение выбранного банка. Telegram не открывает из Mini App ссылки
+   * вида bank100000000111://, поэтому Mini App открывает эту https-страницу во внешнем
+   * браузере, а она уже переходит в банк (iOS: схема банка, Android: intent с пакетом).
+   * Принимаем только платёжные ссылки qr.nspk.ru и схемы банков СБП: не открытый редирект.
+   */
+  app.get('/open/sbp', async (request, reply) => {
+    const q = request.query as { link?: string; schema?: string; package?: string }
+    const link = String(q.link ?? '')
+    const schema = String(q.schema ?? '')
+    const pkg = String(q.package ?? '')
+    if (!NSPK_LINK.test(link) || !isBankSchema(schema) || !isBankPackage(pkg)) return reply.code(400).send('bad link')
+    const { ios, android } = bankDeeplinks(link, schema, pkg)
+    const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+    reply.header('content-type', 'text/html; charset=utf-8').header('cache-control', 'no-store')
+    return reply.send(`<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LYNK · Оплата по СБП</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#050506;color:#f4f4f6;font:16px/1.5 -apple-system,BlinkMacSystemFont,Inter,sans-serif}
+main{max-width:360px;padding:24px;text-align:center}
+a.btn{display:block;margin-top:20px;padding:15px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;text-decoration:none;font-weight:600}
+a.alt{display:block;margin-top:16px;color:#a1a1aa;font-size:14px}
+p{color:#a1a1aa}
+</style></head><body><main>
+<h2>Открываем приложение банка…</h2>
+<p>Подтвердите оплату в приложении банка и вернитесь в Telegram: подписка включится сама.</p>
+<a class="btn" id="open" href="${esc(ios)}">Открыть приложение банка</a>
+<a class="alt" href="${esc(link)}">Не открывается? Выбрать банк на странице СБП</a>
+</main><script>var u=/android/i.test(navigator.userAgent)?${JSON.stringify(android)}:${JSON.stringify(ios)};document.getElementById('open').href=u;location.href=u</script></body></html>`)
   })
 
   /** История платежей пользователя. */
