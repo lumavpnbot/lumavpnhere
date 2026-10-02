@@ -178,6 +178,10 @@ app.get('/health', async () => {
     : null
   return {
     ok: true,
+    // Какая версия сейчас запущена (Railway подставляет коммит сам) и какие способы оплаты включены:
+    // так видно, выкатился ли деплой и подхватились ли ключи (например, ЮKassa → yookassa_sbp).
+    version: env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+    payments: payments.listEnabled().map((p) => p.id),
     botIds: botTokens.map(botIdOf),
     bot: { username: picked.username, id: botIdOf(botToken), setup: botSetup, webhook },
     panel: panel.kind,
