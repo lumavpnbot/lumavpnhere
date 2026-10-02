@@ -12,7 +12,7 @@ const orderSchema = z.object({
   plan: z.enum(['start', 'pro']),
   period: z.enum(['month', 'year']),
   // platega_sbp: старое имя Platega из закэшированной версии Mini App.
-  method: z.enum(['stars', 'crypto_usdt', 'platega', 'platega_sbp', 'balance']).transform((m) => (m === 'platega_sbp' ? 'platega' : m)),
+  method: z.enum(['stars', 'crypto_usdt', 'platega', 'platega_sbp', 'yookassa_sbp', 'balance']).transform((m) => (m === 'platega_sbp' ? 'platega' : m)),
   promo: z.string().max(40).optional(),
   useBalance: z.boolean().optional(),
   autoRenew: z.boolean().optional(),
@@ -36,7 +36,7 @@ export function registerPaymentRoutes(
   }
 
   /**
-   * Сверка заказа с провайдером (Platega): статус и данные СБП. Запрос к провайдеру
+   * Сверка заказа с провайдером (Platega, ЮKassa): статус и данные СБП. Запрос к провайдеру
    * не чаще раза в 3 секунды на заказ. Оплату засчитываем, даже если вебхук не дошёл.
    */
   const lastCheck = new Map<string, { at: number; details: ProviderTxDetails | null }>()
@@ -120,7 +120,7 @@ export function registerPaymentRoutes(
   })
 
   /**
-   * Оплата по СБП внутри Mini App: QR-код и ссылка в приложение банка (без страницы Platega).
+   * Оплата по СБП внутри Mini App: QR-код и ссылка в приложение банка (без страницы провайдера).
    * qrLink: https://qr.nspk.ru/… (открывает банк, из неё же рисуем QR); qrImage: готовая картинка QR.
    * Пока провайдер не выдал QR, оба null: фронт спрашивает ещё раз.
    */
@@ -197,7 +197,7 @@ p{color:#a1a1aa}
     }
   })
 
-  // Вебхуки CryptoBot и Platega (/platega и прежний /platega_sbp). Stars подтверждается апдейтом бота, не сюда.
+  // Вебхуки CryptoBot, Platega (/platega и прежний /platega_sbp) и ЮKassa (/yookassa_sbp). Stars подтверждается апдейтом бота, не сюда.
   app.post('/payments/webhook/:method', async (request, reply) => {
     const method = (request.params as { method: string }).method as 'crypto_usdt' | 'platega' | 'platega_sbp' | 'yookassa_sbp'
     const provider = payments.get(method)
@@ -206,7 +206,11 @@ p{color:#a1a1aa}
 
     // Подпись считается по исходному телу запроса (сохраняем его в server.ts).
     const rawBody = request.rawBody ?? JSON.stringify(request.body)
-    const event = provider.verifyWebhook(request.headers as Record<string, string>, rawBody)
+    // ЮKassa сверяет уведомление запросом к своему API, поэтому проверка может быть асинхронной.
+    const event = await (async () => provider.verifyWebhook(request.headers as Record<string, string>, rawBody))().catch((err) => {
+      recordError('payment webhook', err)
+      return null
+    })
     // Если провайдер не вернул наш orderId, находим заказ по id его транзакции.
     if (event && !event.orderId && event.externalId) {
       event.orderId = (await prisma.payment.findFirst({ where: { externalId: event.externalId }, select: { orderId: true } }))?.orderId ?? ''

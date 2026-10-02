@@ -5,6 +5,8 @@ export interface CreateInvoiceParams {
   amountRub: number
   description: string
   tgUserId: number
+  /** Подтверждённая почта пользователя (для чека 54-ФЗ). */
+  email?: string
 }
 
 export interface CreateInvoiceResult {
@@ -34,7 +36,7 @@ export interface ProviderTxDetails {
 
 /**
  * Единый интерфейс платёжного провайдера. Каждый способ оплаты (Stars,
- * CryptoBot, Platega, позже ЮKassa) реализует его одинаково — роуты и бизнес-логика
+ * CryptoBot, Platega, ЮKassa) реализует его одинаково — роуты и бизнес-логика
  * в src/routes/payments.ts работают с провайдером через этот контракт
  * и не знают, что внутри конкретная реализация.
  */
@@ -43,7 +45,7 @@ export interface PaymentProvider {
   readonly enabled: boolean
   createInvoice(params: CreateInvoiceParams): Promise<CreateInvoiceResult>
   /** Проверяет подпись/HMAC вебхука и превращает тело запроса в нормализованное событие. */
-  verifyWebhook(headers: Record<string, string>, rawBody: string): WebhookEvent | null
+  verifyWebhook(headers: Record<string, string>, rawBody: string): WebhookEvent | null | Promise<WebhookEvent | null>
   /** Запрос транзакции у провайдера по её id (externalId). Есть не у всех провайдеров. */
   details?(externalId: string): Promise<ProviderTxDetails | null>
 }

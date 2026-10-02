@@ -133,8 +133,9 @@ export function createBillingService(
       amountRub: method === 'stars' ? q.stars : q.toPay,
       description: `LYNK: ${title}`,
       tgUserId: Number(params.user.tgId),
+      email: params.user.email ?? undefined,
     })
-    // Id у провайдера (транзакция Platega): по нему платёж ищется в админке ещё до оплаты.
+    // Id у провайдера (транзакция Platega, платёж ЮKassa): по нему платёж ищется в админке ещё до оплаты.
     if (invoice.externalId) await prisma.payment.update({ where: { id: payment.id }, data: { externalId: invoice.externalId } })
     await prisma.paymentLog.create({ data: { orderId, event: 'created', payload: { method, toPay: q.toPay, stars: q.stars } } })
     return { orderId, status: 'pending' as const, quote: q, payload: invoice.payload, paymentId: payment.id.toString() }

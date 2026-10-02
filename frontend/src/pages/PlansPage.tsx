@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, m } from 'framer-motion'
 import Sheet from '@/components/Sheet'
 import { Toggle } from '@/components/controls'
 import { PageTitle, Section, TopBar } from '@/components/ui'
-import { CardIcon, CheckIcon, ChevronDown, GiftIcon, SparkIcon, WalletIcon } from '@/components/icons'
+import { CardIcon, CheckIcon, ChevronDown, GiftIcon, QrIcon, SparkIcon, WalletIcon } from '@/components/icons'
 import { PLANS, type PlanId } from '@/config'
 import { useT, type TKey } from '@/i18n'
 import { formatRub } from '@/lib/format'
@@ -14,12 +14,13 @@ import { api, apiEnabled } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
 
 type Period = 'month' | 'year'
-// Platega: СБП и карта на их странице оплаты. Отдельный способ СБП (выбор банка прямо в приложении,
-// components/SbpPay.tsx) подключится к провайдеру, который отдаёт ссылку СБП через API.
-type Method = 'stars' | 'platega' | 'crypto_usdt' | 'balance'
+// СБП через ЮKassa: банк выбирается прямо в приложении (components/SbpPay.tsx), показывается, только если
+// бэкенд включил его (GET /payments/methods). Platega: СБП и карта на их странице оплаты.
+type Method = 'stars' | 'yookassa_sbp' | 'platega' | 'crypto_usdt' | 'balance'
 
 const METHODS: { id: Method; label: TKey; hint: TKey }[] = [
   { id: 'stars', label: 'plans.stars', hint: 'plans.starsHint' },
+  { id: 'yookassa_sbp', label: 'plans.sbp', hint: 'plans.sbpHint' },
   { id: 'platega', label: 'plans.platega', hint: 'plans.plategaHint' },
   { id: 'crypto_usdt', label: 'plans.crypto', hint: 'plans.cryptoHint' },
   { id: 'balance', label: 'plans.balance', hint: 'plans.balanceHint' },
@@ -35,7 +36,12 @@ interface OrderResponse {
 type Result =
   | { kind: 'success' }
   | { kind: 'waiting'; orderId: string }
+  /** Оплата по СБП внутри приложения: выбор банка и QR (без страницы провайдера). */
+  | { kind: 'sbp'; orderId: string; amount: number; payUrl: string }
   | null
+
+// Окно СБП с QR-кодом грузится только при оплате по СБП.
+const SbpPay = lazy(() => import('@/components/SbpPay'))
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -61,6 +67,8 @@ export default function PlansPage() {
   const [promoError, setPromoError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<Result>(null)
+  // Способы, которые бэкенд реально принимает; null = ещё не знаем (СБП пока не показываем).
+  const [enabled, setEnabled] = useState<string[] | null>(null)
   const poll = useRef<number | null>(null)
   const balanceTouched = useRef(false)
 
@@ -84,6 +92,12 @@ export default function PlansPage() {
     if (poll.current) window.clearInterval(poll.current)
   }, [])
 
+  useEffect(() => {
+    if (!apiEnabled) return
+    api.get<{ methods: string[] }>('/payments/methods').then((r) => setEnabled(r.methods), () => undefined)
+  }, [])
+  const methods = METHODS.filter((m) => m.id !== 'yookassa_sbp' || enabled?.includes(m.id))
+
   const applyPromo = async () => {
     const code = promoInput.trim().toUpperCase()
     if (!code) return
@@ -104,8 +118,9 @@ export default function PlansPage() {
     }
   }
 
-  const waitForPayment = (orderId: string) => {
-    setResult({ kind: 'waiting', orderId })
+  /** keepSheet: окно оплаты (СБП) остаётся открытым, пока ждём подтверждения банка (до 30 минут). */
+  const waitForPayment = (orderId: string, keepSheet = false) => {
+    if (!keepSheet) setResult({ kind: 'waiting', orderId })
     let tries = 0
     if (poll.current) window.clearInterval(poll.current)
     poll.current = window.setInterval(async () => {
@@ -130,7 +145,7 @@ export default function PlansPage() {
       } catch {
         /* повторим */
       }
-      if (tries > 90) {
+      if (tries > (keepSheet ? 450 : 90)) {
         window.clearInterval(poll.current!)
         void refresh()
       }
@@ -161,6 +176,9 @@ export default function PlansPage() {
         const status = await openInvoice(order.payload)
         if (status === 'paid') waitForPayment(order.orderId)
         else if (status === 'failed') notify(t('plans.payFailed'))
+      } else if (method === 'yookassa_sbp' && order.payload) {
+        setResult({ kind: 'sbp', orderId: order.orderId, amount: order.quote.toPay, payUrl: order.payload })
+        waitForPayment(order.orderId, true)
       } else if (order.payload) {
         openExternal(order.payload)
         waitForPayment(order.orderId)
@@ -311,7 +329,7 @@ export default function PlansPage() {
       {/* Способ оплаты */}
       <Section title={t('plans.method')}>
         <div className="glass divide-y divide-white/[0.06] overflow-hidden">
-          {METHODS.map((m) => {
+          {methods.map((m) => {
             const active = method === m.id
             return (
               <button
@@ -327,6 +345,8 @@ export default function PlansPage() {
                     <WalletIcon className="h-[18px] w-[18px]" />
                   ) : m.id === 'stars' ? (
                     <SparkIcon className="h-[18px] w-[18px]" />
+                  ) : m.id === 'yookassa_sbp' ? (
+                    <QrIcon className="h-[18px] w-[18px]" />
                   ) : m.id === 'platega' ? (
                     <CardIcon className="h-[18px] w-[18px]" />
                   ) : (
@@ -415,6 +435,10 @@ export default function PlansPage() {
               {t('plans.connectNow')}
             </button>
           </div>
+        ) : result?.kind === 'sbp' ? (
+          <Suspense fallback={<div className="flex h-40 items-center justify-center"><span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-white" /></div>}>
+            <SbpPay orderId={result.orderId} amount={result.amount} payUrl={result.payUrl} onClose={() => setResult(null)} />
+          </Suspense>
         ) : result?.kind === 'waiting' ? (
           <div className="flex flex-col items-center pb-2 pt-3 text-center">
             <span className="h-14 w-14 animate-spin rounded-full border-[3px] border-white/15 border-t-white" />

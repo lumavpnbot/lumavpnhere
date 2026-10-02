@@ -323,6 +323,8 @@ export function createAdmin(deps: {
           ? { method: { in: ['crypto_usdt', 'crypto_ton'] } }
           : filter === 'platega'
             ? { method: { in: ['platega', 'platega_sbp'] } }
+            : filter === 'yookassa'
+            ? { method: { in: ['yookassa_sbp', 'yookassa_card'] } }
             : filter === 'balance'
             ? { method: 'balance' }
             : filter === 'pending' || filter === 'paid' || filter === 'refunded'
@@ -332,7 +334,7 @@ export function createAdmin(deps: {
     const list = rows.slice(0, PAGE)
     const icon = (s: string) => (s === 'paid' ? '✅' : s === 'pending' ? '⏳' : s === 'refunded' ? '↩️' : '✖️')
     const kb: InlineKeyboard = [
-      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('Platega', 'adm:pay:platega:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
+      [btn('Все', 'adm:pay:all:0'), btn('Stars', 'adm:pay:stars:0'), btn('Platega', 'adm:pay:platega:0'), btn('СБП', 'adm:pay:yookassa:0'), btn('Крипта', 'adm:pay:crypto:0'), btn('Баланс', 'adm:pay:balance:0')],
       [btn('Оплачены', 'adm:pay:paid:0'), btn('Ожидают', 'adm:pay:pending:0'), btn('Возвраты', 'adm:pay:refunded:0')],
       ...list.map((p) => [btn(`${icon(p.status)} ${rub(Number(p.amountRub) + Number(p.balanceUsedRub))} · ${p.user.username ? '@' + p.user.username : p.user.tgId} · ${day(p.createdAt)}`, `adm:p:${p.id}`)]),
       pager(`adm:pay:${filter}`, page, rows.length > PAGE),
@@ -766,7 +768,7 @@ export function createAdmin(deps: {
         return show(ctx, await expiringList(Number(b ?? 0)))
 
       case 'pay':
-        if (b === 'search') return void (await ask(ctx, 'pay_search', 'Введите orderId, id платежа, id транзакции Platega или tg_id пользователя.', {}, 'adm:pay:all:0'))
+        if (b === 'search') return void (await ask(ctx, 'pay_search', 'Введите orderId, id платежа, id транзакции Platega / платежа ЮKassa или tg_id пользователя.', {}, 'adm:pay:all:0'))
         if (b === 'csv') {
           const rows = await prisma.payment.findMany({ include: { user: true }, orderBy: { createdAt: 'desc' }, take: 5000 })
           const body = csv([

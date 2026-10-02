@@ -14,7 +14,7 @@ lynkvpn/
 
 MVP в разработке. Ключевые решения на старте:
 
-- **Платежи:** Telegram Stars, CryptoBot (USDT TRC-20, TON) и Platega: СБП и карта на их странице оплаты (`PLATEGA_MERCHANT_ID` / `PLATEGA_SECRET`, callback: `<PUBLIC_URL>/payments/webhook/platega`). ЮKassa (карты РФ) добавляется позже отдельно - код уже спроектирован под подключение нового провайдера без переделки логики (см. `backend/src/payments`).
+- **Платежи:** Telegram Stars, CryptoBot (USDT TRC-20, TON) и Platega: СБП и карта на их странице оплаты (`PLATEGA_MERCHANT_ID` / `PLATEGA_SECRET`, callback: `<PUBLIC_URL>/payments/webhook/platega`). ЮKassa: СБП по H2H, банк выбирается прямо в Mini App (`YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY`, HTTP-уведомления: `<PUBLIC_URL>/payments/webhook/yookassa_sbp`, события `payment.succeeded` и `payment.canceled`). Провайдеры: `backend/src/payments`.
 - **VPN-инфраструктура:** серверы на панелях H1 (VLESS). Backend работает с ними через адаптер `PanelProvider` (`backend/src/panel`), список панелей задаётся переменной `H1_PANELS`.
 - **Тарифы:** Free / Старт / Про, 3 дня trial (4 дня по рефералке, меняется в /admin → Настройки).
 - **Реферальная программа:** 30% с уровнями (Серебро/Золото/Платина), холд 7 дней, вывод от 500 ₽.

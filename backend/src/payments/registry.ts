@@ -6,9 +6,8 @@ import { createPlategaProvider } from './plategaProvider'
 
 /**
  * Реестр включённых способов оплаты. PlansPage на фронте запрашивает этот
- * список через GET /payments/methods, поэтому когда сокомандник допишет
- * ЮKassa и пропишет её ключи в .env, она появится в интерфейсе автоматически —
- * без деплоя фронтенда.
+ * список через GET /payments/methods: способ без ключей в .env (например, СБП
+ * через ЮKassa без YOOKASSA_SHOP_ID / YOOKASSA_SECRET_KEY) в интерфейсе не показывается.
  */
 export function createPaymentRegistry(env: {
   TELEGRAM_BOT_TOKEN?: string
@@ -16,6 +15,9 @@ export function createPaymentRegistry(env: {
   CRYPTOBOT_API_TOKEN?: string
   YOOKASSA_SHOP_ID?: string
   YOOKASSA_SECRET_KEY?: string
+  YOOKASSA_RECEIPT?: string
+  YOOKASSA_RECEIPT_EMAIL?: string
+  YOOKASSA_VAT_CODE?: string
   PLATEGA_MERCHANT_ID?: string
   PLATEGA_SECRET?: string
   /** Куда Platega вернёт покупателя после оплаты. */
@@ -25,7 +27,13 @@ export function createPaymentRegistry(env: {
     createStarsProvider(env.TELEGRAM_BOT_TOKEN ?? '', env.TELEGRAM_API_URL),
     createCryptoBotProvider(env.CRYPTOBOT_API_TOKEN ?? ''),
     createPlategaProvider(env.PLATEGA_MERCHANT_ID ?? '', env.PLATEGA_SECRET ?? '', env.PLATEGA_RETURN_URL),
-    createYooKassaProvider(env.YOOKASSA_SHOP_ID ?? '', env.YOOKASSA_SECRET_KEY ?? ''),
+    createYooKassaProvider({
+      shopId: env.YOOKASSA_SHOP_ID ?? '',
+      secretKey: env.YOOKASSA_SECRET_KEY ?? '',
+      receipt: env.YOOKASSA_RECEIPT === '1',
+      receiptEmail: env.YOOKASSA_RECEIPT_EMAIL ?? '',
+      vatCode: Number(env.YOOKASSA_VAT_CODE) || 1,
+    }),
   ]
 
   const byId = new Map<PaymentMethodId, PaymentProvider>(providers.map((p) => [p.id, p]))
