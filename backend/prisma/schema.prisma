@@ -389,6 +389,9 @@ model Broadcast {
   text          String
   buttonText    String?         @map("button_text")
   buttonUrl     String?         @map("button_url")
+  // Фото / видео / GIF к рассылке: тип и file_id из Telegram (принадлежит этому боту).
+  mediaType     String?         @map("media_type")
+  mediaFileId   String?         @map("media_file_id")
   scheduledAt   DateTime        @map("scheduled_at")
   status        BroadcastStatus @default(scheduled)
   delivered     Int             @default(0)

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import type { FastifyBaseLogger } from 'fastify'
-import { segmentWhere } from '@/bot/admin'
+import { broadcastMedia, segmentWhere } from '@/bot/admin'
+import { sendPost } from '@/bot/welcome'
 import { TgError, type Telegram } from '@/bot/tg'
 import { recordError } from '@/lib/errors'
 import type { AchievementService } from './achievements'
@@ -80,12 +81,13 @@ export function createJobs(deps: {
     const bc = await prisma.broadcast.findUniqueOrThrow({ where: { id } })
     const users = await prisma.user.findMany({ where: segmentWhere(bc.segment), select: { tgId: true } })
     const keyboard = bc.buttonText && bc.buttonUrl ? [[{ text: bc.buttonText, url: bc.buttonUrl }]] : undefined
+    const media = broadcastMedia(bc)
     let delivered = 0
     let failed = 0
     let blocked = 0
     for (const u of users) {
       try {
-        await tg.send(u.tgId, bc.text, { keyboard })
+        await sendPost(tg, u.tgId, bc.text, media, keyboard)
         delivered++
       } catch (e) {
         if (e instanceof TgError && e.code === 403) {

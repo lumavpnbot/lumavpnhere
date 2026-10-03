@@ -31,7 +31,7 @@ import {
 import { can, type Staff, type StaffRole } from './staff'
 import { entitiesToHtml, esc, type InlineKeyboard, type Telegram, type TgEntity, type TgMedia } from './tg'
 import { normalizePhone, type NpdReceipts } from '@/services/npdReceipts'
-import { sendWelcome } from './welcome'
+import { sendPost, sendWelcome } from './welcome'
 
 /**
  * Админ-меню в боте (ТЗ раздел 6). Открывается командой /admin для ролей
@@ -52,6 +52,12 @@ const SEGMENTS: Record<string, string> = {
   trial: 'На пробном периоде',
   expired: 'Подписка закончилась',
   balance: 'С балансом > 0',
+}
+
+/** Картинка рассылки из черновика или записи в БД (mediaType + mediaFileId). */
+export function broadcastMedia(d: { mediaType?: unknown; mediaFileId?: unknown }): TgMedia | null {
+  const type = d.mediaType
+  return d.mediaFileId && (type === 'photo' || type === 'video' || type === 'animation') ? { type, fileId: String(d.mediaFileId) } : null
 }
 
 export function segmentWhere(segment: string): Prisma.UserWhereInput {
@@ -542,7 +548,7 @@ export function createAdmin(deps: {
   async function broadcastMenu(): Promise<View> {
     const recent = await prisma.broadcast.findMany({ orderBy: { createdAt: 'desc' }, take: 5 })
     const lines = recent
-      .map((b) => `${b.status === 'sent' ? '✅' : b.status === 'scheduled' ? '🕓' : b.status === 'sending' ? '📤' : '✖️'} #${b.id} · ${SEGMENTS[b.segment] ?? b.segment} · ${dt(b.scheduledAt)}${b.status === 'sent' ? ` · доставлено ${b.delivered}, ошибок ${b.failed}, заблокировали ${b.blocked}` : ''}`)
+      .map((b) => `${b.status === 'sent' ? '✅' : b.status === 'scheduled' ? '🕓' : b.status === 'sending' ? '📤' : '✖️'} #${b.id}${b.mediaFileId ? ' 🖼' : ''} · ${SEGMENTS[b.segment] ?? b.segment} · ${dt(b.scheduledAt)}${b.status === 'sent' ? ` · доставлено ${b.delivered}, ошибок ${b.failed}, заблокировали ${b.blocked}` : ''}`)
       .join('\n')
     const scheduled = recent.filter((b) => b.status === 'scheduled')
     return {
@@ -1014,7 +1020,7 @@ export function createAdmin(deps: {
       case 'bc': {
         if (b === 'seg') {
           const count = await prisma.user.count({ where: segmentWhere(c) })
-          return void (await ask(ctx, 'bc_text', `Аудитория: <b>${SEGMENTS[c]}</b> (${count} чел.)\nВведите текст рассылки. Поддерживаются форматирование Telegram, HTML и премиум-эмодзи.`, { segment: c }, 'adm:bc'))
+          return void (await ask(ctx, 'bc_text', `Аудитория: <b>${SEGMENTS[c]}</b> (${count} чел.)\nПришлите текст рассылки или фото (видео, GIF) с подписью. Поддерживаются форматирование Telegram, HTML и премиум-эмодзи.`, { segment: c }, 'adm:bc'))
         }
         if (b === 'nobtn') return previewBroadcast(ctx)
         if (b === 'send' || b === 'sched') {
@@ -1128,11 +1134,13 @@ export function createAdmin(deps: {
         text: String(data.text),
         buttonText: data.buttonText ? String(data.buttonText) : null,
         buttonUrl: data.buttonUrl ? String(data.buttonUrl) : null,
+        mediaType: data.mediaType ? String(data.mediaType) : null,
+        mediaFileId: data.mediaFileId ? String(data.mediaFileId) : null,
         scheduledAt: when,
         createdByTgId: BigInt(ctx.tgId),
       },
     })
-    await staff.audit(ctx.tgId, 'broadcast_create', `broadcast:${bc.id}`, { segment: data.segment, at: when.toISOString() })
+    await staff.audit(ctx.tgId, 'broadcast_create', `broadcast:${bc.id}`, { segment: data.segment, at: when.toISOString(), media: data.mediaType ?? null })
     return bc
   }
 
@@ -1141,8 +1149,8 @@ export function createAdmin(deps: {
     if (!draft) return
     draft.kind = 'bc_ready'
     const kb: InlineKeyboard = draft.data.buttonUrl ? [[{ text: String(draft.data.buttonText), url: String(draft.data.buttonUrl) }]] : []
-    await tg.send(ctx.chatId, String(draft.data.text), { keyboard: kb.length ? kb : undefined }).catch(async (e: Error) => {
-      await tg.send(ctx.chatId, `Ошибка разметки: ${esc(e.message)}`)
+    await sendPost(tg, ctx.chatId, String(draft.data.text ?? ''), broadcastMedia(draft.data), kb.length ? kb : undefined).catch(async (e: Error) => {
+      await tg.send(ctx.chatId, `Ошибка отправки: ${esc(e.message)}`)
     })
     const count = await prisma.user.count({ where: segmentWhere(String(draft.data.segment)) })
     await tg.send(ctx.chatId, `${header('👀', 'Предпросмотр выше')}Аудитория: <b>${SEGMENTS[String(draft.data.segment)]}</b>, ${count} чел.`, {
@@ -1169,8 +1177,8 @@ export function createAdmin(deps: {
     const retry = (msg: string) => tg.send(ctx.chatId, `⚠️ ${msg}`, { keyboard: [[btn('Отмена', 'adm:cancel')]] })
     const n = Number(v.replace(',', '.'))
     const done = () => fsm.delete(ctx.tgId)
-    // Фото принимает только приветствие; в остальных полях оно молча потерялось бы.
-    if (media && state.kind !== 'set_welcome') { await retry('Здесь можно только текст, без фото и видео'); return true }
+    // Фото принимают приветствие и текст рассылки; в остальных полях оно молча потерялось бы.
+    if (media && state.kind !== 'set_welcome' && state.kind !== 'bc_text') { await retry('Здесь можно только текст, без фото и видео'); return true }
 
     switch (state.kind) {
       case 'user_search': {
@@ -1311,7 +1319,10 @@ export function createAdmin(deps: {
         return true
       }
       case 'bc_text': {
-        data.text = html
+        if (!v && !media) { await retry('Пришлите текст или фото (видео, GIF) с подписью'); return true }
+        data.text = html.trim()
+        data.mediaType = media?.type ?? null
+        data.mediaFileId = media?.fileId ?? null
         state.kind = 'bc_button'
         await tg.send(ctx.chatId, 'Добавить кнопку со ссылкой? Отправьте «Текст | https://ссылка» или нажмите «Без кнопки».', {
           keyboard: [[btn('Без кнопки', 'adm:bc:nobtn'), btn('Отмена', 'adm:cancel')]],
