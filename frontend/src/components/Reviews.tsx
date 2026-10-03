@@ -78,7 +78,7 @@ const STAR_PATH = 'M12 2.6l2.83 6.08 6.67.78-4.95 4.55 1.33 6.59L12 17.27l-5.88 
 
 function StarShape({ size, className = '' }: { size: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} className={`block shrink-0 ${className}`} style={{ minWidth: size }} aria-hidden="true">
       <path d={STAR_PATH} fill="currentColor" stroke="currentColor" strokeWidth={0.6} strokeLinejoin="round" />
     </svg>
   )
@@ -88,7 +88,7 @@ function StarShape({ size, className = '' }: { size: number; className?: string 
 export function Stars({ value, size = 14, gap = 2 }: { value: number; size?: number; gap?: number }) {
   const pct = Math.max(0, Math.min(1, value / 5)) * 100
   const row = (cls: string) => (
-    <span className="flex shrink-0" style={{ gap }}>
+    <span className="flex w-max shrink-0" style={{ gap }}>
       {[0, 1, 2, 3, 4].map((i) => (
         <StarShape key={i} size={size} className={cls} />
       ))}
@@ -98,7 +98,7 @@ export function Stars({ value, size = 14, gap = 2 }: { value: number; size?: num
     <span className="relative inline-flex" aria-label={`${value.toFixed(1)} / 5`}>
       {row('text-white/[0.14]')}
       <span className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${pct}%` }}>
-        {row('text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.35)]')}
+        {row('text-white')}
       </span>
     </span>
   )
