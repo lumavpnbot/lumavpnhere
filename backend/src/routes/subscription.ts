@@ -179,6 +179,14 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
       return reply.code(403).send('banned')
     }
 
+    // Ссылку открыли в браузере (нажали в Telegram, вставили в адресную строку): вместо списка
+    // конфигов в base64 показываем страницу с кнопками «Добавить в Happ / INCY / Hiddify».
+    if (isBrowser(request.headers)) {
+      const sub = await vpn.current(user.id)
+      reply.header('content-type', 'text/html; charset=utf-8')
+      return reply.send(subscriptionPage(env, token, sub?.expiresAt ?? null))
+    }
+
     // Устройство: Happ присылает x-hwid и данные об устройстве при каждом обновлении подписки.
     const header = (k: string) => {
       const v = request.headers[k]
@@ -340,6 +348,55 @@ p{color:#a1a1aa}
 <a class="btn" href="${esc(deeplink)}">Открыть в ${client.name}</a>
 </main><script>location.href=${JSON.stringify(deeplink)}</script></body></html>`)
   })
+}
+
+/**
+ * Браузер, а не VPN-клиент: просит HTML и представляется как Mozilla. Клиенты (Happ, v2rayNG,
+ * Hiddify, Streisand и др.) присылают свой user-agent и HTML не просят, им уходит подписка.
+ */
+function isBrowser(headers: Record<string, string | string[] | undefined>): boolean {
+  const ua = String(headers['user-agent'] ?? '')
+  const accept = String(headers['accept'] ?? '')
+  if (CLIENT_UA.test(ua) || headers['x-hwid']) return false
+  return /^Mozilla\//.test(ua) && accept.includes('text/html')
+}
+const CLIENT_UA = /happ|incy|v2ray|hiddify|streisand|v2box|nekobox|nekoray|sing-?box|clash|mihomo|stash|karing|shadowrocket|foxray|quantumult|surge|loon/i
+
+/** Страница подписки для браузера: срок, кнопки добавления в клиенты, копирование ссылки. */
+function subscriptionPage(env: NodeJS.ProcessEnv, token: string, expiresAt: Date | null): string {
+  const url = subscriptionUrl(env, token) ?? ''
+  const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+  const active = !!expiresAt && expiresAt > new Date()
+  const until = expiresAt?.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' })
+  const buttons = (Object.keys(CLIENT_APPS) as ClientAppId[])
+    .map((id, i) => `<a class="btn${i ? '' : ' main'}" href="${esc(clientOpenUrl(env, id, token) ?? CLIENT_APPS[id].deeplink(url))}">Добавить в ${CLIENT_APPS[id].name}</a>`)
+    .join('')
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${BRAND} · Подписка</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#050506;color:#f4f4f6;font:16px/1.5 -apple-system,BlinkMacSystemFont,Inter,sans-serif}
+main{width:100%;max-width:380px;padding:24px;box-sizing:border-box;text-align:center}
+h1{margin:0 0 4px;font-size:26px}
+p{margin:0;color:#a1a1aa}
+.state{margin:6px 0 22px;color:${active ? '#86efac' : '#fca5a5'}}
+a.btn,button{display:block;width:100%;box-sizing:border-box;margin-top:10px;padding:15px;border:0;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;text-decoration:none;font:600 16px/1.2 inherit;cursor:pointer}
+a.main{background:#fff;color:#0b0b0d}
+.link{margin-top:22px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.06);color:#a1a1aa;font:13px/1.4 ui-monospace,monospace;word-break:break-all;text-align:left}
+.hint{margin-top:14px;font-size:13px}
+</style></head><body><main>
+<h1>${BRAND}</h1>
+<p class="state">${active ? `Подписка активна до ${esc(until ?? '')}` : 'Подписка не активна. Продлите её в приложении LYNK в Telegram.'}</p>
+${buttons}
+<div class="link" id="link">${esc(url)}</div>
+<button id="copy">Скопировать ссылку</button>
+<p class="hint">Эта ссылка открывается в приложении для подключения, а не в браузере. Нажмите «Добавить в …» или скопируйте ссылку и вставьте её в приложение (кнопка «+» → «Из буфера»).</p>
+</main><script>
+document.getElementById('copy').onclick=function(){var b=this,u=${JSON.stringify(url)};function ok(){b.textContent='Скопировано'}
+if(navigator.clipboard)navigator.clipboard.writeText(u).then(ok,fallback);else fallback();
+function fallback(){var r=document.createRange();r.selectNodeContents(document.getElementById('link'));var s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand('copy');ok()}catch(e){}}}
+</script></body></html>`
 }
 
 export function subscriptionUrl(env: NodeJS.ProcessEnv, subToken: string) {
