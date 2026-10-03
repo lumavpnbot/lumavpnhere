@@ -153,6 +153,7 @@ model User {
   transfers    TransferRequest[]
   achievements UserAchievement[]
   rewards      UserReward[]
+  review       Review?
 
   @@map("users")
 }
@@ -566,4 +567,22 @@ model EmailCode {
 
   @@index([userId])
   @@map("email_codes")
+}
+
+// Отзывы и оценки: строго один отзыв на аккаунт (уникальный user_id на уровне БД).
+model Review {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @unique @map("user_id")
+  rating    Int // 1..5
+  text      String?
+  source    String   @default("app") // app | bot
+  hidden    Boolean  @default(false) // скрыт модератором
+  editCount Int      @default(0) @map("edit_count")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hidden, updatedAt])
+  @@map("reviews")
 }

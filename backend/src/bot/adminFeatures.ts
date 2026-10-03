@@ -5,6 +5,8 @@ import type { RewardSpec, SettingsService } from '@/services/settings'
 import type { StatusService } from '@/services/status'
 import { REJECT_REASONS, parseTransferCode, transferCode, type TransferCheck, type TransferService } from '@/services/transfer'
 import type { VpnService } from '@/services/vpn'
+import type { ReviewService } from '@/services/reviews'
+import { createReviewsAdmin } from './adminReviews'
 import { DAY, PAGE, back, btn, csv, day, dt, header, pager, parseMsk, who, confirmView, type Ctx, type Fsm, type View } from './adminUi'
 import type { Staff, StaffRole } from './staff'
 import { esc, type InlineKeyboard, type Telegram } from './tg'
@@ -47,17 +49,20 @@ export function createAdminFeatures(
     status: StatusService
     sendBroadcast: (id: bigint) => Promise<void>
     statusUrl: string | null
+    reviews?: ReviewService
   },
   api: AdminApi,
 ) {
   const { prisma, tg, staff, settings, vpn, transfer, achievements, status } = deps
   const { show, ask, fsm } = api
+  const reviewsAdmin = deps.reviews ? createReviewsAdmin({ prisma, reviews: deps.reviews, staff }, show) : null
 
   const SECTIONS: Record<string, string> = {
     tr: 'tr', trl: 'tr', trc: 'tr', tra: 'tr', trs: 'tr', trp: 'tr', trpc: 'tr', trx: 'tr',
     ach: 'ach', achc: 'ach', achs: 'ach', acha: 'ach', achr: 'ach', achx: 'ach', achg: 'ach',
     st: 'st', stn: 'st', stx: 'st', stp: 'st', stpok: 'st', sth: 'st',
     ud: 'users', udx: 'users', udh: 'users', ub: 'users', ubg: 'users',
+    ...(reviewsAdmin?.sections ?? {}),
   }
 
   // ── Переносы подписок ─────────────────────────────────────────────────────
@@ -405,6 +410,7 @@ export function createAdminFeatures(
   // ── Обработка кнопок ──────────────────────────────────────────────────────
 
   async function onCallback(ctx: Ctx, p: string[]): Promise<string | void> {
+    if (reviewsAdmin && p[0] in reviewsAdmin.sections) return reviewsAdmin.onCallback(ctx, p)
     const [a, b, c, d, e, f] = p
     const isOwner = ctx.role === 'owner'
     switch (a) {
@@ -766,6 +772,7 @@ export function createAdminFeatures(
       ['tr', '🔁 Переносы', 'adm:tr'],
       ['ach', '🏆 Достижения', 'adm:ach'],
       ['st', '📶 Статус', 'adm:st'],
+      ...(reviewsAdmin ? [reviewsAdmin.homeItem] : []),
     ] as [string, string, string][],
     handles: (a: string) => a in SECTIONS,
     section: (a: string) => SECTIONS[a] ?? 'owner',

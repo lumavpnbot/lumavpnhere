@@ -19,6 +19,8 @@ import { createJobs } from '@/services/jobs'
 import { registerTransferRoutes } from '@/routes/transfer'
 import { registerAchievementRoutes } from '@/routes/achievements'
 import { registerStatusRoutes } from '@/routes/status'
+import { registerReviewRoutes } from '@/routes/reviews'
+import { createReviewService } from '@/services/reviews'
 import { createAchievementService } from '@/services/achievements'
 import { createTransferService } from '@/services/transfer'
 import { createStatusService } from '@/services/status'
@@ -156,6 +158,14 @@ const status = createStatusService({
     if (env.STATUS_CHANNEL_ID) await tg.send(env.STATUS_CHANNEL_ID, text).catch((err) => recordError('status channel', err))
   },
 })
+// Новый отзыв: команде уведомление с кнопкой «Скрыть» (на случай мата или спама).
+const reviews = createReviewService(prisma, async (review, user, isNew) => {
+  const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating)
+  const text = review.text ? `\n\n«${review.text.replace(/</g, '&lt;').slice(0, 600)}»` : ''
+  await notifyAdmins(`⭐ <b>${isNew ? 'Новый отзыв' : 'Отзыв изменён'}</b> · ${stars}\nОт: ${user.username ? '@' + user.username : user.tgId}${text}`, [
+    [{ text: '🙈 Скрыть', callback_data: `adm:rvh:${review.id}:1` }, { text: 'Открыть', callback_data: `adm:rvc:${review.id}` }],
+  ])
+})
 const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
 const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements, receipts })
 const admin = createAdmin({
@@ -170,7 +180,7 @@ const admin = createAdmin({
   receipts,
   sendBroadcast: jobs.sendBroadcast,
   features: (api) =>
-    createAdminFeatures({ prisma, tg, staff, settings, vpn, transfer, achievements, status, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env) }, api),
+    createAdminFeatures({ prisma, tg, staff, settings, vpn, transfer, achievements, status, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env), reviews }, api),
 })
 app.log.info(`panel mode: ${panel.kind}`)
 
@@ -182,8 +192,9 @@ registerEmailRoutes(app, prisma, env)
 registerTransferRoutes(app, { transfer, settings, users })
 registerAchievementRoutes(app, { achievements, users, tg, env })
 registerStatusRoutes(app, status)
+registerReviewRoutes(app, { reviews, users })
 let botSetup = 'ещё не запускалась'
-const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, achievements, env })
+const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, achievements, reviews, env })
 
 app.get('/health', async () => {
   const panelInfo = panel.describe ? await panel.describe().catch((e: Error) => ({ error: e.message })) : null

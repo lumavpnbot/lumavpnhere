@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { AchievementService } from '@/services/achievements'
 import type { BillingService } from '@/services/billing'
+import { ReviewError, type ReviewService } from '@/services/reviews'
 import type { AppSettings, SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
 import type { VpnService } from '@/services/vpn'
@@ -37,10 +38,11 @@ export function registerBot(
     users: UserService
     vpn: VpnService
     achievements?: AchievementService
+    reviews?: ReviewService
     env: NodeJS.ProcessEnv
   },
 ) {
-  const { prisma, tg, staff, admin, settings, billing, users, vpn, achievements, env } = deps
+  const { prisma, tg, staff, admin, settings, billing, users, vpn, achievements, reviews, env } = deps
   const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
   // Секрет вебхука выводим из токена: Telegram присылает его в заголовке, чужие запросы отбрасываем.
   const secret = crypto.createHash('sha256').update(`lynk-webhook:${deps.botToken}`).digest('hex').slice(0, 48)
@@ -58,6 +60,7 @@ export function registerBot(
   const startKeyboard = (s: AppSettings): InlineKeyboard => [
     [appButton('Открыть LYNK', '🚀', s.buttonEmoji.open, webAppUrl)],
     [appButton('Перенести подписку', '🔁', s.buttonEmoji.transfer, screenUrl('transfer'))],
+    ...(reviews ? [[{ text: '⭐ Оценить LYNK', callback_data: 'rv:open' }]] : []),
   ]
   const SUPPORT_PROMPT = '✍️ Опишите вопрос одним сообщением: что не работает, какое устройство и приложение. Мы ответим здесь.'
 
@@ -100,6 +103,97 @@ export function registerBot(
     }
   }
 
+  // ── Отзывы в боте: оценка кнопками, текст следующим сообщением ─────────────
+  // Кто сейчас пишет текст отзыва: tgId → до какого времени ждём сообщение.
+  const reviewWaiting = new Map<number, number>()
+  const STAR_LABEL = ['', 'Ужасно', 'Плохо', 'Нормально', 'Хорошо', 'Отлично']
+  const starsLine = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n)
+
+  async function reviewView(tgId: number, username: string | null): Promise<{ text: string; keyboard: InlineKeyboard }> {
+    const { user } = await users.ensureUser({ tgId, username, fromBot: true })
+    const [mine, elig, sum] = await Promise.all([reviews!.mine(user), reviews!.eligibility(user), reviews!.summary()])
+    const head =
+      `⭐ <b>Отзыв о LYNK</b>\n` +
+      (sum.count ? `Средняя оценка: <b>${sum.average.toFixed(1)}</b> из 5 · ${sum.count} оценок\n` : '') +
+      `<code>─────────────────────</code>\n`
+    if (!elig.ok && !mine) return { text: `${head}${esc(elig.reason)}.`, keyboard: [] }
+    const stars = [1, 2, 3, 4, 5].map((n) => ({ text: mine?.rating === n ? `✅ ${n}⭐` : `${n}⭐`, callback_data: `rv:s:${n}` }))
+    const body = mine
+      ? `Ваша оценка: <b>${starsLine(mine.rating)}</b> · ${STAR_LABEL[mine.rating]}\n` +
+        (mine.text ? `\n«${esc(mine.text).slice(0, 600)}»\n` : '\n<i>Без текста</i>\n') +
+        (mine.hidden ? '\n<i>Отзыв скрыт модератором.</i>\n' : '') +
+        `\nМожно поменять оценку или текст в любой момент. Один аккаунт, один отзыв.`
+      : 'Поставьте оценку от 1 до 5. Текст по желанию: можно добавить после оценки.'
+    const keyboard: InlineKeyboard = [stars]
+    if (mine) keyboard.push([{ text: mine.text ? '✍️ Изменить текст' : '✍️ Добавить текст', callback_data: 'rv:text' }, { text: '🗑 Удалить', callback_data: 'rv:del' }])
+    return { text: head + body, keyboard }
+  }
+
+  async function onReviewCallback(cq: NonNullable<TgUpdate['callback_query']>, data: string) {
+    const chatId = cq.message?.chat.id ?? cq.from.id
+    const messageId = cq.message?.message_id
+    const render = async () => {
+      const v = await reviewView(cq.from.id, cq.from.username ?? null)
+      if (messageId && data !== 'rv:open') await tg.edit(chatId, messageId, v.text, v.keyboard)
+      else await tg.send(chatId, v.text, { keyboard: v.keyboard })
+    }
+    const { user } = await users.ensureUser({ tgId: cq.from.id, username: cq.from.username ?? null, fromBot: true })
+    try {
+      if (data.startsWith('rv:s:')) {
+        const rating = Number(data.slice(5))
+        const had = await reviews!.mine(user)
+        await reviews!.upsert(user, { rating, keepText: true }, 'bot')
+        await tg.answerCallback(cq.id, `Оценка ${rating} из 5 сохранена`)
+        await render()
+        if (!had?.text) {
+          reviewWaiting.set(cq.from.id, Date.now() + 10 * 60_000)
+          await tg.send(chatId, '✍️ Хотите добавить пару слов? Напишите отзыв одним сообщением. Или просто ничего не отправляйте: оценка уже сохранена.', {
+            keyboard: [[{ text: 'Без текста', callback_data: 'rv:skip' }]],
+          })
+        }
+        return
+      }
+      if (data === 'rv:text') {
+        reviewWaiting.set(cq.from.id, Date.now() + 10 * 60_000)
+        await tg.answerCallback(cq.id)
+        await tg.send(chatId, '✍️ Напишите отзыв одним сообщением (до 1000 символов, без ссылок).', { keyboard: [[{ text: 'Отмена', callback_data: 'rv:skip' }]] })
+        return
+      }
+      if (data === 'rv:skip') {
+        reviewWaiting.delete(cq.from.id)
+        await tg.answerCallback(cq.id, 'Готово')
+        if (messageId) await tg.call('deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => undefined)
+        return
+      }
+      if (data === 'rv:del') {
+        await reviews!.remove(user)
+        reviewWaiting.delete(cq.from.id)
+        await tg.answerCallback(cq.id, 'Отзыв удалён')
+        await render()
+        return
+      }
+      await tg.answerCallback(cq.id)
+      await render()
+    } catch (err) {
+      await tg.answerCallback(cq.id, err instanceof ReviewError ? err.message : 'Не получилось, попробуйте ещё раз', true)
+    }
+  }
+
+  async function onReviewText(msg: TgMessage) {
+    reviewWaiting.delete(msg.from!.id)
+    const { user } = await users.ensureUser({ tgId: msg.from!.id, username: msg.from!.username ?? null, fromBot: true })
+    const mine = await reviews!.mine(user)
+    if (!mine) return tg.send(msg.chat.id, 'Сначала поставьте оценку: /review')
+    try {
+      await reviews!.upsert(user, { rating: mine.rating, text: msg.text ?? '' }, 'bot')
+      const v = await reviewView(msg.from!.id, msg.from!.username ?? null)
+      await tg.send(msg.chat.id, `✅ Спасибо! Отзыв сохранён.\n\n${v.text}`, { keyboard: v.keyboard })
+    } catch (err) {
+      reviewWaiting.set(msg.from!.id, Date.now() + 10 * 60_000)
+      await tg.send(msg.chat.id, `⚠️ ${err instanceof ReviewError ? esc(err.message) : 'Не получилось сохранить'}. Отправьте текст ещё раз.`)
+    }
+  }
+
   async function onPreCheckout(q: NonNullable<TgUpdate['pre_checkout_query']>) {
     const payment = await prisma.payment.findUnique({ where: { orderId: q.invoice_payload } })
     const ok = !!payment && payment.status === 'pending' && payment.method === 'stars' && payment.starsAmount === q.total_amount
@@ -117,6 +211,7 @@ export function registerBot(
       const cq = update.callback_query
       const data = cq.data ?? ''
       const chatId = cq.message?.chat.id ?? cq.from.id
+      if (data.startsWith('rv:') && reviews) return onReviewCallback(cq, data)
       // Кнопки старых сообщений («Моя подписка», «Поддержка» и т.п.): всё теперь в приложении.
       if (data.startsWith('u:')) {
         if (data === 'u:support') {
@@ -155,6 +250,11 @@ export function registerBot(
     const isAdminCmd = command === '/admin' || (command === '/start' && rest[0] === 'admin')
     if (command === '/start' && !isAdminCmd) return onStart(msg, rest[0] ?? null)
     if (command === '/support' || command === '/help') return tg.send(msg.chat.id, SUPPORT_PROMPT)
+    if (command === '/review' && reviews) {
+      reviewWaiting.delete(msg.from.id)
+      const v = await reviewView(msg.from.id, msg.from.username ?? null)
+      return tg.send(msg.chat.id, v.text, { keyboard: v.keyboard })
+    }
     if (isAdminCmd) {
       const role = await staff.roleOf(msg.from.id)
       if (!role) return command === '/start' ? onStart(msg, null) : undefined // обычным пользователям /admin не отвечает (ТЗ 6)
@@ -169,6 +269,11 @@ export function registerBot(
       const media = mediaOf(msg)
       await admin.onText({ chatId: msg.chat.id, tgId: msg.from.id, role }, media ? (msg.caption ?? '') : text, media ? msg.caption_entities : msg.entities, media)
       return
+    }
+    const waitUntil = reviewWaiting.get(msg.from.id)
+    if (reviews && waitUntil && !command.startsWith('/')) {
+      if (waitUntil > Date.now() && msg.text) return onReviewText(msg)
+      reviewWaiting.delete(msg.from.id)
     }
     if (command.startsWith('/')) {
       return tg.send(msg.chat.id, 'Откройте приложение кнопкой меню или отправьте /start. Вопрос в поддержку можно написать прямо сюда.')
@@ -203,6 +308,7 @@ export function registerBot(
     const userCommands = [
       { command: 'start', description: 'Открыть LYNK' },
       { command: 'support', description: 'Написать в поддержку' },
+      ...(reviews ? [{ command: 'review', description: 'Оценить LYNK' }] : []),
     ]
     await tg.call('setMyCommands', { commands: userCommands })
     // Команде показываем /admin в меню команд (только в их личных чатах).
