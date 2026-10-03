@@ -1,7 +1,7 @@
 import type { PanelClient, PanelProvider } from './types'
 import { H1ApiError } from './h1PanelProvider'
 
-/** Сколько не обращаемся к панели, которая не ответила (таймаут, сеть, 5xx). */
+/** Через сколько проверяем в фоне, ожила ли панель, которая не ответила (таймаут, сеть, 5xx). */
 const DOWN_MS = 2 * 60_000
 
 class PanelDownError extends Error {}
@@ -16,14 +16,17 @@ const isOutage = (err: unknown) => !(err instanceof H1ApiError) || err.status >=
  *
  * Первая панель главная: по ней считаем срок, трафик и устройства.
  * Если какая-то страна недоступна, выдача на остальных не ломается: панель, которая
- * не ответила, пропускаем DOWN_MS, а не ждём её таймаут (10 с) в каждом запросе.
+ * не ответила, пропускаем, пока фоновая проверка (раз в DOWN_MS) не увидит, что она ожила.
+ * Запросы пользователей её таймаут (10 с) больше не ждут.
  * Раньше из-за одной лежащей панели (de) каждое обновление подписки и выдача новым
  * пользователям занимали 20–40 с, и клиенты обрывали запрос.
  */
 export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: string) => void = console.warn): PanelProvider {
   // Последняя ошибка по каждой стране, видна в /health (без секретов, только текст ошибки).
   const lastErrors: Record<string, { at: string; error: string }> = {}
-  const downUntil: number[] = panels.map(() => 0)
+  const down: boolean[] = panels.map(() => false)
+  const probing: boolean[] = panels.map(() => false)
+  const probeAt: number[] = panels.map(() => 0)
   const label = (i: number) => panels[i].countries.join(',') || String(i)
   const log = (msg: string) => {
     logFn(msg)
@@ -31,11 +34,38 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
     if (m) lastErrors[m[1]] = { at: new Date().toISOString(), error: m[2] }
   }
 
+  /** Фоновая проверка лежащей панели (не чаще раза в DOWN_MS): ответила, значит снова в строю. */
+  function probe(i: number) {
+    if (probing[i] || Date.now() < probeAt[i]) return
+    probing[i] = true
+    probeAt[i] = Date.now() + DOWN_MS
+    panels[i]
+      .getClient(0)
+      .then(
+        () => {
+          down[i] = false
+          logFn(`[panel ${label(i)}] снова отвечает`)
+        },
+        (err) => {
+          if (!isOutage(err)) down[i] = false
+        },
+      )
+      .finally(() => {
+        probing[i] = false
+      })
+  }
+
   /** Вызов одной панели с учётом «лежит»: пока панель недоступна, сразу ошибка без ожидания. */
   function guarded<T>(i: number, fn: (p: PanelProvider) => Promise<T>): Promise<T> {
-    if (Date.now() < downUntil[i]) return Promise.reject(new PanelDownError(`панель ${label(i)} недоступна`))
+    if (down[i]) {
+      probe(i)
+      return Promise.reject(new PanelDownError(`панель ${label(i)} недоступна`))
+    }
     return fn(panels[i]).catch((err) => {
-      if (isOutage(err)) downUntil[i] = Date.now() + DOWN_MS
+      if (isOutage(err) && !down[i]) {
+        down[i] = true
+        probeAt[i] = Date.now() + DOWN_MS
+      }
       throw err
     })
   }
@@ -109,8 +139,7 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
           out[p.countries[0] ?? String(i)] = p.describe ? await p.describe().catch((e: Error) => ({ error: e.message })) : null
         }),
       )
-      const down = panels.flatMap((_, i) => (Date.now() < downUntil[i] ? [label(i)] : []))
-      return { panels: out, down, lastErrors }
+      return { panels: out, down: panels.flatMap((_, i) => (down[i] ? [label(i)] : [])), lastErrors }
     },
   }
 }

@@ -642,7 +642,11 @@ export function createAdmin(deps: {
     } else if (kind === 'subs') {
       body = recentSubRequests()
         .slice(0, 15)
-        .map((r) => `${dt(r.at)} · <code>${r.tgId}</code> · ${r.hwid ? '🟢 HWID' : '⚪️ без HWID'}${r.model ? ` · ${esc(r.model)}` : ''}${r.os ? ` · ${esc(r.os)}` : ''}\n<code>${esc(r.ua).slice(0, 80)}</code>`)
+        .map(
+          (r) =>
+            `${dt(r.at)} · <code>${r.tgId || '?'}</code> · ${r.status === 200 ? '✅' : '❌'} ${r.status ?? '…'}${r.ms != null ? ` · ${(r.ms / 1000).toFixed(1)} с` : ''}${r.note ? ` · ${esc(r.note)}` : ''}\n` +
+            `${r.hwid ? '🟢 HWID' : '⚪️ без HWID'}${r.model ? ` · ${esc(r.model)}` : ''}${r.os ? ` · ${esc(r.os)}` : ''} · <code>${esc(r.ua.slice(0, 80)) || 'без user-agent'}</code>`,
+        )
         .join('\n')
     } else if (kind === 'errors') {
       body = recentErrors(24)

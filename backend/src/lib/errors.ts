@@ -26,6 +26,10 @@ export interface SubRequest {
   hwid: boolean
   os: string | null
   model: string | null
+  /** Что ответили клиенту: код, время и причина (кэш, нет подписки, панель не ответила…). */
+  status?: number
+  ms?: number
+  note?: string
 }
 const subRequests: SubRequest[] = []
 export function recordSubRequest(r: SubRequest) {

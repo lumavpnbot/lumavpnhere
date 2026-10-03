@@ -1,9 +1,9 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
 import { disabledCountries } from '@/lib/countries'
-import { recordError, recordSubRequest } from '@/lib/errors'
+import { recordError, recordSubRequest, type SubRequest } from '@/lib/errors'
 import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
 
 const BRAND = 'LYNK'
@@ -37,6 +37,8 @@ const PLAIN_UA = 'v2rayNG/1.9.0'
 // обрывают запрос примерно через 15 с и оставляют старую подписку, поэтому укладываемся раньше,
 // а если панель не успела, отдаём последний удачный список конфигов (user.subCache).
 const SYNC_WAIT_MS = 6_000
+// Сохранённых конфигов ещё нет (только что добавили подписку): ждём панель дольше, чем отдавать ошибку.
+const SYNC_WAIT_FIRST_MS = 12_000
 const UPSTREAM_WAIT_MS = 6_000
 
 /** Результат работы или fallback, если она не успела за ms (сама работа продолжается в фоне). */
@@ -162,11 +164,41 @@ export function renameLinks(links: string[], off: Set<string> = new Set()): stri
  *  - при смене провайдера или добавлении страны ссылка у пользователя та же.
  */
 export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaClient, panel: PanelProvider, vpn: VpnService, env: NodeJS.ProcessEnv) {
+  // Каждый запрос подписки с итогом (код, время, причина) виден в /admin → Логи → Подписки:
+  // по нему понятно, что получил клиент, когда «не добавляется» или «не обновляется».
+  const subLog = new WeakMap<FastifyRequest, SubRequest & { start: number }>()
+  app.addHook('onResponse', async (request, reply) => {
+    const entry = subLog.get(request)
+    if (!entry) return
+    entry.status = reply.statusCode
+    entry.ms = Date.now() - entry.start
+    recordSubRequest(entry)
+  })
+
   app.get('/sub/:token', async (request, reply) => {
     const { token } = request.params as { token: string }
+    const header = (k: string) => {
+      const v = request.headers[k]
+      return (Array.isArray(v) ? v[0] : v)?.toString().slice(0, 120) ?? null
+    }
+    const ua = header('user-agent') ?? ''
+    const log: SubRequest & { start: number } = {
+      start: Date.now(),
+      at: new Date(),
+      tgId: 0,
+      ua,
+      hwid: Boolean(header('x-hwid')),
+      os: header('x-device-os'),
+      model: header('x-device-model'),
+    }
+    subLog.set(request, log)
     const user = await prisma.user.findUnique({ where: { subToken: token } })
-    if (!user) return reply.code(404).send('not found')
+    if (!user) {
+      log.note = 'ссылка не найдена (токен устарел или обрезан)'
+      return reply.code(404).send('not found')
+    }
     const tgId = Number(user.tgId)
+    log.tgId = tgId
     const isOwner = ownerIds(env).has(tgId)
 
     reply.header('cache-control', 'no-store')
@@ -176,27 +208,23 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
 
     if (user.banned) {
       announce('Доступ к сервису ограничен. Напишите в поддержку.')
+      log.note = 'заблокирован'
       return reply.code(403).send('banned')
     }
 
     // Ссылку открыли в браузере (нажали в Telegram, вставили в адресную строку): вместо списка
     // конфигов в base64 показываем страницу с кнопками «Добавить в Happ / INCY / Hiddify».
     if (isBrowser(request.headers)) {
+      log.note = 'браузер: страница подписки'
       const sub = await vpn.current(user.id)
       reply.header('content-type', 'text/html; charset=utf-8')
       return reply.send(subscriptionPage(env, token, sub?.expiresAt ?? null))
     }
 
     // Устройство: Happ присылает x-hwid и данные об устройстве при каждом обновлении подписки.
-    const header = (k: string) => {
-      const v = request.headers[k]
-      return (Array.isArray(v) ? v[0] : v)?.toString().slice(0, 120) ?? null
-    }
-    const ua = header('user-agent') ?? ''
     // Если клиент не прислал HWID (старые версии, другие приложения), узнаём устройство по user-agent.
     const isClientApp = /happ|incy|v2ray|hiddify|streisand|v2box|nekobox|sing-?box|clash|karing|shadowrocket|foxray/i.test(ua)
     const hwid = header('x-hwid') ?? (isClientApp ? `ua:${ua.slice(0, 100)}` : null)
-    recordSubRequest({ at: new Date(), tgId, ua, hwid: Boolean(header('x-hwid')), os: header('x-device-os'), model: header('x-device-model') })
 
     // Источник правды: подписка в БД. Панель подтягиваем к ней (vpn.sync).
     // Команде проекта «Премиум» выдаётся автоматически, даже если приложение ещё не открывали.
@@ -208,6 +236,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         .then((c) => (c?.enabled ? panel.disable(tgId) : undefined))
         .catch((err) => recordError('sub disable', err))
       announce('Подписка закончилась. Продлите её в приложении LYNK.')
+      log.note = 'нет активной подписки'
       return reply.code(404).send('no active subscription')
     }
 
@@ -223,6 +252,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         const count = await prisma.device.count({ where: { userId: user.id, NOT: { hwid: { startsWith: 'ua:' } } } })
         if (limit != null && count >= limit) {
           announce(`Достигнут лимит устройств (${limit}). Удалите старое устройство в приложении LYNK.`)
+          log.note = `лимит устройств (${limit})`
           return reply.code(403).send('device limit reached')
         }
       }
@@ -246,7 +276,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
           return null
         },
       ),
-      SYNC_WAIT_MS,
+      user.subCache ? SYNC_WAIT_MS : SYNC_WAIT_FIRST_MS,
       null,
     )
     const urls = client?.enabled ? client.upstreamSubscriptionUrls : []
@@ -286,11 +316,13 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
       // Панель не ответила вовремя: отдаём прежние конфиги со свежим сроком из БД, чтобы
       // клиент не показывал ошибку и обновил дату окончания.
       links = user.subCache.split('\n').filter(Boolean)
-      recordError('sub cache used', new Error(`tg_${tgId}: панель не ответила, отдали сохранённые конфиги`))
+      log.note = 'панель не ответила: сохранённые конфиги'
     } else {
       announce('Серверы готовятся. Обновите подписку через пару минут.')
+      log.note = client ? 'панель не отдала конфиги' : 'панель не ответила, сохранённых конфигов нет'
       return reply.code(503).send('panel unavailable')
     }
+    log.note ??= `${links.length} конфигов`
 
     const upstreamAnnounce = ok[0]?.headers.get('announce')
     if (upstreamAnnounce) reply.header('announce', upstreamAnnounce)
