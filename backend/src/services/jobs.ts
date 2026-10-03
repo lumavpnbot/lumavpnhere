@@ -151,10 +151,14 @@ export function createJobs(deps: {
       setInterval(safe('status-cleanup', () => status.cleanup()), 60 * 60 * 1000)
     }
     if (achievements) setInterval(safe('achievements', achievementsSweep), 6 * 60 * 60 * 1000)
-    // После перезапуска (например, добавили инбаунд в H1_PANELS) обновляем клиентов на панелях.
+    // После перезапуска сверяем клиентов на панелях и чиним только расхождения (нет клиента,
+    // выключен, срок меньше). Раньше каждый деплой перезаписывал всех клиентов на всех панелях,
+    // а каждая запись перезагружает сервер H1 и рвёт соединения. Новые инбаунды всем раздаёт
+    // кнопка «Обновить клиентов на панелях» в /admin (или SYNC_ON_START=full).
     if (process.env.SYNC_ON_START !== '0') {
+      const full = process.env.SYNC_ON_START === 'full'
       setTimeout(
-        safe('panel-sync', async () => log.info({ result: await vpn.syncAll() }, 'panel sync done')),
+        safe('panel-sync', async () => log.info({ result: await vpn.syncAll({ onlyDrift: !full }) }, 'panel sync done')),
         60 * 1000,
       )
     }

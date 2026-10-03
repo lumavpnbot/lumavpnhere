@@ -4,6 +4,12 @@ import { H1ApiError } from './h1PanelProvider'
 /** Через сколько проверяем в фоне, ожила ли панель, которая не ответила (таймаут, сеть, 5xx). */
 const DOWN_MS = 2 * 60_000
 
+/** Досоздание/продление клиента на одной стране не чаще раза в BACKFILL_MS. */
+const BACKFILL_MS = 30 * 60_000
+/** Срок на другой стране считаем отставшим, только если он меньше главного больше чем на сутки:
+ * панели могут хранить срок по-разному (до полуночи, в своём часовом поясе). */
+const BEHIND_MS = 24 * 60 * 60_000
+
 class PanelDownError extends Error {}
 
 /** Панель «лежит»: таймаут, сетевая ошибка или 5xx. Ответ 4xx значит, что панель жива. */
@@ -78,14 +84,22 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
     return results
   }
 
-  // Досоздание и продление на остальных странах идёт в фоне: по одному разу на клиента и страну.
-  const backfilling = new Set<string>()
+  // Досоздание и продление на остальных странах идёт в фоне, по клиенту и стране не чаще раза
+  // в BACKFILL_MS. Каждое изменение клиента на панели H1 перезагружает её сервер, и частые
+  // перезаписи рвут соединения (XHTTP и др.) у всех пользователей этой страны.
+  const backfilledAt = new Map<string, number>()
+  // Сколько раз с запуска меняли клиентов на каждой панели (видно в /health): так заметен «шторм» записей.
+  const writes: Record<string, number> = {}
+  const countWrite = (i: number) => {
+    writes[label(i)] = (writes[label(i)] ?? 0) + 1
+  }
 
   return {
     kind: 'multi',
     countries: panels.flatMap((p) => p.countries),
 
     async provision(params) {
+      panels.forEach((_, i) => !down[i] && countWrite(i))
       const results = await each((p) => p.provision(params), 'provision')
       const first = results[0]
       if (first.status === 'rejected') throw first.reason
@@ -106,17 +120,18 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
         results.forEach((r, i) => {
           if (i === 0 || r.status !== 'fulfilled') return
           const c = r.value
-          const behind = !c || !c.enabled || (c.expiresAt != null && c.expiresAt.getTime() < main.expiresAt!.getTime() - 60 * 60_000)
+          const behind = !c || !c.enabled || (c.expiresAt != null && c.expiresAt.getTime() < main.expiresAt!.getTime() - BEHIND_MS)
           const key = `${tgId}:${i}`
-          if (!behind || backfilling.has(key)) return
-          backfilling.add(key)
+          if (!behind || Date.now() - (backfilledAt.get(key) ?? 0) < BACKFILL_MS) return
+          backfilledAt.set(key, Date.now())
+          if (backfilledAt.size > 10_000) backfilledAt.delete(backfilledAt.keys().next().value!)
+          countWrite(i)
           void guarded(i, (p) =>
             p.provision({ tgId, expiresAt: main.expiresAt!, trafficLimitGb: main.trafficLimitGb, deviceLimit: main.deviceLimit }),
           )
             .catch((e) => {
               if (!(e instanceof PanelDownError)) log(`[panel ${label(i)}] backfill: ${(e as Error).message}`)
             })
-            .finally(() => backfilling.delete(key))
         })
       }
 
@@ -139,7 +154,7 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
           out[p.countries[0] ?? String(i)] = p.describe ? await p.describe().catch((e: Error) => ({ error: e.message })) : null
         }),
       )
-      return { panels: out, down: panels.flatMap((_, i) => (down[i] ? [label(i)] : [])), lastErrors }
+      return { panels: out, down: panels.flatMap((_, i) => (down[i] ? [label(i)] : [])), writes, lastErrors }
     },
   }
 }

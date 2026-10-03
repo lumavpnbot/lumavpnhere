@@ -204,7 +204,7 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
      * Нужно после добавления нового инбаунда (например XHTTP): иначе он появится
      * у пользователя только при следующем продлении.
      */
-    async syncAll() {
+    async syncAll(opts: { onlyDrift?: boolean } = {}) {
       const subs = await prisma.subscription.findMany({
         where: activeWhere(),
         include: { user: true },
@@ -217,7 +217,9 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
         if (seen.has(sub.userId)) continue
         seen.add(sub.userId)
         try {
-          await provision(sub.user, sub.plan, sub.expiresAt)
+          // onlyDrift: трогаем панель только там, где клиента нет, он выключен или срок меньше.
+          if (opts.onlyDrift) await sync(sub.user)
+          else await provision(sub.user, sub.plan, sub.expiresAt)
           ok++
         } catch {
           failed++
