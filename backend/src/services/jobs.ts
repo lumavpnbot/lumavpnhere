@@ -128,6 +128,21 @@ export function createJobs(deps: {
     }
     setInterval(safe('ten-minutes', every10), 10 * 60 * 1000)
     setInterval(safe('broadcasts', dueBroadcasts), 60 * 1000)
+    // Доступ, который панель не приняла (пробный период, оплата, продление): повтор раз в 2 минуты.
+    let repairing = false
+    setInterval(
+      safe('panel-repair', async () => {
+        if (repairing) return
+        repairing = true
+        try {
+          const r = await vpn.repairPending()
+          if (r.pending) log.info({ result: r }, 'panel repair')
+        } finally {
+          repairing = false
+        }
+      }),
+      2 * 60 * 1000,
+    )
     setTimeout(safe('startup', every10), 30 * 1000)
     // Статус сервиса: проверка узлов раз в минуту, чистка истории раз в час (ТЗ 02).
     if (status && process.env.STATUS_MONITOR !== '0') {

@@ -1,5 +1,6 @@
 import type { PrismaClient, SubscriptionPlan, User } from '@prisma/client'
 import type { PanelClient, PanelProvider } from '@/panel'
+import { recordError } from '@/lib/errors'
 
 const DAY = 24 * 60 * 60 * 1000
 const HOUR = 60 * 60 * 1000
@@ -23,8 +24,11 @@ export const activeWhere = () => ({ status: { in: ['trial' as const, 'active' as
 
 /**
  * Единая точка, через которую бизнес-логика выдаёт или продлевает VPN.
- * Сначала создаём/обновляем клиента на панели, потом пишем подписку в БД:
- * если панель недоступна, пользователь не получит «оплачено, но не работает».
+ * Источник правды: БД. Подписку пишем сразу, потом выдаём доступ на панели.
+ * Раньше было наоборот, и пока панель H1 тормозила или отвечала ошибкой, у новых
+ * пользователей не появлялся пробный период, а оплата не продлевала подписку.
+ * Если панель не приняла выдачу, пользователь отмечается (panelPendingAt), и доступ
+ * дотягивает repairPending (раз в 2 минуты), а также /sub и /me через sync.
  */
 export type SubSource = 'trial' | 'payment' | 'gift' | 'transfer' | 'admin'
 
@@ -48,6 +52,19 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
     return panel.provision({ tgId: Number(user.tgId), expiresAt, trafficLimitGb: limits.trafficGb, deviceLimit: limits.devices })
   }
 
+  /** Выдача на панели без исключений: при ошибке отмечаем пользователя для повтора. */
+  async function provisionOrQueue(user: User, plan: SubscriptionPlan, expiresAt: Date): Promise<PanelClient | null> {
+    try {
+      const client = await provision(user, plan, expiresAt)
+      await prisma.user.updateMany({ where: { id: user.id, panelPendingAt: { not: null } }, data: { panelPendingAt: null } })
+      return client
+    } catch (err) {
+      recordError(`panel provision tg_${user.tgId}`, err)
+      await prisma.user.update({ where: { id: user.id }, data: { panelPendingAt: new Date() } }).catch(() => undefined)
+      return null
+    }
+  }
+
   /** Текущая действующая подписка (последняя по сроку). */
   async function current(userId: bigint) {
     return prisma.subscription.findFirst({ where: { userId, ...activeWhere() }, orderBy: LATEST_FIRST })
@@ -59,11 +76,11 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
     const from = cur ? cur.expiresAt.getTime() : Date.now()
     const expiresAt = new Date(from + days * DAY)
 
-    await provision(user, plan, expiresAt)
-
-    return prisma.subscription.create({
+    const sub = await prisma.subscription.create({
       data: { userId: user.id, plan, status, expiresAt, source: source ?? (status === 'trial' ? 'trial' : 'payment') },
     })
+    await provisionOrQueue(user, plan, expiresAt)
+    return sub
   }
 
   /** Есть ли сейчас оплаченное время (перенос требует, чтобы его не было; Trial и подарки не считаются). */
@@ -95,8 +112,8 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
     const at = repairedAt.get(key) ?? 0
     if (c && Date.now() - at < 5 * 60_000) return { sub, client: c, repaired: false }
     repairedAt.set(key, Date.now())
-    const fresh = await provision(user, sub.plan, sub.expiresAt)
-    return { sub, client: fresh, repaired: true }
+    const fresh = await provisionOrQueue(user, sub.plan, sub.expiresAt)
+    return { sub, client: fresh ?? c, repaired: Boolean(fresh) }
   }
   const repairedAt = new Map<string, number>()
 
@@ -152,9 +169,34 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
 
     async startTrial(user: User, days: number, force = false) {
       if (user.trialUsed && !force) return null
-      const sub = await activate(user, 'start', days, 'trial')
-      await prisma.user.update({ where: { id: user.id }, data: { trialUsed: true } })
+      // Подписка и отметка trialUsed сразу: /me отдаёт пробный период, даже пока панель выдаёт доступ.
+      const cur = await current(user.id)
+      const expiresAt = new Date((cur ? cur.expiresAt.getTime() : Date.now()) + days * DAY)
+      const [sub] = await prisma.$transaction([
+        prisma.subscription.create({ data: { userId: user.id, plan: 'start', status: 'trial', expiresAt, source: 'trial' } }),
+        prisma.user.update({ where: { id: user.id }, data: { trialUsed: true } }),
+      ])
+      await provisionOrQueue(user, 'start', expiresAt)
       return sub
+    },
+
+    /**
+     * Повтор выдачи тем, кому панель не ответила (panelPendingAt). Если панель опять
+     * не приняла, остальных не мучаем: попробуем в следующий раз.
+     */
+    async repairPending() {
+      const pending = await prisma.user.findMany({ where: { panelPendingAt: { not: null } }, orderBy: { panelPendingAt: 'asc' }, take: 50 })
+      let ok = 0
+      for (const user of pending) {
+        const sub = await current(user.id)
+        if (!sub) {
+          await prisma.user.update({ where: { id: user.id }, data: { panelPendingAt: null } })
+          continue
+        }
+        if (!(await provisionOrQueue(user, sub.plan, sub.expiresAt))) break
+        ok++
+      }
+      return { ok, pending: pending.length }
     },
 
     /**

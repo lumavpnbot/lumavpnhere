@@ -202,6 +202,8 @@ app.get('/health', async () => {
     bot: { username: picked.username, id: botIdOf(botToken), setup: botSetup, webhook },
     panel: panel.kind,
     panelInfo,
+    // Сколько пользователей ждут выдачи доступа на панели (панель не приняла; повтор раз в 2 минуты).
+    panelPending: await prisma.user.count({ where: { panelPendingAt: { not: null } } }).catch(() => null),
   }
 })
 

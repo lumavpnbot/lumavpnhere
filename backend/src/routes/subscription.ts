@@ -33,6 +33,23 @@ export function parseUserInfo(v: string | null): Record<string, number> {
 // Чтобы склеить несколько стран, просим у панелей простой список ссылок (как для v2rayNG).
 const PLAIN_UA = 'v2rayNG/1.9.0'
 
+// Сколько /sub ждёт панель: сверку клиента и ссылки подписки у панелей. Клиенты (Happ и др.)
+// обрывают запрос примерно через 15 с и оставляют старую подписку, поэтому укладываемся раньше,
+// а если панель не успела, отдаём последний удачный список конфигов (user.subCache).
+const SYNC_WAIT_MS = 6_000
+const UPSTREAM_WAIT_MS = 6_000
+
+/** Результат работы или fallback, если она не успела за ms (сама работа продолжается в фоне). */
+function within<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  return Promise.race([
+    work.finally(() => clearTimeout(timer)),
+    new Promise<T>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), ms)
+    }),
+  ])
+}
+
 export function decodeList(body: string): string[] {
   const text = body.trim()
   const raw = /^[A-Za-z0-9+/=\s_-]+$/.test(text) && !text.includes('://') ? Buffer.from(text, 'base64').toString('utf8') : text
@@ -212,24 +229,25 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     }
 
     // Если на панели клиента нет, он выключен или срок там меньше оплаченного, выдаём заново.
-    let client: PanelClient | null = null
-    try {
-      client = (await vpn.sync(user)).client
-    } catch (err) {
-      recordError('sub sync', err)
-      client = await panel.getClient(tgId).catch(() => null)
-    }
+    // Панель тормозит: не ждём дольше SYNC_WAIT_MS, сверка доделается в фоне.
+    const client: PanelClient | null = await within(
+      vpn.sync(user).then(
+        (r) => r.client,
+        (err) => {
+          recordError('sub sync', err)
+          return null
+        },
+      ),
+      SYNC_WAIT_MS,
+      null,
+    )
     const urls = client?.enabled ? client.upstreamSubscriptionUrls : []
     const direct = client?.enabled ? (client.links ?? []) : []
-    if (!urls.length && !direct.length) {
-      announce('Серверы временно недоступны. Обновите подписку через пару минут.')
-      return reply.code(503).send('panel unavailable')
-    }
 
     // Берём у панелей простой список ссылок, чтобы переименовать конфиги и склеить страны.
     const responses = await Promise.allSettled(
       urls.map((u) =>
-        fetch(u, { headers: { 'User-Agent': PLAIN_UA }, signal: AbortSignal.timeout(10_000) }).then(async (r) => {
+        fetch(u, { headers: { 'User-Agent': PLAIN_UA }, signal: AbortSignal.timeout(UPSTREAM_WAIT_MS) }).then(async (r) => {
           if (!r.ok) throw new Error(`upstream ${r.status}`)
           return { headers: r.headers, body: Buffer.from(await r.arrayBuffer()) }
         }),
@@ -237,9 +255,33 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     )
     responses.forEach((r) => r.status === 'rejected' && recordError('sub upstream', r.reason))
     const ok = responses.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-    if (!ok.length && !direct.length) {
-      announce('Серверы временно недоступны. Обновите подписку через пару минут.')
-      return reply.code(502).send('upstream error')
+
+    // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
+    // другие страны. Убираем повторы по ссылке без названия (#…).
+    const seen = new Set<string>()
+    let links = renameLinks(
+      [...ok.flatMap((r) => decodeList(r.body.toString('utf8'))), ...direct].filter((l) => {
+        const key = l.split('#')[0]
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      }),
+      disabledCountries(env),
+    )
+    if (links.length) {
+      // Запоминаем удачный список: пригодится, если в следующий раз панель не ответит.
+      const text = links.join('\n')
+      if (text !== user.subCache) {
+        await prisma.user.update({ where: { id: user.id }, data: { subCache: text, subCacheAt: new Date() } }).catch((err) => recordError('sub cache', err))
+      }
+    } else if (user.subCache) {
+      // Панель не ответила вовремя: отдаём прежние конфиги со свежим сроком из БД, чтобы
+      // клиент не показывал ошибку и обновил дату окончания.
+      links = user.subCache.split('\n').filter(Boolean)
+      recordError('sub cache used', new Error(`tg_${tgId}: панель не ответила, отдали сохранённые конфиги`))
+    } else {
+      announce('Серверы готовятся. Обновите подписку через пару минут.')
+      return reply.code(503).send('panel unavailable')
     }
 
     const upstreamAnnounce = ok[0]?.headers.get('announce')
@@ -266,18 +308,6 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     reply.header('check-url-via-proxy', 'https://cp.cloudflare.com/generate_204')
     reply.header('subscriptions-sort-type', 'ping')
 
-    // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
-    // другие страны. Убираем повторы по ссылке без названия (#…).
-    const seen = new Set<string>()
-    const links = renameLinks(
-      [...ok.flatMap((r) => decodeList(r.body.toString('utf8'))), ...direct].filter((l) => {
-        const key = l.split('#')[0]
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      }),
-      disabledCountries(env),
-    )
     reply.header('content-type', 'text/plain; charset=utf-8')
     return reply.send(b64(links.join('\n')))
   })

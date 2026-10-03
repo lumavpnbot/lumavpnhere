@@ -132,6 +132,11 @@ model User {
   // Писал ли пользователь боту: без этого Telegram не даст отправить ему сообщение.
   botStarted    Boolean  @default(false) @map("bot_started")
   lastSeenAt    DateTime? @map("last_seen_at")
+  // Панель не приняла выдачу/продление: доступ дотягивает задача vpn.repairPending (и /sub, /me).
+  panelPendingAt DateTime? @map("panel_pending_at")
+  // Последний удачный список конфигов /sub/:token: отдаём его, если панель не ответила вовремя.
+  subCache      String?  @map("sub_cache")
+  subCacheAt    DateTime? @map("sub_cache_at")
   createdAt     DateTime @default(now()) @map("created_at")
 
   subscriptions Subscription[]
