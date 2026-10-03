@@ -4,6 +4,7 @@ import Flag from '@/components/Flag'
 import { DemoBadge, Divider, ListRow, Section, StatusPill, TopBar } from '@/components/ui'
 import { ChatIcon, ChevronRight, DevicesIcon, InfinityIcon, MegaphoneIcon, PulseIcon, ReferralsIcon, ShieldIcon, WalletIcon } from '@/components/icons'
 import StatusWidget from '@/components/StatusWidget'
+import { ReviewsSection } from '@/components/Reviews'
 import { COUNTRIES, LINKS, PLANS } from '@/config'
 import { useLang, useT, type TKey } from '@/i18n'
 import mark from '@/assets/lynk-mark.png'
@@ -180,6 +181,11 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </Section>
+
+      {/* ── Отзывы и рейтинг ── */}
+      <Section title={t('reviews.section')}>
+        <ReviewsSection onAll={() => go('/reviews')} />
       </Section>
 
       {/* ── Связь ── */}

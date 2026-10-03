@@ -14,6 +14,7 @@ const ROUTES = [
   ['notifications', '#/account/notifications'],
   ['logins', '#/account/logins'],
   ['support', '#/support'],
+  ['reviews', '#/reviews'],
   ['doc-terms', '#/docs/terms'],
 ]
 
@@ -31,6 +32,15 @@ for (const lang of ['ru', 'en']) {
     await page.screenshot({ path: `shots/${lang}-${name}.png` })
     if (lang === 'ru') await page.screenshot({ path: `shots/${lang}-${name}-full.png`, fullPage: true })
   }
+
+  // Отзыв: шторка со звёздами.
+  await page.goto(BASE + '#/reviews')
+  await page.waitForTimeout(800)
+  await page.getByText(lang === 'ru' ? 'Оставить отзыв' : 'Leave a review').first().click()
+  await page.waitForTimeout(500)
+  await page.locator('[role=radio]').nth(3).click()
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `shots/${lang}-review-sheet.png` })
 
   // Промокод и QR.
   await page.goto(BASE + '#/plans')

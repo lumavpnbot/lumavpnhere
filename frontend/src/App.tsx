@@ -12,6 +12,7 @@ import PlansPage from '@/pages/PlansPage'
 import DevicesPage from '@/pages/DevicesPage'
 import ReferralsPage from '@/pages/ReferralsPage'
 import AccountPage from '@/pages/AccountPage'
+import ReviewsPage from '@/pages/ReviewsPage'
 
 /**
  * После деплоя старые файлы экранов удаляются с GitHub Pages. Если Telegram открыл
@@ -127,6 +128,7 @@ export default function App() {
               <Route path="/support" element={<SupportPage />} />
               <Route path="/docs/:doc" element={<DocPage />} />
               <Route path="/status" element={<StatusPage />} />
+              <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/account/transfer" element={<TransferPage />} />
               <Route path="/account/achievements" element={<AchievementsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
