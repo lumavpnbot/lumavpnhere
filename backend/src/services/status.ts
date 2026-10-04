@@ -233,7 +233,14 @@ export function createStatusService(deps: {
     return inc
   }
 
-  return { tick, cleanup, snapshot, history, overall, publish, resolve, incidentView, knownNodes, changedAt: () => changedAt }
+  /** Удалить инцидент совсем (ошибочный или тестовый): пропадает из статуса и истории. */
+  async function remove(id: bigint) {
+    const inc = await prisma.incident.delete({ where: { id } })
+    touch()
+    return inc
+  }
+
+  return { tick, cleanup, snapshot, history, overall, publish, resolve, remove, incidentView, knownNodes, changedAt: () => changedAt }
 }
 
 export type StatusService = ReturnType<typeof createStatusService>

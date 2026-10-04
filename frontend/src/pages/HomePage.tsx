@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Flag from '@/components/Flag'
 import { DemoBadge, Divider, ListRow, Section, StatusPill, TopBar } from '@/components/ui'
 import { ChatIcon, ChevronRight, DevicesIcon, InfinityIcon, MegaphoneIcon, PulseIcon, ReferralsIcon, ShieldIcon, WalletIcon } from '@/components/icons'
 import StatusWidget from '@/components/StatusWidget'
 import { ReviewsSection } from '@/components/Reviews'
-import { COUNTRIES, LINKS, PLANS } from '@/config'
-import { useLang, useT, type TKey } from '@/i18n'
+import { LINKS, PLANS } from '@/config'
+import { useLang, useT } from '@/i18n'
 import mark from '@/assets/lynk-mark.png'
 import { daysWord, formatDate, formatRub } from '@/lib/format'
 import { useTrialVars } from '@/lib/trial'
@@ -35,11 +34,6 @@ export default function HomePage() {
     haptic('light')
     navigate(path)
   }
-
-  const liveCodes = useAppStore((s) => s.liveCountries)
-
-  const live = COUNTRIES.filter((c) => liveCodes.includes(c))
-  const soon = COUNTRIES.filter((c) => !liveCodes.includes(c))
 
   return (
     <>
@@ -150,39 +144,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Страны ── */}
-      <Section
-        title={t('home.countries')}
-        action={<span className="text-[12px] text-faint">{t('home.countriesHint', { available: live.length, soon: soon.length })}</span>}
-      >
-        <div className="glass overflow-hidden">
-          {live.map((c, i) => (
-            <div key={c}>
-              {i > 0 && <Divider />}
-              <div className="flex items-center gap-3.5 px-4 py-3.5">
-                <Flag code={c} size={36} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-medium">{t(`country.${c}` as TKey)}</div>
-                </div>
-                <PingPill country={c} />
-              </div>
-            </div>
-          ))}
-
-          <div className="border-t border-white/[0.07] px-4 pb-4 pt-3.5">
-            <div className="mb-3 text-[13px] text-faint">{t('home.soonTitle')}</div>
-            <div className="flex flex-wrap gap-2">
-              {soon.map((c) => (
-                <span key={c} className="inline-flex items-center gap-2 rounded-pill bg-white/[0.05] py-1 pl-1 pr-3 text-[13px] text-dim">
-                  <Flag code={c} size={22} />
-                  {t(`country.${c}` as TKey)}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Section>
-
       {/* ── Отзывы и рейтинг ── */}
       <Section title={t('reviews.section')}>
         <ReviewsSection onAll={() => go('/reviews')} />
@@ -258,12 +219,3 @@ function InfoCard({
   )
 }
 
-/** Статус узла: зелёная точка и задержка с нашего сервера до узла (обновляется раз в минуту). */
-function PingPill({ country }: { country: string }) {
-  const t = useT()
-  const info = useAppStore((s) => s.servers.find((x) => x.country === country))
-  if (!info) return <StatusPill tone="ok">{t('common.available')}</StatusPill>
-  if (!info.online) return <StatusPill tone="bad">{t('common.offline')}</StatusPill>
-  const tone = info.pingMs != null && info.pingMs > 250 ? 'warn' : 'ok'
-  return <StatusPill tone={tone}>{info.pingMs != null ? `${info.pingMs} ${t('common.ms')}` : t('common.available')}</StatusPill>
-}

@@ -68,6 +68,21 @@ export default function App() {
     void bootstrap()
   }, [bootstrap])
 
+  // Экран загрузки (index.html) держим, пока не пришёл профиль, но не дольше 10 с:
+  // если сервер не отвечает, лучше показать приложение с ошибкой и кнопкой «Повторить».
+  const loaded = useAppStore((s) => s.loaded)
+  useEffect(() => {
+    const hide = () => {
+      const el = document.getElementById('splash')
+      if (!el) return
+      el.classList.add('splash--hide')
+      window.setTimeout(() => el.remove(), 400)
+    }
+    if (loaded) return hide()
+    const timer = window.setTimeout(hide, 10_000)
+    return () => window.clearTimeout(timer)
+  }, [loaded])
+
   // Когда первый экран показан и браузер свободен, подгружаем остальные экраны в фоне:
   // переходы остаются мгновенными, но не тормозят запуск.
   useEffect(() => {

@@ -60,7 +60,6 @@ export function registerBot(
   const startKeyboard = (s: AppSettings): InlineKeyboard => [
     [appButton('Открыть LYNK', '🚀', s.buttonEmoji.open, webAppUrl)],
     [appButton('Перенести подписку', '🔁', s.buttonEmoji.transfer, screenUrl('transfer'))],
-    ...(reviews ? [[{ text: '⭐ Оценить LYNK', callback_data: 'rv:open' }]] : []),
   ]
   const SUPPORT_PROMPT = '✍️ Опишите вопрос одним сообщением: что не работает, какое устройство и приложение. Мы ответим здесь.'
 
@@ -304,11 +303,11 @@ export function registerBot(
       allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
       drop_pending_updates: false,
     })
-    // Меню команд: /start и /support (/sub убрана: всё в приложении).
+    // Меню команд: /start и /support (/sub убрана: всё в приложении). «Оценить LYNK» убрана из меню
+    // и стартовых кнопок: оценка в приложении, а набранная вручную /review по-прежнему работает.
     const userCommands = [
       { command: 'start', description: 'Открыть LYNK' },
       { command: 'support', description: 'Написать в поддержку' },
-      ...(reviews ? [{ command: 'review', description: 'Оценить LYNK' }] : []),
     ]
     await tg.call('setMyCommands', { commands: userCommands })
     // Команде показываем /admin в меню команд (только в их личных чатах).

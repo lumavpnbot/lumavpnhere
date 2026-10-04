@@ -60,7 +60,7 @@ export function createAdminFeatures(
   const SECTIONS: Record<string, string> = {
     tr: 'tr', trl: 'tr', trc: 'tr', tra: 'tr', trs: 'tr', trp: 'tr', trpc: 'tr', trx: 'tr',
     ach: 'ach', achc: 'ach', achs: 'ach', acha: 'ach', achr: 'ach', achx: 'ach', achg: 'ach',
-    st: 'st', stn: 'st', stx: 'st', stp: 'st', stpok: 'st', sth: 'st',
+    st: 'st', stn: 'st', stx: 'st', stp: 'st', stpok: 'st', sth: 'st', std: 'st', stdok: 'st',
     ud: 'users', udx: 'users', udh: 'users', ub: 'users', ubg: 'users',
     ...(reviewsAdmin?.sections ?? {}),
   }
@@ -354,7 +354,7 @@ export function createAdminFeatures(
     const kb: InlineKeyboard = [[btn('🔄 Обновить', 'adm:st'), btn('🕓 История', 'adm:sth')], [btn('🟠 Опубликовать проблему', 'adm:stn:minor'), btn('🔴 Крупный сбой', 'adm:stn:major')]]
     for (const i of s.openIncidents) {
       const inc = await prisma.incident.findUnique({ where: { id: BigInt(i.id) } })
-      kb.push([btn(`✅ Закрыть #${i.id}`, `adm:stx:${i.id}`), ...(inc?.notifiedAll ? [] : [btn(`📢 Оповестить всех #${i.id}`, `adm:stp:${i.id}`)])])
+      kb.push([btn(`✅ Закрыть #${i.id}`, `adm:stx:${i.id}`), ...(inc?.notifiedAll ? [] : [btn(`📢 Оповестить всех #${i.id}`, `adm:stp:${i.id}`)]), btn(`🗑 #${i.id}`, `adm:std:${i.id}`)])
     }
     kb.push(back())
     return { text, kb }
@@ -558,10 +558,28 @@ export function createAdminFeatures(
         return show(ctx, await statusView())
       case 'sth': {
         const list = await status.history(20)
+        // Удаление: по кнопке на каждый инцидент, по три в ряд.
+        const del = list.map((i) => btn(`🗑 #${i.id}`, `adm:std:${i.id}`))
         return show(ctx, {
-          text: header('🕓', 'История инцидентов') + (list.map((i) => `${i.status === 'open' ? (i.severity === 'major' ? '🔴' : '🟠') : '⚪️'} #${i.id} ${esc(i.title)}${i.auto ? ' · авто' : ''}\n  ${dt(new Date(i.startedAt))}${i.resolvedAt ? ` — ${dt(new Date(i.resolvedAt))}` : ' — продолжается'}`).join('\n') || '<i>пусто</i>'),
-          kb: [back('adm:st')],
+          text:
+            header('🕓', 'История инцидентов') +
+            (list.map((i) => `${i.status === 'open' ? (i.severity === 'major' ? '🔴' : '🟠') : '⚪️'} #${i.id} ${esc(i.title)}${i.auto ? ' · авто' : ''}\n  ${dt(new Date(i.startedAt))}${i.resolvedAt ? ` — ${dt(new Date(i.resolvedAt))}` : ' — продолжается'}`).join('\n') || '<i>пусто</i>') +
+            (list.length ? '\n\n<i>🗑 удаляет инцидент из статуса и истории насовсем.</i>' : ''),
+          kb: [...Array.from({ length: Math.ceil(del.length / 3) }, (_, r) => del.slice(r * 3, r * 3 + 3)), back('adm:st')],
         })
+      }
+      case 'std': {
+        const inc = await prisma.incident.findUnique({ where: { id: BigInt(b) } })
+        if (!inc) return 'Не найден'
+        return show(ctx, confirmView(`Удалить инцидент #${b} «${esc(inc.title)}»? Он пропадёт со страницы статуса и из истории. Отменить нельзя.`, `adm:stdok:${b}`, 'adm:sth'))
+      }
+      case 'stdok': {
+        const inc = await prisma.incident.findUnique({ where: { id: BigInt(b) } })
+        if (!inc) return 'Уже удалён'
+        await status.remove(inc.id)
+        await staff.audit(ctx.tgId, 'incident_delete', `incident:${b}`, { title: inc.title, status: inc.status })
+        await show(ctx, await statusView())
+        return 'Инцидент удалён'
       }
       case 'stn':
         return void (await ask(ctx, 'st_title', `${b === 'major' ? '🔴 Крупный сбой' : '🟠 Проблема'}. Короткий заголовок, например «Нидерланды: медленная скорость»:`, { severity: b === 'major' ? 'major' : 'minor' }, 'adm:st'))
