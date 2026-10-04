@@ -63,7 +63,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  prices: { start: { month: 80, year: 800 }, pro: { month: 160, year: 1600 } },
+  prices: { start: { month: 50, year: 800 }, pro: { month: 100, year: 1600 } },
   trialDays: 3,
   trialDaysReferral: 4,
   referralPercents: [30, 35, 40, 45],

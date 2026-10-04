@@ -18,8 +18,8 @@ export type DocId = keyof typeof DOCS
 
 /** Цены по умолчанию (ТЗ 4). Актуальные приходят с бэкенда и меняются из админ-меню. */
 export const PRICES_RUB: Record<'start' | 'pro', Record<'month' | 'year', number>> = {
-  start: { month: 80, year: 800 },
-  pro: { month: 160, year: 1600 },
+  start: { month: 50, year: 800 },
+  pro: { month: 100, year: 1600 },
 }
 
 export const PLANS = [

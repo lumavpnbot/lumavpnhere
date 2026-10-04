@@ -45,6 +45,16 @@ const SbpPay = lazy(() => import('@/components/SbpPay'))
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+/** Расчёт цены сервером (POST /payments/quote): тот же, по которому создаётся платёж. */
+interface ServerQuote {
+  basePrice: number
+  discount: number
+  achDiscount: number
+  total: number
+  balanceUsed: number
+  toPay: number
+}
+
 export default function PlansPage() {
   const t = useT()
   const navigate = useNavigate()
@@ -77,13 +87,50 @@ export default function PlansPage() {
     if (!balanceTouched.current) setUseBalance(balance > 0)
   }, [balance])
 
-  const base = prices[planId][period]
-  const discount = promo ? round2((base * promo.percent) / 100) : 0
+  // Цены могли поменяться в админке после открытия приложения: при входе на экран берём свежие.
+  useEffect(() => {
+    if (!apiEnabled) return
+    api.get<{ prices?: typeof prices }>('/subscription/plans').then(
+      (r) => r.prices && useAppStore.setState({ prices: r.prices }),
+      () => undefined,
+    )
+  }, [])
+
+  // Предварительный расчёт на устройстве, чтобы экран не ждал сети.
+  const localBase = prices[planId][period]
+  const localDiscount = promo ? round2((localBase * promo.percent) / 100) : 0
   // Скидка за достижения применяется автоматически к цене после промокода (как на бэкенде).
-  const achDiscount = round2((Math.max(0, base - discount) * rewardPercent) / 100)
-  const total = round2(Math.max(0, base - discount - achDiscount))
-  const fromBalance = method === 'balance' || useBalance ? round2(Math.min(balance, total)) : 0
-  const toPay = round2(total - fromBalance)
+  const localAch = round2((Math.max(0, localBase - localDiscount) * rewardPercent) / 100)
+  const localTotal = round2(Math.max(0, localBase - localDiscount - localAch))
+  const withBalance = method === 'balance' || useBalance
+  const localFromBalance = withBalance ? round2(Math.min(balance, localTotal)) : 0
+
+  // Итог к оплате считает сервер, тем же расчётом, что и при создании платежа: на экране всегда
+  // та сумма, которую спишут (раньше экран мог показывать одну цену, а СБП списывать другую).
+  const quoteKey = `${planId}:${period}:${promo?.code ?? ''}:${withBalance}`
+  const [server, setServer] = useState<{ key: string; q: ServerQuote } | null>(null)
+  useEffect(() => {
+    if (!apiEnabled) return
+    let alive = true
+    const timer = window.setTimeout(() => {
+      api
+        .post<ServerQuote>('/payments/quote', { plan: planId, period, promo: promo?.code, useBalance: withBalance })
+        .then((q) => alive && setServer({ key: quoteKey, q }), () => undefined)
+    }, 250)
+    return () => {
+      alive = false
+      window.clearTimeout(timer)
+    }
+  }, [quoteKey, planId, period, promo?.code, withBalance])
+  const sq = server?.key === quoteKey ? server.q : null
+  const quoteReady = !apiEnabled || sq !== null
+
+  const base = sq?.basePrice ?? localBase
+  const discount = sq?.discount ?? localDiscount
+  const achDiscount = sq?.achDiscount ?? localAch
+  const total = sq?.total ?? localTotal
+  const fromBalance = sq?.balanceUsed ?? localFromBalance
+  const toPay = sq?.toPay ?? round2(localTotal - localFromBalance)
   const notEnough = method === 'balance' && balance < total
 
   const yearSaving = useMemo(() => prices[planId].month * 12 - prices[planId].year, [prices, planId])
@@ -406,8 +453,8 @@ export default function PlansPage() {
         </div>
       </div>
 
-      <button onClick={pay} disabled={busy || notEnough || maintenance} className="btn-glass-strong mt-5 w-full">
-        {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : toPay === 0 ? t('plans.payBalance') : t('plans.pay', { amount: formatRub(toPay) })}
+      <button onClick={pay} disabled={busy || notEnough || maintenance || !quoteReady} className="btn-glass-strong mt-5 w-full">
+        {busy || !quoteReady ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : toPay === 0 ? t('plans.payBalance') : t('plans.pay', { amount: formatRub(toPay) })}
       </button>
       {notEnough && <p className="mt-2.5 text-center text-[12px] text-faint">{t('plans.notEnough')}</p>}
       <p className="mt-3 text-center text-[12px] text-faint">{t('plans.trialNote', trialVars)}</p>
