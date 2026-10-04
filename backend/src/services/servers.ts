@@ -29,6 +29,14 @@ export function entries(env: NodeJS.ProcessEnv): Entry[] {
   } else if (env.H1_PANEL_URL) {
     list = [{ country: env.H1_COUNTRY ?? 'fi', url: env.H1_PANEL_URL }]
   }
+  // Свои серверы с 3x-ui (XUI_PANELS).
+  if (env.XUI_PANELS) {
+    try {
+      list = [...list, ...(JSON.parse(env.XUI_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))]
+    } catch {
+      /* неверный JSON: ошибку покажет createPanelProvider */
+    }
+  }
   return list.filter((e) => !off.has(String(e.country).toLowerCase()))
 }
 

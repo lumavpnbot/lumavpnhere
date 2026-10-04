@@ -3,6 +3,7 @@ import type { PanelProvider } from './types'
 import { createMockPanelProvider } from './mockPanelProvider'
 import { createH1PanelProvider } from './h1PanelProvider'
 import { createMultiPanelProvider } from './multiPanelProvider'
+import { createXuiPanelProvider } from './xuiPanelProvider'
 
 const list = (v?: string) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -26,10 +27,59 @@ interface PanelEnvEntry {
  *
  * PANEL_MODE=mock разработка без сервера.
  */
+interface XuiEnvEntry {
+  country: string
+  url: string
+  token?: string
+  username?: string
+  password?: string
+  /** Названия (remark) или id инбаундов через запятую. */
+  inbounds?: string
+  /** База подписки 3x-ui, например http://1.2.3.4:2096/sub/ */
+  subUrl?: string
+  /** false = проверять сертификат панели (по умолчанию не проверяем: он самоподписанный). */
+  verifyTls?: boolean
+}
+
+/**
+ * Свои серверы с 3x-ui: переменная XUI_PANELS, JSON-список:
+ *   [{"country":"de","url":"https://1.2.3.4:14742/секретный-путь","token":"...","inbounds":"de-reality,de-xhttp","subUrl":"http://1.2.3.4:2096/sub/"}]
+ * Работают вместе с H1_PANELS: все страны склеиваются в одну подписку.
+ */
+function xuiPanels(env: NodeJS.ProcessEnv): PanelProvider[] {
+  if (!env.XUI_PANELS) return []
+  let entries: XuiEnvEntry[]
+  try {
+    entries = JSON.parse(env.XUI_PANELS) as XuiEnvEntry[]
+  } catch {
+    throw new Error('XUI_PANELS: не удалось разобрать JSON')
+  }
+  const off = disabledCountries(env)
+  return entries
+    .filter((e) => !off.has(String(e.country).toLowerCase()))
+    .map((e) => {
+      if (!e.url || !(e.token || (e.username && e.password))) throw new Error(`3x-ui (${e.country}): нужны url и token (или username + password)`)
+      return createXuiPanelProvider({
+        baseUrl: e.url,
+        token: e.token,
+        username: e.username,
+        password: e.password,
+        country: e.country,
+        inbounds: list(e.inbounds),
+        subUrl: e.subUrl,
+        insecure: e.verifyTls !== true,
+      })
+    })
+}
+
 export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
   if (env.PANEL_MODE !== 'h1') return createMockPanelProvider()
+  const xui = xuiPanels(env)
 
   let entries: PanelEnvEntry[]
+  if (!env.H1_PANELS && !env.H1_PANEL_URL && xui.length) {
+    return xui.length === 1 ? xui[0] : createMultiPanelProvider(xui)
+  }
   if (env.H1_PANELS) {
     try {
       entries = JSON.parse(env.H1_PANELS) as PanelEnvEntry[]
@@ -64,7 +114,8 @@ export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
     })
   })
 
-  return panels.length === 1 ? panels[0] : createMultiPanelProvider(panels)
+  const all = [...panels, ...xui]
+  return all.length === 1 ? all[0] : createMultiPanelProvider(all)
 }
 
 export { clientName } from './types'
