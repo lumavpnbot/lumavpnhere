@@ -98,9 +98,15 @@ export default function HomePage() {
               />
             </div>
 
-            <button onClick={() => go('/plans')} className="btn-glass-strong mt-4 w-full">
-              {t('home.extend')}
-            </button>
+            {/* Подключение и продление рядом: подключаются чаще, поэтому эта кнопка главная. */}
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <button onClick={() => go('/connect')} className="btn-glass-strong w-full">
+                {t('home.connect')}
+              </button>
+              <button onClick={() => go('/plans')} className="btn-glass w-full">
+                {t('home.extendShort')}
+              </button>
+            </div>
           </>
         ) : (
           <>
