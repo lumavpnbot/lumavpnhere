@@ -87,7 +87,17 @@ export function registerPaymentRoutes(
   app.post('/payments/invoice', payLimit, async (request, reply) => {
     const body = orderSchema.parse(request.body)
     try {
-      const order = await billing.createOrder({ user: await me(request.tgUser!.tgId), ...body })
+      // Поля передаём явно: раньше шёл ...body, и промокод (promo) не доходил до createOrder,
+      // который ждёт promoCode. Экран показывал цену со скидкой, а в оплату уходила полная.
+      const order = await billing.createOrder({
+        user: await me(request.tgUser!.tgId),
+        plan: body.plan,
+        period: body.period,
+        method: body.method,
+        promoCode: body.promo,
+        useBalance: body.useBalance,
+        autoRenew: body.autoRenew,
+      })
       return { orderId: order.orderId, status: order.status, payload: order.payload, quote: order.quote }
     } catch (err) {
       const r = fail(err)
