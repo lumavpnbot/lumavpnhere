@@ -55,7 +55,7 @@ export function createAdminFeatures(
 ) {
   const { prisma, tg, staff, settings, vpn, transfer, achievements, status } = deps
   const { show, ask, fsm } = api
-  const reviewsAdmin = deps.reviews ? createReviewsAdmin({ prisma, reviews: deps.reviews, staff }, show) : null
+  const reviewsAdmin = deps.reviews ? createReviewsAdmin({ prisma, reviews: deps.reviews, staff, settings: deps.settings }, show) : null
 
   const SECTIONS: Record<string, string> = {
     tr: 'tr', trl: 'tr', trc: 'tr', tra: 'tr', trs: 'tr', trp: 'tr', trpc: 'tr', trx: 'tr',

@@ -42,6 +42,8 @@ interface SummaryResponse {
 }
 
 const DAY = 86_400_000
+/** Пока оценок меньше, вместо рейтинга показываем «Сервис новый»: среднее по паре отзывов ничего не говорит. */
+export const FEW_REVIEWS = 5
 const DEMO: SummaryResponse = {
   summary: { count: 128, withText: 54, average: 4.72, weighted: 4.79, distribution: { '5': 104, '4': 15, '3': 5, '2': 2, '1': 2 } },
   latest: [
@@ -235,6 +237,27 @@ export function SummaryCard({ s }: { s: ReviewSummary }) {
   )
 }
 
+/** Вместо сводки, пока отзывов мало: «Сервис новый, будьте первым, кто оценит». */
+export function EarlyCard({ count, rated }: { count: number; rated: boolean }) {
+  const t = useT()
+  return (
+    <div className="glass glass-hero relative overflow-hidden p-5 text-center">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-white/[0.08] blur-2xl" />
+      <div className="relative flex flex-col items-center">
+        <span className="flex gap-1.5">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <StarShape key={i} size={22} className={rated ? 'text-white' : 'text-white/[0.18]'} />
+          ))}
+        </span>
+        <div className="mt-3 text-[17px] font-semibold">{t('reviews.earlyTitle')}</div>
+        <p className="mt-1 max-w-[290px] text-[13.5px] leading-snug text-dim">
+          {rated ? t('reviews.earlyThanks') : count ? t('reviews.earlyFew') : t('reviews.earlyFirst')}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Шторка: оставить / изменить ─────────────────────────────────────────────
 
 export function ReviewSheet({
@@ -359,7 +382,7 @@ export function ReviewsSection({ onAll }: { onAll: () => void }) {
 
   return (
     <>
-      <SummaryCard s={data.summary} />
+      {data.summary.count < FEW_REVIEWS ? <EarlyCard count={data.summary.count} rated={!!data.mine} /> : <SummaryCard s={data.summary} />}
 
       <button
         onClick={() => {

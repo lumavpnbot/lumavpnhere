@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PageTitle, Section, TopBar } from '@/components/ui'
-import { ReviewCard, ReviewSheet, SummaryCard, useReviews, type PublicReview } from '@/components/Reviews'
+import { EarlyCard, FEW_REVIEWS, ReviewCard, ReviewSheet, SummaryCard, useReviews, type PublicReview } from '@/components/Reviews'
 import { useT } from '@/i18n'
 import { haptic } from '@/lib/telegram'
 import { api, apiEnabled } from '@/lib/api'
@@ -17,6 +18,14 @@ export default function ReviewsPage() {
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [sheet, setSheet] = useState(false)
+  const [params, setParams] = useSearchParams()
+
+  // Кнопка «Оценить» из бота (?screen=review → /reviews?rate=1): сразу открываем выбор звёзд.
+  useEffect(() => {
+    if (!data || params.get('rate') !== '1') return
+    setSheet(true)
+    setParams({}, { replace: true })
+  }, [data, params, setParams])
 
   const load = useCallback(
     async (f: Filter, after: string | null) => {
@@ -50,7 +59,7 @@ export default function ReviewsPage() {
       <TopBar />
       <PageTitle title={t('reviews.title')} subtitle={t('reviews.subtitle')} />
 
-      {data && <SummaryCard s={data.summary} />}
+      {data && (data.summary.count < FEW_REVIEWS ? <EarlyCard count={data.summary.count} rated={!!data.mine} /> : <SummaryCard s={data.summary} />)}
 
       {data && (
         <button

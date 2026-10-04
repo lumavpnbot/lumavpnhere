@@ -21,6 +21,7 @@ import { registerAchievementRoutes } from '@/routes/achievements'
 import { registerStatusRoutes } from '@/routes/status'
 import { registerReviewRoutes } from '@/routes/reviews'
 import { createReviewService } from '@/services/reviews'
+import { createReviewAsk } from '@/services/reviewAsk'
 import { createAchievementService } from '@/services/achievements'
 import { createTransferService } from '@/services/transfer'
 import { createStatusService } from '@/services/status'
@@ -167,6 +168,9 @@ const reviews = createReviewService(prisma, async (review, user, isNew) => {
   ])
 })
 const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
+// Просьба оценить сервис в боте: раз на аккаунт, проверка раз в 10 минут (вкл/выкл в /admin → ⭐ Отзывы).
+const reviewAsk = createReviewAsk({ prisma, tg, settings, reviews, webAppUrl })
+setInterval(() => void reviewAsk.tick().catch((err) => app.log.error({ err }, 'review ask failed')), 10 * 60 * 1000)
 const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements, receipts })
 const admin = createAdmin({
   prisma,

@@ -458,6 +458,10 @@ const ru = {
   'reviews.fText': 'С текстом',
   'reviews.empty': 'Пока нет отзывов с таким фильтром',
   'reviews.loadMore': 'Показать ещё',
+  'reviews.earlyTitle': 'Сервис новый',
+  'reviews.earlyFirst': 'Будьте первым, кто оценит LYNK. Ваш отзыв поможет другим выбрать.',
+  'reviews.earlyFew': 'Будьте одним из первых, кто оценит LYNK. Ваш отзыв поможет другим выбрать.',
+  'reviews.earlyThanks': 'Спасибо за оценку! Отзывов пока немного, скоро здесь появится рейтинг.',
 }
 
 type Key = keyof typeof ru
@@ -911,6 +915,10 @@ const en: Record<Key, string> = {
   'reviews.fText': 'With text',
   'reviews.empty': 'No reviews for this filter yet',
   'reviews.loadMore': 'Show more',
+  'reviews.earlyTitle': 'A new service',
+  'reviews.earlyFirst': 'Be the first to rate LYNK. Your review helps others choose.',
+  'reviews.earlyFew': 'Be one of the first to rate LYNK. Your review helps others choose.',
+  'reviews.earlyThanks': 'Thanks for rating! There are only a few reviews so far, the rating will appear soon.',
 }
 
 const DICTS: Record<Lang, Record<Key, string>> = { ru, en }

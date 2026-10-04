@@ -58,6 +58,8 @@ export interface AppSettings {
   transferMinAccountDays: number
   transferMinDays: number
   transferMaxDays: number
+  /** Просить в боте оценить сервис (через 3 дня после подключения или день после первой оплаты). */
+  reviewAskEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   transferMinAccountDays: 3,
   transferMinDays: 7,
   transferMaxDays: 90,
+  reviewAskEnabled: true,
 }
 
 export const LEVEL_NAMES = ['Базовый', 'Серебро', 'Золото', 'Платина'] as const

@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import type { ReviewService } from '@/services/reviews'
+import type { SettingsService } from '@/services/settings'
 import { PAGE, back, btn, dt, header, pager, who, confirmView, type Ctx, type View } from './adminUi'
 import type { Staff } from './staff'
 import { esc, type InlineKeyboard } from './tg'
@@ -7,12 +8,17 @@ import { esc, type InlineKeyboard } from './tg'
 const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n)
 
 /** Раздел «⭐ Отзывы» в админ-меню: сводка, список, скрыть/вернуть, удалить. */
-export function createReviewsAdmin(deps: { prisma: PrismaClient; reviews: ReviewService; staff: Staff }, show: (ctx: Ctx, view: View) => Promise<void>) {
-  const { prisma, reviews, staff } = deps
+export function createReviewsAdmin(
+  deps: { prisma: PrismaClient; reviews: ReviewService; staff: Staff; settings: SettingsService },
+  show: (ctx: Ctx, view: View) => Promise<void>,
+) {
+  const { prisma, reviews, staff, settings } = deps
 
   async function menu(): Promise<View> {
     const s = await reviews.summary()
     const hidden = await prisma.review.count({ where: { hidden: true } })
+    const askOn = (await settings.get()).reviewAskEnabled
+    const asked = await prisma.user.count({ where: { reviewAskedAt: { not: null } } })
     const bars = ([5, 4, 3, 2, 1] as const)
       .map((n) => {
         const c = s.distribution[n]
@@ -25,10 +31,13 @@ export function createReviewsAdmin(deps: { prisma: PrismaClient; reviews: Review
         header('⭐', 'Отзывы и рейтинг') +
         `Средняя: <b>${s.average.toFixed(2)}</b> · взвешенная: <b>${s.weighted.toFixed(2)}</b>\n` +
         `Оценок: <b>${s.count}</b> · с текстом: ${s.withText} · скрыто: ${hidden}\n\n${bars}\n\n` +
+        `Просьба оценить в боте: <b>${askOn ? '🟢 включена' : '⚪️ выключена'}</b> · уже спросили: ${asked}\n` +
+        `<i>Бот один раз пишет тем, кто подключил устройство 3 дня назад или оплатил вчера и ещё не оценил.</i>\n\n` +
         `<i>Во взвешенной оценке покупатели весят вдвое больше. Один аккаунт, один отзыв.</i>`,
       kb: [
         [btn('Все', 'adm:rvl:all:0'), btn('С текстом', 'adm:rvl:text:0'), btn('Скрытые', 'adm:rvl:hidden:0')],
         [btn('1–2★', 'adm:rvl:low:0'), btn('5★', 'adm:rvl:5:0')],
+        [btn(askOn ? '🔕 Не просить оценку в боте' : '🔔 Просить оценку в боте', 'adm:rvask')],
         back(),
       ],
     }
@@ -69,6 +78,13 @@ export function createReviewsAdmin(deps: { prisma: PrismaClient; reviews: Review
     switch (a) {
       case 'rv':
         return show(ctx, await menu())
+      case 'rvask': {
+        const on = !(await settings.get()).reviewAskEnabled
+        await settings.set('reviewAskEnabled', on)
+        await staff.audit(ctx.tgId, 'review_ask', undefined, { on })
+        await show(ctx, await menu())
+        return on ? 'Бот будет просить оценку' : 'Просьба оценить выключена'
+      }
       case 'rvl':
         return show(ctx, await list(b ?? 'all', Number(c ?? 0)))
       case 'rvc':
@@ -95,7 +111,7 @@ export function createReviewsAdmin(deps: { prisma: PrismaClient; reviews: Review
 
   return {
     homeItem: ['rv', '⭐ Отзывы', 'adm:rv'] as [string, string, string],
-    sections: { rv: 'rv', rvl: 'rv', rvc: 'rv', rvh: 'rv', rvd: 'rv', rvdok: 'rv' } as Record<string, string>,
+    sections: { rv: 'rv', rvask: 'rv', rvl: 'rv', rvc: 'rv', rvh: 'rv', rvd: 'rv', rvdok: 'rv' } as Record<string, string>,
     onCallback,
   }
 }

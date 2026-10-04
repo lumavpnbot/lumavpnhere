@@ -14,8 +14,9 @@ import { useAppStore } from './store/useAppStore'
  * «tgWebAppData=…» за путь: открывался неизвестный экран, таб-бар прятался
  * и появлялась кнопка Back. Сбрасываем hash на главную до старта роутера.
  */
-// Кнопка бота «Перенести подписку» открывает Mini App с ?screen=transfer: стартуем сразу с этого экрана.
-const START_SCREENS: Record<string, string> = { transfer: '/account/transfer' }
+// Кнопки бота открывают Mini App сразу на нужном экране: ?screen=transfer (перенос подписки),
+// ?screen=review (просьба оценить: открывается выбор звёзд).
+const START_SCREENS: Record<string, string> = { transfer: '/account/transfer', review: '/reviews?rate=1' }
 if (!window.location.hash.startsWith('#/')) {
   const start = START_SCREENS[new URLSearchParams(window.location.search).get('screen') ?? ''] ?? '/'
   window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${start}`)

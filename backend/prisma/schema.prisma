@@ -132,6 +132,8 @@ model User {
   // Писал ли пользователь боту: без этого Telegram не даст отправить ему сообщение.
   botStarted    Boolean  @default(false) @map("bot_started")
   lastSeenAt    DateTime? @map("last_seen_at")
+  // Когда бот попросил оценить сервис (один раз на аккаунт), см. services/reviewAsk.ts.
+  reviewAskedAt DateTime? @map("review_asked_at")
   // Панель не приняла выдачу/продление: доступ дотягивает задача vpn.repairPending (и /sub, /me).
   panelPendingAt DateTime? @map("panel_pending_at")
   // Последний удачный список конфигов /sub/:token: отдаём его, если панель не ответила вовремя.
