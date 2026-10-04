@@ -98,7 +98,9 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     const send = () => raw(method, path, body === undefined ? undefined : JSON.stringify(body))
     let r = await send()
     // Сессия истекла: 401 или редирект на страницу входа.
-    if (!cfg.token && (r.status === 401 || r.status === 302 || r.status === 307 || r.text.startsWith('<'))) {
+    // Сессия истекла или токен не принят: 401 / редирект на вход. Если есть логин и пароль, входим по ним.
+    const unauthorized = r.status === 401 || r.status === 302 || r.status === 307 || r.text.trimStart().startsWith('<')
+    if (unauthorized && cfg.username && cfg.password) {
       cookie = null
       await login()
       r = await send()
