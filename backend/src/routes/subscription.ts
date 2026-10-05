@@ -103,6 +103,24 @@ function protoOf(link: string, params: URLSearchParams): string {
   return ({ tcp: 'TCP', raw: 'TCP', xhttp: 'XHTTP', splithttp: 'XHTTP', ws: 'WS', grpc: 'gRPC', httpupgrade: 'HTTPUpgrade', hysteria: 'Hysteria', hysteria2: 'Hysteria' } as Record<string, string>)[type] ?? type.toUpperCase()
 }
 
+/** Страна конфига: по флагу в названии или по адресу сервера. */
+export function linkCountry(link: string): string | null {
+  const [body, fragment = ''] = link.split('#')
+  let name = fragment
+  try {
+    name = decodeURIComponent(fragment)
+  } catch {
+    /* как есть */
+  }
+  let host = ''
+  try {
+    host = new URL(body).hostname
+  } catch {
+    /* vmess и т.п. */
+  }
+  return countryFromFlag(name) ?? countryFromHost(host)
+}
+
 /**
  * Переименование конфигов: «🇫🇮 Финляндия | TCP», «🇫🇮 Финляндия | Hysteria», и сортировка по стране.
  * Конфиги убранных стран (off, DISABLED_COUNTRIES) выбрасываем: панели H1 связаны и могут их подтянуть.
@@ -297,8 +315,15 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // Панели H1 в одном аккаунте связаны: подписка одной уже может содержать
     // другие страны. Убираем повторы по ссылке без названия (#…).
     const seen = new Set<string>()
+    // Страна есть на своём сервере (3x-ui): её старые конфиги из связанных панелей H1 не берём
+    // (так из подписки ушла умершая Германия H1, пришедшая через Финляндию).
+    const ownCountries = new Set(direct.map(linkCountry).filter((c): c is string => !!c))
+    const upstreamLinks = ok.flatMap((r) => decodeList(r.body.toString('utf8'))).filter((l) => {
+      const c = linkCountry(l)
+      return !c || !ownCountries.has(c)
+    })
     let links = renameLinks(
-      [...ok.flatMap((r) => decodeList(r.body.toString('utf8'))), ...direct].filter((l) => {
+      [...upstreamLinks, ...direct].filter((l) => {
         const key = l.split('#')[0]
         if (seen.has(key)) return false
         seen.add(key)
