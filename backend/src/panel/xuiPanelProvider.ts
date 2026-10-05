@@ -54,17 +54,29 @@ const GB = 1024 ** 3
 
 /** Панель ответила, но отказала (success: false): она жива, это не «лежит». */
 export class XuiApiError extends Error {}
+class XuiNotFound extends Error {}
 
 export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
   const base = cfg.baseUrl.replace(/\/+$/, '')
-  let cookie: string | null = null
+  const cookies = new Map<string, string>()
+  let csrf: string | null = null
+  const cookieHeader = () => [...cookies].map(([k, v]) => `${k}=${v}`).join('; ')
+  const keepCookies = (set: string[] | undefined) => {
+    for (const c of set ?? []) {
+      const [pair] = c.split(';')
+      const i = pair.indexOf('=')
+      if (i > 0) cookies.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim())
+    }
+  }
 
   function raw(method: string, path: string, body?: string, contentType = 'application/json'): Promise<{ status: number; headers: http.IncomingHttpHeaders; text: string }> {
     const url = new URL(base + path)
     const lib = url.protocol === 'https:' ? https : http
-    const headers: Record<string, string> = { Accept: 'application/json' }
+    // X-Requested-With: без него 3x-ui v3 на неавторизованный запрос отвечает 404, а не 401.
+    const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
     if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`
-    if (cookie) headers.Cookie = cookie
+    if (cookies.size) headers.Cookie = cookieHeader()
+    if (csrf && method !== 'GET') headers['X-CSRF-Token'] = csrf
     if (body != null) {
       headers['Content-Type'] = contentType
       headers['Content-Length'] = String(Buffer.byteLength(body))
@@ -86,29 +98,54 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     })
   }
 
-  async function login() {
-    if (!cfg.username || !cfg.password) throw new Error(`3x-ui ${cfg.country}: нет токена и логина/пароля`)
-    const form = new URLSearchParams({ username: cfg.username, password: cfg.password }).toString()
-    const r = await raw('POST', '/login', form, 'application/x-www-form-urlencoded')
-    const set = r.headers['set-cookie']
-    const parsed = JSON.parse(r.text || '{}') as { success?: boolean; msg?: string }
-    if (!parsed.success || !set?.length) throw new Error(`3x-ui ${cfg.country}: вход не удался (${parsed.msg ?? r.status})`)
-    cookie = set.map((c) => c.split(';')[0]).join('; ')
+  /** CSRF-токен сессии (3x-ui v3 требует его на вход и на все POST без API-токена). Старые версии: 404, пропускаем. */
+  async function fetchCsrf() {
+    const r = await raw('GET', '/csrf-token')
+    keepCookies(r.headers['set-cookie'])
+    if (r.status !== 200) return
+    try {
+      const j = JSON.parse(r.text) as { obj?: string }
+      if (typeof j.obj === 'string') csrf = j.obj
+    } catch {
+      /* старая версия без CSRF */
+    }
   }
 
+  async function login() {
+    if (!cfg.username || !cfg.password) throw new Error(`3x-ui ${cfg.country}: нет токена и логина/пароля`)
+    cookies.clear()
+    csrf = null
+    await fetchCsrf()
+    const form = new URLSearchParams({ username: cfg.username, password: cfg.password }).toString()
+    const r = await raw('POST', '/login', form, 'application/x-www-form-urlencoded')
+    keepCookies(r.headers['set-cookie'])
+    let parsed: { success?: boolean; msg?: string } = {}
+    try {
+      parsed = JSON.parse(r.text || '{}')
+    } catch {
+      /* HTML вместо JSON */
+    }
+    if (!parsed.success) throw new Error(`3x-ui ${cfg.country}: вход не удался (${parsed.msg ?? r.status})`)
+    // После входа сессия новая: берём её CSRF-токен.
+    await fetchCsrf()
+    loggedIn = true
+  }
+  let loggedIn = false
+
   async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-    if (!cfg.token && !cookie) await login()
+    if (!cfg.token && !loggedIn) await login()
     const send = () => raw(method, path, body === undefined ? undefined : JSON.stringify(body))
     let r = await send()
     // Сессия истекла: 401 или редирект на страницу входа.
     // Сессия истекла или токен не принят: 401 / редирект на вход. Если есть логин и пароль, входим по ним.
-    const unauthorized = r.status === 401 || r.status === 302 || r.status === 307 || r.text.trimStart().startsWith('<')
+    const unauthorized = r.status === 401 || r.status === 403 || r.status === 302 || r.status === 307 || r.text.trimStart().startsWith('<')
     if (unauthorized && cfg.username && cfg.password) {
-      cookie = null
+      loggedIn = false
       await login()
       r = await send()
     }
-    if (r.status === 404) throw new Error(`3x-ui ${cfg.country}: 404 ${path} (проверьте адрес и секретный путь панели)`)
+    if (r.status === 401 || r.status === 403) throw new Error(`3x-ui ${cfg.country}: доступ запрещён (${r.status}): проверьте API-токен или логин/пароль`)
+    if (r.status === 404) throw new XuiNotFound(`3x-ui ${cfg.country}: 404 ${path} (проверьте адрес и секретный путь панели)`)
     let data: { success?: boolean; msg?: string; obj?: T }
     try {
       data = JSON.parse(r.text)
@@ -151,7 +188,30 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     }
   }
 
+  /**
+   * 3x-ui v3 (с разделом «Клиенты»): клиент один на всю панель, API /panel/api/clients/*.
+   * Старые версии: клиенты внутри инбаунда, /panel/api/inbounds/addClient и т.п.
+   */
+  let v3: boolean | null = null
+  async function isV3() {
+    if (v3 != null) return v3
+    try {
+      await api('GET', '/panel/api/clients/traffic/__lynk_probe__')
+      v3 = true
+    } catch (e) {
+      if (e instanceof XuiNotFound) v3 = false
+      else throw e
+    }
+    return v3
+  }
+
   async function traffic(email: string) {
+    if (await isV3()) {
+      return api<XuiTraffic | null>('GET', `/panel/api/clients/traffic/${encodeURIComponent(email)}`).catch((e) => {
+        if (e instanceof XuiApiError) return null
+        throw e
+      })
+    }
     // «Клиента нет» = null. Таймаут и сетевые ошибки пробрасываем: иначе лежащая панель выглядит
     // как «клиента нет», каждый запрос подписки ждёт её таймаут, и Happ обрывает добавление.
     return api<XuiTraffic | null>('GET', `/panel/api/inbounds/getClientTraffics/${encodeURIComponent(email)}`).catch((e) => {
@@ -160,7 +220,35 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     })
   }
 
+  async function upsertClientV3(tgId: number, params: ProvisionParams | null, enable: boolean) {
+    const list = await inbounds()
+    const email = clientName(tgId)
+    const existing = await traffic(email)
+    if (!params && !existing) return
+    const client = {
+      id: uuidFor(tgId),
+      flow: list.some((i) => flowFor(i)) ? 'xtls-rprx-vision' : '',
+      email,
+      limitIp: params?.deviceLimit ?? 0,
+      totalGB: params?.trafficLimitGb ? Math.round(params.trafficLimitGb * GB) : existing?.total ?? 0,
+      expiryTime: params ? params.expiresAt.getTime() : existing?.expiryTime ?? 0,
+      enable,
+      tgId: 0,
+      subId: subIdFor(tgId),
+      reset: 0,
+    }
+    const inboundIds = list.map((i) => i.id)
+    if (existing) {
+      await api('POST', `/panel/api/clients/update/${encodeURIComponent(email)}`, client)
+      // Инбаунд добавили позже: привязываем клиента и к нему (уже привязанные пропускаются).
+      if (params) await api('POST', `/panel/api/clients/${encodeURIComponent(email)}/attach`, { inboundIds }).catch(() => undefined)
+    } else {
+      await api('POST', '/panel/api/clients/add', { client, inboundIds })
+    }
+  }
+
   async function upsertClient(tgId: number, params: ProvisionParams | null, enable: boolean) {
+    if (await isV3()) return upsertClientV3(tgId, params, enable)
     const list = await inbounds()
     const uuid = uuidFor(tgId)
     const subId = subIdFor(tgId)
@@ -176,7 +264,7 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
         totalGB: params?.trafficLimitGb ? Math.round(params.trafficLimitGb * GB) : existing?.total ?? 0,
         expiryTime: params ? params.expiresAt.getTime() : existing?.expiryTime ?? 0,
         enable,
-        tgId: '',
+        tgId: 0,
         subId,
         reset: 0,
       }
@@ -220,6 +308,10 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     },
 
     async remove(tgId) {
+      if (await isV3()) {
+        await api('POST', `/panel/api/clients/del/${encodeURIComponent(clientName(tgId))}`).catch(() => undefined)
+        return
+      }
       const list = await inbounds()
       for (const inb of list) {
         await api('POST', `/panel/api/inbounds/${inb.id}/delClient/${uuidFor(tgId)}`).catch(() => undefined)
@@ -229,7 +321,7 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     async describe() {
       const all = (await api<XuiInbound[]>('GET', '/panel/api/inbounds/list')) ?? []
       return {
-        panel: '3x-ui',
+        panel: (await isV3().catch(() => null)) ? '3x-ui v3' : '3x-ui',
         inbounds: all.map((i) => ({ id: i.id, tag: i.remark, port: i.port, protocol: i.protocol, enable: i.enable })),
         using: await inbounds().then(
           (l) => l.map((i) => i.remark || String(i.id)),
