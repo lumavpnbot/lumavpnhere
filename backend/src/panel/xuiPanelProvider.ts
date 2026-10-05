@@ -278,6 +278,8 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     const t = await traffic(clientName(tgId))
     if (!t) return null
     const subBase = cfg.subUrl ? cfg.subUrl.replace(/\/?$/, '/') : null
+    // v3: ссылки берём прямо из API панели (не зависим от порта и пути сервиса подписок).
+    const links = (await isV3()) ? await linksFor(clientName(tgId)) : null
     return {
       name: clientName(tgId),
       uuid: uuidFor(tgId),
@@ -287,7 +289,25 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
       trafficLimitGb: t.total ? Math.round((t.total / GB) * 100) / 100 : null,
       deviceLimit: null,
       devicesCount: 0,
-      upstreamSubscriptionUrls: subBase ? [`${subBase}${subIdFor(tgId)}`] : [],
+      upstreamSubscriptionUrls: links?.length ? [] : subBase ? [`${subBase}${subIdFor(tgId)}`] : [],
+      links: links ?? [],
+    }
+  }
+
+  const linkCache = new Map<string, { at: number; links: string[] }>()
+  async function linksFor(email: string): Promise<string[] | null> {
+    const hit = linkCache.get(email)
+    if (hit && Date.now() - hit.at < 5 * 60_000) return hit.links
+    try {
+      const raw = (await api<unknown>('GET', `/panel/api/clients/links/${encodeURIComponent(email)}`)) ?? []
+      const links = (Array.isArray(raw) ? raw : []).filter((l): l is string => typeof l === 'string' && /^[a-z0-9]+:\/\//i.test(l))
+      if (links.length) {
+        linkCache.set(email, { at: Date.now(), links })
+        if (linkCache.size > 5000) linkCache.delete(linkCache.keys().next().value!)
+      }
+      return links
+    } catch {
+      return null // запасной путь: ссылка подписки subUrl
     }
   }
 
