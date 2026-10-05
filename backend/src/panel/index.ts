@@ -60,9 +60,10 @@ function xuiPanels(env: NodeJS.ProcessEnv): PanelProvider[] {
     .map((e) => {
       if (!e.url || !(e.token || (e.username && e.password))) throw new Error(`3x-ui (${e.country}): нужны url и token (или username + password)`)
       return createXuiPanelProvider({
-        baseUrl: e.url,
-        token: e.token,
-        username: e.username,
+        baseUrl: e.url.trim(),
+        // Пробелы и переносы строк при копировании с телефона ломают токен (401).
+        token: e.token?.replace(/\s+/g, '') || undefined,
+        username: e.username?.trim(),
         password: e.password,
         country: e.country,
         inbounds: list(e.inbounds),
