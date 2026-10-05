@@ -1,5 +1,6 @@
 import type { PanelClient, PanelProvider } from './types'
 import { H1ApiError } from './h1PanelProvider'
+import { XuiApiError } from './xuiPanelProvider'
 
 /** Через сколько проверяем в фоне, ожила ли панель, которая не ответила (таймаут, сеть, 5xx). */
 const DOWN_MS = 2 * 60_000
@@ -11,9 +12,13 @@ const BACKFILL_MS = 30 * 60_000
 const BEHIND_MS = 24 * 60 * 60_000
 
 class PanelDownError extends Error {}
+class PanelSlowError extends Error {}
+
+/** Дополнительные страны ждём не дольше: главная панель важнее, остальные догонят в фоне. */
+const SECONDARY_WAIT_MS = 4_000
 
 /** Панель «лежит»: таймаут, сетевая ошибка или 5xx. Ответ 4xx значит, что панель жива. */
-const isOutage = (err: unknown) => !(err instanceof H1ApiError) || err.status >= 500
+const isOutage = (err: unknown) => !(err instanceof XuiApiError) && (!(err instanceof H1ApiError) || err.status >= 500)
 
 /**
  * Несколько серверов (стран) как один. Каждая страна у H1 это отдельная
@@ -77,7 +82,20 @@ export function createMultiPanelProvider(panels: PanelProvider[], logFn: (msg: s
   }
 
   async function each<T>(fn: (p: PanelProvider) => Promise<T>, what: string) {
-    const results = await Promise.allSettled(panels.map((_, i) => guarded(i, fn)))
+    const results = await Promise.allSettled(
+      panels.map((_, i) => {
+        const work = guarded(i, fn)
+        if (i === 0) return work
+        // Медленная доп. страна не держит запрос подписки: работа продолжится в фоне.
+        let timer: NodeJS.Timeout | undefined
+        return Promise.race([
+          work.finally(() => clearTimeout(timer)),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new PanelSlowError(`панель ${label(i)} не ответила за ${SECONDARY_WAIT_MS / 1000} с`)), SECONDARY_WAIT_MS)
+          }),
+        ])
+      }),
+    )
     results.forEach((r, i) => {
       if (r.status === 'rejected' && !(r.reason instanceof PanelDownError)) log(`[panel ${label(i)}] ${what}: ${(r.reason as Error)?.message}`)
     })

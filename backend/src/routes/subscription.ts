@@ -38,8 +38,8 @@ const PLAIN_UA = 'v2rayNG/1.9.0'
 // а если панель не успела, отдаём последний удачный список конфигов (user.subCache).
 const SYNC_WAIT_MS = 6_000
 // Сохранённых конфигов ещё нет (только что добавили подписку): ждём панель дольше, чем отдавать ошибку.
-const SYNC_WAIT_FIRST_MS = 12_000
-const UPSTREAM_WAIT_MS = 6_000
+const SYNC_WAIT_FIRST_MS = 9_000
+const UPSTREAM_WAIT_MS = 4_000
 
 /** Результат работы или fallback, если она не успела за ms (сама работа продолжается в фоне). */
 function within<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {

@@ -52,6 +52,9 @@ interface XuiTraffic {
 
 const GB = 1024 ** 3
 
+/** Панель ответила, но отказала (success: false): она жива, это не «лежит». */
+export class XuiApiError extends Error {}
+
 export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
   const base = cfg.baseUrl.replace(/\/+$/, '')
   let cookie: string | null = null
@@ -69,7 +72,7 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     return new Promise((resolve, reject) => {
       const req = lib.request(
         url,
-        { method, headers, rejectUnauthorized: !cfg.insecure, timeout: cfg.timeoutMs ?? 10_000 } as https.RequestOptions,
+        { method, headers, rejectUnauthorized: !cfg.insecure, timeout: cfg.timeoutMs ?? 5_000 } as https.RequestOptions,
         (res) => {
           const chunks: Buffer[] = []
           res.on('data', (c: Buffer) => chunks.push(c))
@@ -112,7 +115,7 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
     } catch {
       throw new Error(`3x-ui ${cfg.country}: неожиданный ответ ${r.status} на ${path}`)
     }
-    if (data.success === false) throw new Error(`3x-ui ${cfg.country}: ${data.msg ?? 'ошибка'} (${path})`)
+    if (data.success === false) throw new XuiApiError(`3x-ui ${cfg.country}: ${data.msg ?? 'ошибка'} (${path})`)
     return data.obj as T
   }
 
@@ -149,7 +152,12 @@ export function createXuiPanelProvider(cfg: XuiConfig): PanelProvider {
   }
 
   async function traffic(email: string) {
-    return api<XuiTraffic | null>('GET', `/panel/api/inbounds/getClientTraffics/${encodeURIComponent(email)}`).catch(() => null)
+    // «Клиента нет» = null. Таймаут и сетевые ошибки пробрасываем: иначе лежащая панель выглядит
+    // как «клиента нет», каждый запрос подписки ждёт её таймаут, и Happ обрывает добавление.
+    return api<XuiTraffic | null>('GET', `/panel/api/inbounds/getClientTraffics/${encodeURIComponent(email)}`).catch((e) => {
+      if (e instanceof XuiApiError) return null
+      throw e
+    })
   }
 
   async function upsertClient(tgId: number, params: ProvisionParams | null, enable: boolean) {
