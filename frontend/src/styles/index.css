@@ -186,6 +186,16 @@ body {
     box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.85);
   }
 
+  /* Нижняя шторка: сплошной фон без размытия (см. Sheet.tsx), отдельный слой для плавного сдвига. */
+  .sheet-panel {
+    background: linear-gradient(180deg, #1c1c21, #111114 60%);
+    box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 -24px 60px -20px rgba(0, 0, 0, 0.9);
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    contain: layout paint;
+  }
+
   .btn-glass,
   .btn-glass-strong {
     position: relative;

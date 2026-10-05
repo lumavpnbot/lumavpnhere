@@ -169,7 +169,7 @@ export default function LoginsPage() {
                   type="email"
                   inputMode="email"
                   autoComplete="email"
-                  autoFocus
+                  data-autofocus
                   placeholder={t('logins.emailPlaceholder')}
                   value={email}
                   onChange={(e) => {
