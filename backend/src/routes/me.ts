@@ -6,7 +6,7 @@ import { rateLimit } from '@/plugins/rateLimit'
 import type { AchievementService } from '@/services/achievements'
 import { LEVEL_NAMES, type SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
-import { LATEST_FIRST, PLAN_LIMITS, type VpnService } from '@/services/vpn'
+import { LATEST_FIRST, type VpnService } from '@/services/vpn'
 import { clientOpenUrls, happOpenUrl, subscriptionUrl } from './subscription'
 
 const TX_KIND: Record<string, string> = { referral: 'referral', purchase: 'purchase', admin: 'bonus', bonus: 'bonus', refund: 'refund' }
@@ -138,7 +138,9 @@ export function registerMeRoutes(
         panelDeadline,
       )
     }
-    const limits = subscription ? PLAN_LIMITS[subscription.plan] : null
+    // Лимиты тарифа вместе с докупленными на месяц ГБ и устройствами.
+    const limits = subscription ? await vpn.limitsFor(user, subscription.plan) : null
+    const addons = active ? (await vpn.activeAddons(user.id)).rows : []
     // Лимит устройств с бонусами за достижения, скидка на следующий платёж, закреплённые бейджи.
     const [deviceLimit, bonusDevices, discount, showcase, badges] = await Promise.all([
       active && subscription ? vpn.deviceLimit(user, subscription.plan) : Promise.resolve(0),
@@ -188,6 +190,8 @@ export function registerMeRoutes(
         autoRenew: subscription.autoRenew,
         trafficUsedGb: client?.trafficUsedGb ?? 0,
         trafficLimitGb: isAdmin ? null : (limits?.trafficGb ?? null),
+        // Докупленное на месяц: что и до какого числа.
+        addons: addons.map((a) => ({ kind: a.kind, amount: a.amount, expiresAt: a.expiresAt })),
         subscriptionUrl: active ? subscriptionUrl(env, user.subToken) : null,
         happUrl: active ? happOpenUrl(env, user.subToken) : null,
         // Страницы «Открыть в Happ / INCY / Hiddify» (экран «Подключение»).

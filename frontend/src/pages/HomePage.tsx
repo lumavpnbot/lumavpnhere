@@ -89,6 +89,7 @@ export default function HomePage() {
                     ? t('home.unlimited')
                     : `${Math.round(subscription.trafficUsedGb)} / ${subscription.trafficLimitGb} GB`
                 }
+                onClick={subscription.trafficLimitGb == null ? undefined : () => go('/plans?extra=traffic')}
               />
               <MiniMetric
                 icon={<DevicesIcon className="h-4 w-4" />}

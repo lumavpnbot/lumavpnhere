@@ -1,8 +1,8 @@
 import type { PaymentMethod, Prisma, PrismaClient, User } from '@prisma/client'
 import type { PanelProvider } from '@/panel'
-import type { BillingService } from '@/services/billing'
+import { productTitle, type BillingService } from '@/services/billing'
 import type { ServerStatusService } from '@/services/servers'
-import { LEVEL_NAMES, type PaidPlan, type Period, type SettingsService } from '@/services/settings'
+import { LEVEL_NAMES, upgradeRate, type PaidPlan, type Period, type SettingsService } from '@/services/settings'
 import { LATEST_FIRST, type VpnService } from '@/services/vpn'
 import { recentErrors, recentSubRequests } from '@/lib/errors'
 import type { AdminApi, AdminFeatures } from './adminFeatures'
@@ -286,7 +286,7 @@ export function createAdmin(deps: {
     ])
     const text =
       header('🕓', 'История пользователя') +
-      `<b>Платежи</b>\n${pays.map((p) => `${dt(p.createdAt)} · ${planName(p.planPurchased)} · ${rub(p.amountRub)} · ${p.method} · ${p.status}`).join('\n') || '<i>нет</i>'}\n\n` +
+      `<b>Платежи</b>\n${pays.map((p) => `${dt(p.createdAt)} · ${p.product === 'plan' ? planName(p.planPurchased) : productTitle(p)} · ${rub(p.amountRub)} · ${p.method} · ${p.status}`).join('\n') || '<i>нет</i>'}\n\n` +
       `<b>Баланс</b>\n${txs.map((t) => `${dt(t.createdAt)} · ${Number(t.amountRub) > 0 ? '+' : ''}${rub(t.amountRub)} · ${t.kind}`).join('\n') || '<i>нет</i>'}\n\n` +
       `<b>Действия админов</b>\n${audit.map((a) => `${dt(a.createdAt)} · ${esc(a.action)} · ${a.adminTgId}`).join('\n') || '<i>нет</i>'}`
     return { text, kb: [back(`adm:u:${id}`)] }
@@ -361,7 +361,7 @@ export function createAdmin(deps: {
     const text =
       header('🧾', `Платёж #${p.id}`, p.orderId) +
       `Пользователь: ${who(p.user)}\n` +
-      `Тариф: <b>${planName(p.planPurchased)}</b>, ${p.periodDays === 365 ? '12 мес' : '1 мес'}\n` +
+      `Покупка: <b>${productTitle(p)}</b>\n` +
       `Способ: <b>${p.method}</b>${p.starsAmount ? ` (${p.starsAmount} ⭐)` : ''}${p.externalId ? ` · id: <code>${esc(p.externalId)}</code>` : ''}\n` +
       `К оплате: <b>${rub(p.amountRub)}</b> · с баланса ${rub(p.balanceUsedRub)} · скидка ${rub(p.discountRub)}${p.promoCode ? ` (${esc(p.promoCode.code)})` : ''}\n` +
       `Статус: <b>${p.status}</b>${stuck ? ' · ⚠️ доступ не выдан' : ''}\nСоздан: ${dt(p.createdAt)} · оплачен: ${dt(p.paidAt)}\n` +
@@ -569,6 +569,8 @@ export function createAdmin(deps: {
       `Trial: <b>${s.trialDays}</b> дн · по рефералке <b>${s.trialDaysReferral}</b> дн\n` +
       `Реф. проценты: <b>${s.referralPercents.join(' / ')}%</b>\n` +
       `Курс Stars: <b>1 ⭐ = ${s.starsRubRate} ₽</b>\n` +
+      `Докупка: трафик ${s.trafficPacks.map((p) => `${p.gb} ГБ = ${rub(p.price)}`).join(', ') || 'нет'} · устройство ${rub(s.devicePrice)} / мес\n` +
+      `Переход Старт → Премиум: <b>${rub(upgradeRate(s))}</b> за 30 дней${s.upgradePer30d == null ? ' (авто)' : ''}\n` +
       `Промокод для новых: <b>${s.defaultPromo ? esc(s.defaultPromo) : 'нет'}</b>\n` +
       `Приветствие: <b>${s.welcomeMedia ? { photo: 'фото', video: 'видео', animation: 'GIF' }[s.welcomeMedia.type] + ' с подписью' : 'текст'}</b>\n` +
       `Премиум-эмодзи кнопок: <b>${[s.buttonEmoji.open && 'Открыть', s.buttonEmoji.transfer && 'Перенести'].filter(Boolean).join(', ') || 'нет'}</b>\n` +
@@ -581,11 +583,33 @@ export function createAdmin(deps: {
         [btn('Премиум / мес', 'adm:set:price:pro:month'), btn('Премиум / год', 'adm:set:price:pro:year')],
         [btn('Trial', 'adm:set:trial'), btn('Trial реф.', 'adm:set:trialref'), btn('% уровней', 'adm:set:pct')],
         [btn('Курс Stars', 'adm:set:stars'), btn('Промокод новым', 'adm:set:promo')],
+        [btn('💎 Докупка и переход на Премиум', 'adm:set:extras')],
         [btn('Приветствие бота', 'adm:set:welcome'), btn('Эмодзи кнопок', 'adm:set:btnemoji')],
         [btn('🧾 Чеки «Мой налог»', 'adm:set:npd')],
         [btn(s.maintenance ? '🟢 Выключить техрежим' : '🔴 Включить техрежим', 'adm:set:maint')],
         [btn('👮 Роли', 'adm:roles')],
         back(),
+      ],
+    }
+  }
+
+  async function extrasView(): Promise<View> {
+    const s = await settings.get()
+    const auto = Math.max(0, s.prices.pro.month - s.prices.start.month)
+    return {
+      text:
+        header('💎', 'Докупка и переход') +
+        `<b>Трафик на 30 дней</b> (только «Старт», у «Премиум» безлимит)\n${s.trafficPacks.map((p) => `• +${p.gb} ГБ — ${rub(p.price)}`).join('\n') || '<i>пакетов нет, докупка выключена</i>'}\n\n` +
+        `<b>Устройство на 30 дней</b>: ${rub(s.devicePrice)} за штуку, не больше <b>${s.maxExtraDevices}</b> сверх тарифа\n\n` +
+        `<b>Переход «Старт» → «Премиум»</b>: ${rub(upgradeRate(s))} за каждые 30 оставшихся дней` +
+        (s.upgradePer30d == null ? ` (авто: разница месячных цен ${rub(s.prices.pro.month)} − ${rub(s.prices.start.month)})` : ` (вручную, авто было бы ${rub(auto)})`) +
+        `\n<i>Доплата считается по оставшимся дням: осталось 15 дней — половина суммы. Её же добавляем, когда человек со «Старт» покупает «Премиум» на месяц.</i>\n\n` +
+        `<i>«Старт» нельзя купить, пока действует «Премиум».</i>`,
+      kb: [
+        [btn('📦 Пакеты трафика', 'adm:set:packs')],
+        [btn('📱 Цена устройства', 'adm:set:devprice'), btn('Макс. устройств', 'adm:set:devmax')],
+        [btn('⬆️ Доплата за переход', 'adm:set:upgrade')],
+        back('adm:set'),
       ],
     }
   }
@@ -788,7 +812,7 @@ export function createAdmin(deps: {
         if (c === 'cancel') return show(ctx, confirm('Подписка будет завершена сейчас, а неиспользованные дни последней оплаты вернутся на баланс.', `adm:u:${b}:cancelok`, `adm:u:${b}`))
         if (c === 'cancelok') {
           const cur = await vpn.current(u.id)
-          const last = await prisma.payment.findFirst({ where: { userId: id, status: 'paid' }, orderBy: { paidAt: 'desc' } })
+          const last = await prisma.payment.findFirst({ where: { userId: id, status: 'paid', product: 'plan' }, orderBy: { paidAt: 'desc' } })
           let refund = 0
           if (cur && last) {
             const total = Number(last.amountRub) + Number(last.balanceUsedRub)
@@ -1066,6 +1090,11 @@ export function createAdmin(deps: {
             'adm:set',
           ))
         }
+        if (b === 'extras') return show(ctx, await extrasView())
+        if (b === 'packs') return void (await ask(ctx, 'set_packs', 'Пакеты трафика через пробел в виде ГБ=цена. Например: <code>50=25 150=60</code>\n«-» уберёт докупку трафика.', {}, 'adm:set:extras'))
+        if (b === 'devprice') return void (await ask(ctx, 'set_devprice', 'Цена одного дополнительного устройства на 30 дней, в рублях:', {}, 'adm:set:extras'))
+        if (b === 'devmax') return void (await ask(ctx, 'set_devmax', 'Сколько устройств можно докупить сверх тарифа (0 — выключить докупку):', {}, 'adm:set:extras'))
+        if (b === 'upgrade') return void (await ask(ctx, 'set_upgrade', 'Доплата за переход «Старт» → «Премиум» за каждые 30 оставшихся дней, в рублях.\n«авто» — разница месячных цен тарифов.', {}, 'adm:set:extras'))
         if (b === 'npd') return show(ctx, npdView())
         if (b === 'npdsms') {
           if (!deps.receipts) return 'Чеки не настроены'
@@ -1359,6 +1388,47 @@ export function createAdmin(deps: {
         await staff.audit(ctx.tgId, 'set_price', `${plan}:${period}`, { value: Math.round(n) })
         done()
         await show({ ...ctx, messageId: undefined }, await settingsView())
+        return true
+      }
+      case 'set_packs': {
+        if (v === '-') {
+          await settings.set('trafficPacks', [])
+        } else {
+          const packs = v.split(/[\s,;]+/).filter(Boolean).map((part) => {
+            const [gb, price] = part.split(/[=:]/).map((x) => Number(x.replace(',', '.')))
+            return { gb, price }
+          })
+          if (!packs.length || packs.some((p) => !Number.isInteger(p.gb) || p.gb <= 0 || !Number.isFinite(p.price) || p.price <= 0)) {
+            await retry('Формат: 50=25 150=60 (ГБ — целое число, цена больше нуля)')
+            return true
+          }
+          await settings.set('trafficPacks', packs.sort((a, b) => a.gb - b.gb).map((p) => ({ gb: p.gb, price: Math.round(p.price) })))
+        }
+        await staff.audit(ctx.tgId, 'set_traffic_packs', undefined, { value: v })
+        done()
+        await show({ ...ctx, messageId: undefined }, await extrasView())
+        return true
+      }
+      case 'set_devprice':
+      case 'set_devmax': {
+        const max = state.kind === 'set_devmax'
+        if (!Number.isInteger(n) || n < 0 || n > (max ? 50 : 100_000) || (!max && n === 0)) {
+          await retry(max ? 'Целое число от 0 до 50' : 'Нужна положительная цена')
+          return true
+        }
+        await settings.set(max ? 'maxExtraDevices' : 'devicePrice', n)
+        await staff.audit(ctx.tgId, state.kind, undefined, { value: n })
+        done()
+        await show({ ...ctx, messageId: undefined }, await extrasView())
+        return true
+      }
+      case 'set_upgrade': {
+        const autoMode = /^(авто|auto|-)$/i.test(v.trim())
+        if (!autoMode && (!Number.isFinite(n) || n < 0)) { await retry('Число рублей (0 — бесплатно) или «авто»'); return true }
+        await settings.set('upgradePer30d', autoMode ? null : Math.round(n))
+        await staff.audit(ctx.tgId, 'set_upgrade_price', undefined, { value: autoMode ? 'auto' : Math.round(n) })
+        done()
+        await show({ ...ctx, messageId: undefined }, await extrasView())
         return true
       }
       case 'set_trial':

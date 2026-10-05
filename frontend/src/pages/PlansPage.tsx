@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AnimatePresence, m } from 'framer-motion'
 import Sheet from '@/components/Sheet'
+import { ExtrasSection, useOffers, type Product } from '@/components/Extras'
 import { Toggle } from '@/components/controls'
 import { PageTitle, Section, TopBar } from '@/components/ui'
-import { CardIcon, CheckIcon, ChevronDown, GiftIcon, QrIcon, SparkIcon, WalletIcon } from '@/components/icons'
+import { CardIcon, CheckIcon, ChevronDown, GiftIcon, LockIcon, QrIcon, SparkIcon, WalletIcon } from '@/components/icons'
 import { PLANS, type PlanId } from '@/config'
 import { useT, type TKey } from '@/i18n'
 import { formatRub } from '@/lib/format'
@@ -47,6 +48,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 /** Расчёт цены сервером (POST /payments/quote): тот же, по которому создаётся платёж. */
 interface ServerQuote {
+  title?: string
+  upgrade?: { days: number; price: number } | null
   basePrice: number
   discount: number
   achDiscount: number
@@ -66,8 +69,16 @@ export default function PlansPage() {
   const refresh = useAppStore((s) => s.refresh)
   const rewardPercent = useAppStore((s) => s.profile.rewardDiscount ?? 0)
 
+  const [params] = useSearchParams()
+  const { offers, reload: reloadOffers } = useOffers()
   const [period, setPeriod] = useState<Period>('month')
   const [planId, setPlanId] = useState<PlanId>('start')
+  // Что покупаем: тариф или «улучшение» (переход на Премиум, +ГБ, +устройства). ?extra=… с других экранов.
+  const initialExtra = params.get('extra')
+  const [product, setProduct] = useState<Product>('plan')
+  const [gb, setGb] = useState<number | null>(null)
+  const [count, setCount] = useState(1)
+  const extrasRef = useRef<HTMLDivElement | null>(null)
   const [method, setMethod] = useState<Method>('stars')
   const [useBalance, setUseBalance] = useState(balance > 0)
   const [autoRenew, setAutoRenew] = useState(false)
@@ -87,6 +98,31 @@ export default function PlansPage() {
     if (!balanceTouched.current) setUseBalance(balance > 0)
   }, [balance])
 
+  // Премиум действует: Старт купить нельзя (он заменил бы Премиум), выбираем Премиум.
+  useEffect(() => {
+    if (offers?.startBlocked) setPlanId('pro')
+  }, [offers?.startBlocked])
+
+  // Переход с других экранов (?extra=upgrade|traffic|device): сразу выбираем и показываем.
+  const extraApplied = useRef(false)
+  useEffect(() => {
+    if (!offers || extraApplied.current || !initialExtra) return
+    extraApplied.current = true
+    if (initialExtra === 'upgrade' && offers.upgrade.available) setProduct('upgrade')
+    else if (initialExtra === 'traffic' && offers.traffic.available && offers.traffic.packs[0]) {
+      setProduct('traffic')
+      setGb(offers.traffic.packs[0].gb)
+    } else if (initialExtra === 'device' && offers.devices.available) setProduct('device')
+    else return
+    window.setTimeout(() => extrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250)
+  }, [offers, initialExtra])
+
+  const pick = (p: Product, opts?: { gb?: number; count?: number }) => {
+    setProduct(p)
+    if (opts?.gb != null) setGb(opts.gb)
+    if (opts?.count != null) setCount(opts.count)
+  }
+
   // Цены могли поменяться в админке после открытия приложения: при входе на экран берём свежие.
   useEffect(() => {
     if (!apiEnabled) return
@@ -97,38 +133,56 @@ export default function PlansPage() {
   }, [])
 
   // Предварительный расчёт на устройстве, чтобы экран не ждал сети.
-  const localBase = prices[planId][period]
-  const localDiscount = promo ? round2((localBase * promo.percent) / 100) : 0
+  const isPlan = product === 'plan'
+  const localUpgrade = (isPlan && planId === 'pro') || product === 'upgrade' ? (offers?.upgrade.available ? (offers.upgrade.price ?? 0) : 0) : 0
+  const localBase =
+    product === 'plan'
+      ? prices[planId][period]
+      : product === 'traffic'
+        ? (offers?.traffic.packs.find((p) => p.gb === gb)?.price ?? 0)
+        : product === 'device'
+          ? (offers?.devices.price ?? 0) * count
+          : 0
+  const localDiscount = isPlan && promo ? round2((localBase * promo.percent) / 100) : 0
   // Скидка за достижения применяется автоматически к цене после промокода (как на бэкенде).
-  const localAch = round2((Math.max(0, localBase - localDiscount) * rewardPercent) / 100)
-  const localTotal = round2(Math.max(0, localBase - localDiscount - localAch))
+  const localAch = isPlan ? round2((Math.max(0, localBase - localDiscount) * rewardPercent) / 100) : 0
+  const localTotal = round2(Math.max(0, localBase - localDiscount - localAch) + localUpgrade)
   const withBalance = method === 'balance' || useBalance
   const localFromBalance = withBalance ? round2(Math.min(balance, localTotal)) : 0
 
   // Итог к оплате считает сервер, тем же расчётом, что и при создании платежа: на экране всегда
   // та сумма, которую спишут (раньше экран мог показывать одну цену, а СБП списывать другую).
-  const quoteKey = `${planId}:${period}:${promo?.code ?? ''}:${withBalance}`
+  const body = { product, plan: planId, period, gb: gb ?? undefined, count, promo: isPlan ? promo?.code : undefined }
+  const quoteKey = `${product}:${planId}:${period}:${gb}:${count}:${promo?.code ?? ''}:${withBalance}`
   const [server, setServer] = useState<{ key: string; q: ServerQuote } | null>(null)
+  const [quoteError, setQuoteError] = useState<{ key: string; msg: string } | null>(null)
   useEffect(() => {
     if (!apiEnabled) return
     let alive = true
     const timer = window.setTimeout(() => {
       api
-        .post<ServerQuote>('/payments/quote', { plan: planId, period, promo: promo?.code, useBalance: withBalance })
-        .then((q) => alive && setServer({ key: quoteKey, q }), () => undefined)
+        .post<ServerQuote>('/payments/quote', { ...body, useBalance: withBalance })
+        .then(
+          (q) => alive && setServer({ key: quoteKey, q }),
+          // Покупка недоступна (например, «Старт» при Премиуме): показываем причину, а не вечную загрузку.
+          (err) => alive && setQuoteError({ key: quoteKey, msg: err instanceof Error ? err.message : String(err) }),
+        )
     }, 250)
     return () => {
       alive = false
       window.clearTimeout(timer)
     }
-  }, [quoteKey, planId, period, promo?.code, withBalance])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey])
   const sq = server?.key === quoteKey ? server.q : null
-  const quoteReady = !apiEnabled || sq !== null
+  const blockedMsg = quoteError?.key === quoteKey && !sq ? quoteError.msg : null
+  const quoteReady = !apiEnabled || sq !== null || blockedMsg !== null
 
   const base = sq?.basePrice ?? localBase
   const discount = sq?.discount ?? localDiscount
   const achDiscount = sq?.achDiscount ?? localAch
   const total = sq?.total ?? localTotal
+  const upgradeLine = sq ? (sq.upgrade ?? null) : localUpgrade > 0 ? { days: offers?.upgrade.days ?? 0, price: localUpgrade } : null
   const fromBalance = sq?.balanceUsed ?? localFromBalance
   const toPay = sq?.toPay ?? round2(localTotal - localFromBalance)
   const notEnough = method === 'balance' && balance < total
@@ -178,6 +232,7 @@ export default function PlansPage() {
         if (r.status === 'paid') {
           window.clearInterval(poll.current!)
           await refresh()
+          reloadOffers()
           haptic('success')
           setResult({ kind: 'success' })
           return
@@ -208,15 +263,14 @@ export default function PlansPage() {
     setBusy(true)
     try {
       const order = await api.post<OrderResponse>('/payments/invoice', {
-        plan: planId,
-        period,
+        ...body,
         method,
-        promo: promo?.code,
         useBalance: method !== 'balance' && useBalance,
-        autoRenew,
+        autoRenew: isPlan && autoRenew,
       })
       if (order.status === 'paid') {
         await refresh()
+        reloadOffers()
         haptic('success')
         setResult({ kind: 'success' })
       } else if (method === 'stars' && order.payload) {
@@ -272,24 +326,38 @@ export default function PlansPage() {
       {/* Тарифы */}
       <div className="mt-4 space-y-3">
         {PLANS.map((plan) => {
-          const selected = plan.id === planId
+          const selected = isPlan && plan.id === planId
+          const blocked = plan.id === 'start' && !!offers?.startBlocked
           const p = prices[plan.id][period]
           return (
             <button
               key={plan.id}
               onClick={() => {
+                if (blocked) {
+                  haptic('error')
+                  notify(t('extras.startBlocked'))
+                  return
+                }
                 haptic('select')
                 setPlanId(plan.id)
+                setProduct('plan')
               }}
-              className={`glass press w-full overflow-hidden p-5 text-left transition-opacity ${selected ? 'glass-hero' : 'opacity-80'}`}
+              className={`glass press w-full overflow-hidden p-5 text-left transition-opacity ${selected ? 'glass-hero' : blocked ? 'opacity-45' : 'opacity-80'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[20px] font-semibold">{t(plan.nameKey)}</span>
-                    <span className="rounded-pill bg-white/[0.09] px-2 py-0.5 text-[11px] font-medium text-dim">
-                      {plan.id === 'start' ? t('plans.badgeStart') : t('plans.badgePro')}
-                    </span>
+                    {blocked ? (
+                      <span className="inline-flex items-center gap-1 rounded-pill bg-white/[0.09] px-2 py-0.5 text-[11px] font-medium text-dim">
+                        <LockIcon className="h-3 w-3" />
+                        {t('extras.startLocked')}
+                      </span>
+                    ) : (
+                      <span className="rounded-pill bg-white/[0.09] px-2 py-0.5 text-[11px] font-medium text-dim">
+                        {offers?.plan === plan.id ? t('extras.current') : plan.id === 'start' ? t('plans.badgeStart') : t('plans.badgePro')}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-3 flex items-baseline gap-1.5">
                     <span className="text-[30px] font-bold leading-none tabular-nums tracking-[-0.03em]">{formatRub(p)}</span>
@@ -322,8 +390,21 @@ export default function PlansPage() {
       {period === 'year' && yearSaving > 0 && (
         <p className="mt-2.5 px-1 text-[12px] text-faint">{t('plans.yearSaving', { amount: formatRub(yearSaving) })}</p>
       )}
+      {isPlan && planId === 'pro' && offers?.upgrade.available && (
+        <p className="mt-2.5 px-1 text-[12px] leading-snug text-faint">{t('extras.proOverStart', { days: offers.upgrade.days ?? 0 })}</p>
+      )}
 
-      {/* Промокод */}
+      {/* Улучшить подписку: переход на Премиум, +ГБ, +устройства */}
+      {offers && (offers.upgrade.available || offers.traffic.available || offers.devices.available) && (
+        <div ref={extrasRef}>
+          <Section title={t('extras.title')}>
+            <ExtrasSection offers={offers} product={product} gb={gb} count={count} onPick={pick} />
+          </Section>
+        </div>
+      )}
+
+      {/* Промокод (только на тариф) */}
+      {isPlan && (
       <Section>
         <div className="glass overflow-hidden">
           <button
@@ -372,6 +453,7 @@ export default function PlansPage() {
           </AnimatePresence>
         </div>
       </Section>
+      )}
 
       {/* Способ оплаты */}
       <Section title={t('plans.method')}>
@@ -432,19 +514,24 @@ export default function PlansPage() {
             />
           </div>
         )}
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        {isPlan && <div className="flex items-center gap-3 px-4 py-3.5">
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-medium">{t('plans.autoRenew')}</span>
             <span className="block text-[13px] text-faint">{t('plans.autoRenewHint')}</span>
           </span>
           <Toggle checked={autoRenew} onChange={setAutoRenew} />
-        </div>
+        </div>}
       </div>
 
       {/* Итог */}
       <div className="glass mt-3 space-y-2 px-5 py-4 text-[14px]">
-        <Line label={`${t(PLANS.find((p) => p.id === planId)!.nameKey)}, ${period === 'month' ? t('plans.oneMonth') : t('plans.twelveMonths')}`} value={formatRub(base)} />
-        {discount > 0 && <Line label={t('plans.discount', { code: promo!.code })} value={formatRub(-discount)} accent />}
+        {isPlan ? (
+          <Line label={`${t(PLANS.find((p) => p.id === planId)!.nameKey)}, ${period === 'month' ? t('plans.oneMonth') : t('plans.twelveMonths')}`} value={formatRub(base)} />
+        ) : product !== 'upgrade' ? (
+          <Line label={sq?.title ?? (product === 'traffic' ? t('extras.trafficLine', { gb: gb ?? 0 }) : t('extras.deviceLine', { n: count }))} value={formatRub(base)} />
+        ) : null}
+        {upgradeLine && <Line label={t('extras.upgradeLine', { days: upgradeLine.days })} value={formatRub(upgradeLine.price)} />}
+        {discount > 0 && promo && <Line label={t('plans.discount', { code: promo.code })} value={formatRub(-discount)} accent />}
         {achDiscount > 0 && <Line label={t('plans.achDiscount', { percent: rewardPercent })} value={formatRub(-achDiscount)} accent />}
         {fromBalance > 0 && <Line label={t('plans.fromBalance')} value={formatRub(-fromBalance)} accent />}
         <div className="flex items-baseline justify-between border-t border-white/[0.07] pt-3">
@@ -453,7 +540,8 @@ export default function PlansPage() {
         </div>
       </div>
 
-      <button onClick={pay} disabled={busy || notEnough || maintenance || !quoteReady} className="btn-glass-strong mt-5 w-full">
+      {blockedMsg && <p className="mt-4 px-1 text-center text-[13px] leading-snug text-bad">{blockedMsg}</p>}
+      <button onClick={pay} disabled={busy || notEnough || maintenance || !quoteReady || !!blockedMsg} className="btn-glass-strong mt-5 w-full">
         {busy || !quoteReady ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : toPay === 0 ? t('plans.payBalance') : t('plans.pay', { amount: formatRub(toPay) })}
       </button>
       {notEnough && <p className="mt-2.5 text-center text-[12px] text-faint">{t('plans.notEnough')}</p>}
@@ -470,8 +558,8 @@ export default function PlansPage() {
             >
               <CheckIcon className="h-8 w-8" strokeWidth={2.6} />
             </m.span>
-            <div className="mt-5 text-[22px] font-semibold">{t('plans.successTitle')}</div>
-            <p className="mt-1.5 max-w-[280px] text-[14px] text-dim">{t('plans.successText')}</p>
+            <div className="mt-5 text-[22px] font-semibold">{isPlan ? t('plans.successTitle') : product === 'upgrade' ? t('extras.upgradeDone') : t('extras.extraDone')}</div>
+            <p className="mt-1.5 max-w-[280px] text-[14px] text-dim">{isPlan ? t('plans.successText') : t('extras.extraDoneText')}</p>
             <button
               onClick={() => {
                 setResult(null)

@@ -5,12 +5,16 @@ import type { createPaymentRegistry } from '@/payments/registry'
 import type { ProviderTxDetails } from '@/payments/types'
 import { NSPK_LINK, bankDeeplinks, createSbpBanks, isBankPackage, isBankSchema } from '@/payments/sbpBanks'
 import { recordError } from '@/lib/errors'
-import { BillingError, type BillingService } from '@/services/billing'
+import { BillingError, productTitle, type BillingService, type Item } from '@/services/billing'
 import { rateLimit } from '@/plugins/rateLimit'
 
 const orderSchema = z.object({
-  plan: z.enum(['start', 'pro']),
-  period: z.enum(['month', 'year']),
+  // product: что покупают. Без него — тариф (старые версии Mini App).
+  product: z.enum(['plan', 'upgrade', 'traffic', 'device']).default('plan'),
+  plan: z.enum(['start', 'pro']).default('start'),
+  period: z.enum(['month', 'year']).default('month'),
+  gb: z.number().int().positive().max(100_000).optional(),
+  count: z.number().int().positive().max(50).optional(),
   // platega_sbp: старое имя Platega из закэшированной версии Mini App.
   method: z.enum(['stars', 'crypto_usdt', 'platega', 'platega_sbp', 'yookassa_sbp', 'balance']).transform((m) => (m === 'platega_sbp' ? 'platega' : m)),
   promo: z.string().max(40).optional(),
@@ -19,6 +23,15 @@ const orderSchema = z.object({
 })
 
 const quoteSchema = orderSchema.omit({ method: true, autoRenew: true })
+
+const itemOf = (b: z.infer<typeof quoteSchema>): Item =>
+  b.product === 'upgrade'
+    ? { kind: 'upgrade' }
+    : b.product === 'traffic'
+      ? { kind: 'traffic', gb: b.gb ?? 0 }
+      : b.product === 'device'
+        ? { kind: 'device', count: b.count ?? 1 }
+        : { kind: 'plan', plan: b.plan, period: b.period }
 
 export function registerPaymentRoutes(
   app: FastifyInstance,
@@ -62,11 +75,14 @@ export function registerPaymentRoutes(
     methods: [...payments.listEnabled().map((p) => p.id), 'balance'],
   }))
 
+  /** Что можно докупить сейчас (переход на Премиум, ГБ, устройства) и почём. */
+  app.get('/payments/offers', auth, async (request) => billing.offers(await me(request.tgUser!.tgId)))
+
   /** Расчёт цены с промокодом и балансом (без создания платежа). */
   app.post('/payments/quote', auth, async (request, reply) => {
     const body = quoteSchema.parse(request.body)
     try {
-      return await billing.quote(await me(request.tgUser!.tgId), body.plan, body.period, body.promo, body.useBalance)
+      return await billing.quoteItem(await me(request.tgUser!.tgId), itemOf(body), body.promo, body.useBalance)
     } catch (err) {
       const r = fail(err)
       return reply.code(r.status).send(r.body)
@@ -91,8 +107,7 @@ export function registerPaymentRoutes(
       // который ждёт promoCode. Экран показывал цену со скидкой, а в оплату уходила полная.
       const order = await billing.createOrder({
         user: await me(request.tgUser!.tgId),
-        plan: body.plan,
-        period: body.period,
+        item: itemOf(body),
         method: body.method,
         promoCode: body.promo,
         useBalance: body.useBalance,
@@ -199,6 +214,9 @@ p{color:#a1a1aa}
         id: p.id.toString(),
         plan: p.planPurchased,
         periodDays: p.periodDays,
+        product: p.product,
+        addonAmount: p.addonAmount,
+        title: productTitle(p),
         method: p.method,
         amount: Number(p.amountRub) + Number(p.balanceUsedRub),
         status: p.status,

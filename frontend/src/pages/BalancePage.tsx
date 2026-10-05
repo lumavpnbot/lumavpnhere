@@ -17,6 +17,9 @@ interface PaymentRow {
   amount: number
   status: 'paid' | 'refunded'
   at: string
+  /** plan | upgrade | traffic | device; title — название покупки с бэкенда. */
+  product?: string
+  title?: string
 }
 
 const METHOD_LABEL: Record<string, string> = { stars: 'Telegram Stars', crypto_usdt: 'USDT', crypto_ton: 'TON', balance: 'LYNK', yookassa_card: 'Карта', yookassa_sbp: 'СБП', platega: 'Platega', platega_sbp: 'Platega' }
@@ -151,7 +154,7 @@ export default function BalancePage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[15px] font-medium">
-                    {planName(p.plan)}, {p.periodDays >= 365 ? t('plans.twelveMonths') : t('plans.oneMonth')}
+                    {p.product && p.product !== 'plan' && p.title ? p.title : `${planName(p.plan)}, ${p.periodDays >= 365 ? t('plans.twelveMonths') : t('plans.oneMonth')}`}
                   </div>
                   <div className="text-[13px] text-faint">
                     {formatDate(p.at, lang)} · {METHOD_LABEL[p.method] ?? p.method}

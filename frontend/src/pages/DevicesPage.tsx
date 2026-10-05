@@ -73,6 +73,17 @@ export default function DevicesPage() {
         {t('devices.add')}
       </button>
       {full && <p className="mt-3 text-center text-[12px] text-faint">{t('devices.full')}</p>}
+      {limit > 0 && limit < 99 && (
+        <button
+          onClick={() => {
+            haptic('light')
+            navigate('/plans?extra=device')
+          }}
+          className="btn-glass mt-3 w-full"
+        >
+          {t('extras.buyDevice')}
+        </button>
+      )}
     </>
   )
 }

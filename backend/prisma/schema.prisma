@@ -156,6 +156,7 @@ model User {
   achievements UserAchievement[]
   rewards      UserReward[]
   review       Review?
+  addons       Addon[]
 
   @@map("users")
 }
@@ -198,6 +199,10 @@ model Payment {
   starsAmount  Int?          @map("stars_amount")
   externalId   String?       @map("external_id")
   autoRenew    Boolean       @default(false) @map("auto_renew")
+  // Что куплено: plan (тариф), upgrade (Старт → Премиум с доплатой), traffic (+ГБ на месяц), device (+устройства на месяц).
+  product      String        @default("plan")
+  // Для traffic: сколько ГБ, для device: сколько устройств.
+  addonAmount  Int?          @map("addon_amount")
   // Чек самозанятого в «Мой налог» (services/npdReceipts.ts): номер, публичная ссылка, аннулирование.
   receiptUuid       String?   @map("receipt_uuid")
   receiptUrl        String?   @map("receipt_url")
@@ -587,4 +592,23 @@ model Review {
 
   @@index([hidden, updatedAt])
   @@map("reviews")
+}
+
+// Докупленные на месяц гигабайты и устройства (Payment.product = traffic | device).
+model Addon {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @map("user_id")
+  kind      String // traffic | device
+  amount    Int // ГБ или устройства
+  paymentId BigInt?   @unique @map("payment_id")
+  expiresAt DateTime  @map("expires_at")
+  // Когда после окончания срока лимиты на панели пересчитали.
+  lapsedAt  DateTime? @map("lapsed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("addons")
 }

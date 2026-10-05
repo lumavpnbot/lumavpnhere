@@ -4,7 +4,7 @@ import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
 import { disabledCountries } from '@/lib/countries'
 import { recordError, recordSubRequest, type SubRequest } from '@/lib/errors'
-import { PLAN_LIMITS, type VpnService } from '@/services/vpn'
+import type { VpnService } from '@/services/vpn'
 
 const BRAND = 'LYNK'
 const GB = 1024 ** 3
@@ -360,7 +360,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // Срок и лимит трафика берём из нашей БД: так клиент (Happ) всегда показывает
     // актуальную дату после продления, даже если панель отдала старые данные.
     const up = parseUserInfo(ok[0]?.headers.get('subscription-userinfo') ?? null)
-    const limitGb = isOwner ? null : PLAN_LIMITS[sub.plan].trafficGb
+    const limitGb = isOwner ? null : (await vpn.limitsFor(user, sub.plan)).trafficGb
     const upload = up.upload ?? 0
     const download = up.download ?? Math.round((client?.trafficUsedGb ?? 0) * GB)
     reply.header(

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import type { Payment, PaymentMethod, PrismaClient } from '@prisma/client'
 import { recordError } from '@/lib/errors'
+import { productTitle } from './billing'
 import type { SettingsService } from './settings'
 
 /**
@@ -63,8 +64,10 @@ interface AuthResponse {
 export const mskTime = (d: Date) => `${new Date(d.getTime() + 3 * 3600_000).toISOString().slice(0, 19)}+03:00`
 
 /** Название услуги в чеке; номер платежа делает его уникальным (по нему ищем уже выданный чек). */
-export const serviceName = (p: Pick<Payment, 'id' | 'planPurchased' | 'periodDays'>) =>
-  `Подписка LYNK «${p.planPurchased === 'pro' ? 'Премиум' : 'Старт'}» на ${p.periodDays >= 365 ? '12 месяцев' : '1 месяц'}, заказ ${p.id}`
+export const serviceName = (p: Pick<Payment, 'id' | 'planPurchased' | 'periodDays' | 'product' | 'addonAmount'>) =>
+  p.product && p.product !== 'plan'
+    ? `LYNK: ${productTitle(p)}, заказ ${p.id}`
+    : `Подписка LYNK «${p.planPurchased === 'pro' ? 'Премиум' : 'Старт'}» на ${p.periodDays >= 365 ? '12 месяцев' : '1 месяц'}, заказ ${p.id}`
 
 /** Телефон для «Мой налог»: 79001234567. Принимает +7 900 123-45-67, 8 900…, 900…; иначе null. */
 export function normalizePhone(raw: string): string | null {

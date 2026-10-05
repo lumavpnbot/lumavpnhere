@@ -20,6 +20,8 @@ export interface Subscription {
   /** То же для каждого клиента: /open/happ|incy|hiddify/<токен>. */
   openUrls?: Partial<Record<ClientId, string | null>> | null
   autoRenew?: boolean
+  /** Докупленные на месяц ГБ и устройства. */
+  addons?: { kind: 'traffic' | 'device'; amount: number; expiresAt: string }[]
 }
 
 export interface Device {

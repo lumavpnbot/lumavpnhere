@@ -21,6 +21,12 @@ export interface RewardSpec {
   forever?: boolean
 }
 
+/** Пакет трафика «на месяц»: сколько ГБ и за сколько рублей. */
+export interface TrafficPack {
+  gb: number
+  price: number
+}
+
 /** Всё, что команда может менять из админ-меню в боте, без деплоя. */
 export interface AppSettings {
   prices: Record<PaidPlan, Record<Period, number>>
@@ -60,6 +66,13 @@ export interface AppSettings {
   transferMaxDays: number
   /** Просить в боте оценить сервис (через 3 дня после подключения или день после первой оплаты). */
   reviewAskEnabled: boolean
+  /** Докупка трафика на 30 дней (только тарифы с лимитом ГБ, то есть Старт). */
+  trafficPacks: TrafficPack[]
+  /** Докупка устройства: цена одного устройства на 30 дней и сколько можно докупить сверх тарифа. */
+  devicePrice: number
+  maxExtraDevices: number
+  /** Доплата за переход Старт → Премиум за каждые 30 оставшихся дней. null = разница месячных цен. */
+  upgradePer30d: number | null
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -90,6 +103,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   transferMinDays: 7,
   transferMaxDays: 90,
   reviewAskEnabled: true,
+  trafficPacks: [
+    { gb: 50, price: 25 },
+    { gb: 150, price: 60 },
+  ],
+  devicePrice: 20,
+  maxExtraDevices: 5,
+  upgradePer30d: null,
 }
 
 export const LEVEL_NAMES = ['Базовый', 'Серебро', 'Золото', 'Платина'] as const
@@ -118,6 +138,9 @@ export function createSettingsService(prisma: PrismaClient) {
 }
 
 export type SettingsService = ReturnType<typeof createSettingsService>
+
+/** Доплата за 30 дней при переходе Старт → Премиум (из настроек или разница месячных цен). */
+export const upgradeRate = (s: AppSettings) => s.upgradePer30d ?? Math.max(0, s.prices.pro.month - s.prices.start.month)
 
 /** Индекс уровня по числу активных рефералов. */
 export function levelFor(activeReferrals: number, s: AppSettings): number {

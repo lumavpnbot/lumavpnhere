@@ -39,12 +39,22 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
     return r._sum.value ?? 0
   }
 
-  /** Лимиты для панели: команде проекта без ограничений, остальным тариф + бонусные устройства. */
+  /** Докупленные на месяц ГБ и устройства, которые действуют сейчас. */
+  async function activeAddons(userId: bigint) {
+    const rows = await prisma.addon.findMany({ where: { userId, expiresAt: { gt: new Date() } }, orderBy: { expiresAt: 'asc' } })
+    const sum = (kind: string) => rows.filter((r) => r.kind === kind).reduce((a, r) => a + r.amount, 0)
+    return { rows, trafficGb: sum('traffic'), devices: sum('device') }
+  }
+
+  /** Лимиты для панели: команде проекта без ограничений, остальным тариф + бонусные устройства + докупленное. */
   async function limitsFor(user: User, plan: SubscriptionPlan) {
     if (isOwner(Number(user.tgId))) return { trafficGb: null, devices: null }
     const base = PLAN_LIMITS[plan]
-    const bonus = base.devices == null ? 0 : await bonusDevices(user.id)
-    return { trafficGb: base.trafficGb, devices: base.devices == null ? null : base.devices + bonus }
+    const [bonus, extra] = await Promise.all([base.devices == null ? 0 : bonusDevices(user.id), activeAddons(user.id)])
+    return {
+      trafficGb: base.trafficGb == null ? null : base.trafficGb + extra.trafficGb,
+      devices: base.devices == null ? null : base.devices + bonus + extra.devices,
+    }
   }
 
   async function provision(user: User, plan: SubscriptionPlan, expiresAt: Date) {
@@ -152,8 +162,30 @@ export function createVpnService(prisma: PrismaClient, panel: PanelProvider, isO
     return prisma.subscription.update({ where: { id: cur.id }, data: { plan } })
   }
 
+  /**
+   * Докупка на 30 дней (по оплате). Идемпотентно по paymentId: повтор выдачи не добавит второй раз.
+   * Лимиты на панели пересчитываем сразу.
+   */
+  async function addAddon(user: User, kind: 'traffic' | 'device', amount: number, paymentId: bigint | null, days = 30) {
+    const data = { userId: user.id, kind, amount, paymentId, expiresAt: new Date(Date.now() + days * DAY) }
+    if (paymentId) await prisma.addon.upsert({ where: { paymentId }, create: data, update: {} })
+    else await prisma.addon.create({ data })
+    await refreshLimits(user)
+  }
+
   return {
     activate,
+    addAddon,
+    activeAddons,
+    limitsFor,
+    /** Срок докупленного вышел: уменьшаем лимиты на панели до тарифных. */
+    async expireAddons() {
+      const due = await prisma.addon.findMany({ where: { expiresAt: { lte: new Date() }, lapsedAt: null }, include: { user: true }, take: 200 })
+      const users = new Map(due.map((a) => [a.userId, a.user]))
+      for (const user of users.values()) await refreshLimits(user).catch((err) => recordError('addon lapse', err))
+      if (due.length) await prisma.addon.updateMany({ where: { id: { in: due.map((a) => a.id) } }, data: { lapsedAt: new Date() } })
+      return due.length
+    },
     ensureAdmin,
     grant,
     current,

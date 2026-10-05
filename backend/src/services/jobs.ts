@@ -122,6 +122,7 @@ export function createJobs(deps: {
       })
     const every10 = async () => {
       await step('expire', () => vpn.expireOverdue())
+      await step('addons', () => vpn.expireAddons())
       await step('holds', () => billing.releaseHolds())
       await step('autorenew', () => billing.autoRenewFromBalance())
       await step('activations', () => billing.retryFailedActivations())
