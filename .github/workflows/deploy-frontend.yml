@@ -36,8 +36,9 @@ jobs:
       - run: npm install
       - run: npm run build
         env:
-          # Адрес бэкенда на Railway. Пусто = демо-режим.
-          VITE_API_URL: https://lynk-vpn-backend-production.up.railway.app
+          # Адрес бэкенда. Переменная репозитория API_URL (свой домен с прокси, infra/sub-proxy:
+          # открывается без VPN), иначе Railway. Пусто = демо-режим.
+          VITE_API_URL: ${{ vars.API_URL || 'https://lynk-vpn-backend-production.up.railway.app' }}
           VITE_BOT_USERNAME: lynkorobot
 
       - uses: actions/upload-pages-artifact@v3

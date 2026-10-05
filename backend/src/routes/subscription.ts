@@ -326,6 +326,11 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
 
     const upstreamAnnounce = ok[0]?.headers.get('announce')
     if (upstreamAnnounce) reply.header('announce', upstreamAnnounce)
+    // Подписка добавлена по старому адресу (работает только с VPN у части операторов): просим
+    // добавить её заново из приложения, там уже новая ссылка (SUB_URL).
+    if (viaOldAddress(env, request.headers, request.hostname)) {
+      announce('Обновите ссылку подписки: удалите эту подписку и добавьте заново из приложения LYNK. Новая ссылка работает и без VPN.')
+    }
 
     // Срок и лимит трафика берём из нашей БД: так клиент (Happ) всегда показывает
     // актуальную дату после продления, даже если панель отдала старые данные.
@@ -431,14 +436,38 @@ function fallback(){var r=document.createRange();r.selectNodeContents(document.g
 </script></body></html>`
 }
 
+/**
+ * Адрес для ссылок подписки и страниц «Открыть в …»: SUB_URL, иначе PUBLIC_URL.
+ * *.up.railway.app у части провайдеров и мобильных операторов в России не открывается
+ * (ошибка TLS), и подписка без VPN не добавлялась и не обновлялась. SUB_URL: свой домен
+ * с прокси на бэкенд (infra/sub-proxy), который открывается без VPN.
+ */
+export function subBase(env: NodeJS.ProcessEnv) {
+  return (env.SUB_URL || env.PUBLIC_URL || '').replace(/\/+$/, '')
+}
+
 export function subscriptionUrl(env: NodeJS.ProcessEnv, subToken: string) {
-  const base = (env.PUBLIC_URL ?? '').replace(/\/+$/, '')
+  const base = subBase(env)
   return base ? `${base}/sub/${subToken}` : null
 }
 
 export function clientOpenUrl(env: NodeJS.ProcessEnv, app: ClientAppId, subToken: string) {
-  const base = (env.PUBLIC_URL ?? '').replace(/\/+$/, '')
+  const base = subBase(env)
   return base ? `${base}/open/${app}/${subToken}` : null
+}
+
+/** Запрос пришёл по старому адресу (Railway), хотя есть SUB_URL: клиенту стоит добавить подписку заново. */
+function viaOldAddress(env: NodeJS.ProcessEnv, headers: Record<string, string | string[] | undefined>, hostname: string) {
+  if (!env.SUB_URL) return false
+  let subHost = ''
+  try {
+    subHost = new URL(env.SUB_URL).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  // Прокси (infra/sub-proxy) передаёт исходный домен в X-Lynk-Host.
+  const via = String(headers['x-lynk-host'] ?? '').split(':')[0].toLowerCase()
+  return via !== subHost && hostname.toLowerCase() !== subHost
 }
 
 export const happOpenUrl = (env: NodeJS.ProcessEnv, subToken: string) => clientOpenUrl(env, 'happ', subToken)

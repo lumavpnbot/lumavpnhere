@@ -1,0 +1,18 @@
+# Прокси подписки и API LYNK на своём домене (см. README.md рядом).
+# Запуск:  cp .env.example .env  →  вписать домен  →  docker compose up -d
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

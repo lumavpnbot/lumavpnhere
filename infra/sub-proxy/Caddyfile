@@ -1,0 +1,11 @@
+# Прокси LYNK: свой домен → бэкенд на Railway. Нужен, потому что *.up.railway.app у части
+# провайдеров и мобильных операторов в России не открывается (ошибка TLS): без VPN подписка
+# не добавлялась и не обновлялась. Caddy сам выпускает сертификат Let's Encrypt для домена.
+{$SUB_DOMAIN} {
+	encode gzip
+	reverse_proxy {$UPSTREAM} {
+		# Railway узнаёт сервис по Host, а бэкенду передаём, через какой домен пришли.
+		header_up Host {upstream_hostport}
+		header_up X-Lynk-Host {host}
+	}
+}
