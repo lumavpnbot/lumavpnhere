@@ -1,4 +1,4 @@
-import { disabledCountries } from '@/lib/countries'
+import { disabledCountries, h1DisabledCountries } from '@/lib/countries'
 import type { PanelProvider } from './types'
 import { createMockPanelProvider } from './mockPanelProvider'
 import { createH1PanelProvider } from './h1PanelProvider'
@@ -98,8 +98,8 @@ export function createPanelProvider(env: NodeJS.ProcessEnv): PanelProvider {
     ]
   }
 
-  // Панели убранных стран (DISABLED_COUNTRIES, по умолчанию США) не используем.
-  const off = disabledCountries(env)
+  // Панели H1 убранных стран (DISABLED_COUNTRIES, по умолчанию США) не используем.
+  const off = h1DisabledCountries(env)
   const enabled = entries.filter((e) => !off.has(String(e.country).toLowerCase()))
   if (enabled.length) entries = enabled
 

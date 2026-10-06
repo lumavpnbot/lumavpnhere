@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
-import { disabledCountries } from '@/lib/countries'
+import { disabledCountries, h1DisabledCountries } from '@/lib/countries'
 import { recordError, recordSubRequest, type SubRequest } from '@/lib/errors'
 import type { VpnService } from '@/services/vpn'
 
@@ -318,9 +318,11 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // Страна есть на своём сервере (3x-ui): её старые конфиги из связанных панелей H1 не берём
     // (так из подписки ушла умершая Германия H1, пришедшая через Финляндию).
     const ownCountries = new Set(direct.map(linkCountry).filter((c): c is string => !!c))
+    // Убранные страны H1 (США) не берём из подписок H1, даже когда есть свой сервер этой страны.
+    const h1Off = h1DisabledCountries(env)
     const upstreamLinks = ok.flatMap((r) => decodeList(r.body.toString('utf8'))).filter((l) => {
       const c = linkCountry(l)
-      return !c || !ownCountries.has(c)
+      return !c || (!ownCountries.has(c) && !h1Off.has(c))
     })
     let links = renameLinks(
       [...upstreamLinks, ...direct].filter((l) => {
