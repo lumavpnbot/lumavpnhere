@@ -43,7 +43,7 @@ export type PlanId = (typeof PLANS)[number]['id']
 
 export const REFERRAL = { percent: 30, holdDays: 7 }
 
-export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'gb' | 'tr' | 'kz' | 'jp'
+export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'gb' | 'tr' | 'kz' | 'jp' | 'us'
 
 /*
  * Все страны, которые показываем. Какие из них реально работают, приходит
