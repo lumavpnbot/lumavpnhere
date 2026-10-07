@@ -187,6 +187,7 @@ const ru = {
   'country.tr': 'Турция',
   'country.kz': 'Казахстан',
   'country.jp': 'Япония',
+  'country.us': 'США',
   'city.ams': 'Амстердам',
   'common.offline': 'Недоступен',
   'common.ms': 'мс',
@@ -340,6 +341,7 @@ const ru = {
   'status.row': 'Статус сервиса',
   'status.rowHint': 'Работает ли сервис прямо сейчас',
   'status.noData': 'нет данных',
+  'status.newNode': 'Новый сервер',
   'status.publicPage': 'Открыть публичную страницу',
 
   // ── ТЗ v6.3 · Перенос подписок ──
@@ -687,6 +689,7 @@ const en: Record<Key, string> = {
   'country.tr': 'Turkey',
   'country.kz': 'Kazakhstan',
   'country.jp': 'Japan',
+  'country.us': 'United States',
   'city.ams': 'Amsterdam',
   'common.offline': 'Offline',
   'common.ms': 'ms',
@@ -839,6 +842,7 @@ const en: Record<Key, string> = {
   'status.row': 'Service status',
   'status.rowHint': 'Is the service working right now',
   'status.noData': 'no data',
+  'status.newNode': 'New server',
   'status.publicPage': 'Open the public page',
 
   'transfer.title': 'Transfer subscription',
