@@ -111,6 +111,11 @@ const settings = createSettingsService(prisma)
 await prisma.setting
   .deleteMany({ where: { key: { in: ['trialDays', 'trialDaysReferral'] }, updatedAt: { lt: new Date('2026-10-02T13:00:00Z') } } })
   .catch((err) => app.log.error({ err }, 'trial settings reset failed'))
+// Разовое сообщение владельцам (ADMIN_TELEGRAM_IDS). Отметка в settings: после перезапуска не повторяется.
+void prisma.setting
+  .create({ data: { key: 'notice:owners-vk-2026-10-07', value: true } })
+  .then(() => staff.notifyStaff('Нет доступа к Telegram. Напишите мне во ВКонтакте: https://vk.ru/mikumouse123', 'owner'))
+  .catch(() => undefined)
 const payments = createPaymentRegistry({
   TELEGRAM_BOT_TOKEN: botToken,
   TELEGRAM_API_URL: telegramApiBase(env),
