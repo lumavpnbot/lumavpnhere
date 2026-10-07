@@ -60,6 +60,19 @@ function FlagSvg({ code }: { code: FlagCode }) {
           <rect y="11.5" width="30" height="7" fill="#002F6C" />
         </svg>
       )
+    case 'us':
+      return (
+        <svg viewBox="0 0 30 30" className="block h-full w-full">
+          <rect width="30" height="30" fill="#FFFFFF" />
+          {[0, 1, 2, 3].map((i) => (
+            <rect key={i} y={i * 8.5 - 0.5 + (i === 0 ? 0.5 : 0)} width="30" height="4.3" fill="#B22234" />
+          ))}
+          <rect width="14" height="16.5" fill="#3C3B6E" />
+          <g fill="#FFFFFF">
+            {[3.5, 7, 10.5].flatMap((x) => [4, 8.5, 13].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="0.9" />))}
+          </g>
+        </svg>
+      )
     case 'jp':
       return (
         <svg viewBox="0 0 30 30" className="block h-full w-full">
