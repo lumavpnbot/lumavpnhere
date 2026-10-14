@@ -5,7 +5,7 @@ export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'lynkorobot'
 
 export const LINKS = {
   support: 'https://t.me/lynkvpnsupportbot',
-  channel: 'https://t.me/lumaVPN_service',
+  channel: 'https://t.me/lynkproject',
 }
 
 /** Документы лежат рядом с Mini App (frontend/public/*.html). */
