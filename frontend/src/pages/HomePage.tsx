@@ -129,7 +129,9 @@ export default function HomePage() {
           <span className="text-[26px] leading-none">🎃</span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] font-semibold">{t('hw.banner')}</span>
-            <span className="block truncate text-[12px] text-dim">{t('hw.bannerHint', { n: halloween.tickets })}</span>
+            <span className="block truncate text-[12px] text-dim">
+              {halloween.phase === 'before' ? t('hw.bannerSoon') : t('hw.bannerHint', { n: halloween.tickets })}
+            </span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
         </button>

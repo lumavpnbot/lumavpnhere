@@ -222,7 +222,9 @@ export function createHalloweenService(deps: {
     }
     const no = (reason: string) => ({ ...base, available: false, reason })
     if (!c.enabled || !c.wheel.enabled) return no('off')
-    if (phaseOf(c) !== 'live') return no('closed')
+    const p = phaseOf(c)
+    // До старта и после закрытия приёма причины разные: в приложении это разные подписи.
+    if (p !== 'live') return no(p === 'before' ? 'before' : 'closed')
 
     const sub = await prisma.subscription.findFirst({
       where: { userId: user.id, status: 'active', expiresAt: { gt: now } },
