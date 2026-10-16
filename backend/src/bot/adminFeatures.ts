@@ -2,12 +2,13 @@ import type { Prisma, PrismaClient, TransferRequest, TransferStatus, User } from
 import { xlsx } from '@/lib/xlsx'
 import { ACHIEVEMENTS, ACH_BY_CODE, RARITY_NAMES, rewardLabel, type AchievementService } from '@/services/achievements'
 import type { RewardSpec, SettingsService } from '@/services/settings'
+import type { HalloweenService } from '@/services/halloween'
 import type { StatusService } from '@/services/status'
 import { REJECT_REASONS, parseTransferCode, transferCode, type TransferCheck, type TransferService } from '@/services/transfer'
 import type { VpnService } from '@/services/vpn'
 import type { ReviewService } from '@/services/reviews'
 import { createReviewsAdmin } from './adminReviews'
-import { DAY, PAGE, back, btn, csv, day, dt, header, pager, parseMsk, who, confirmView, type Ctx, type Fsm, type View } from './adminUi'
+import { DAY, PAGE, back, btn, csv, day, dt, header, num, pager, parseMsk, who, confirmView, type Ctx, type Fsm, type View } from './adminUi'
 import type { Staff, StaffRole } from './staff'
 import { esc, type InlineKeyboard, type Telegram } from './tg'
 
@@ -47,13 +48,14 @@ export function createAdminFeatures(
     transfer: TransferService
     achievements: AchievementService
     status: StatusService
+    halloween: HalloweenService
     sendBroadcast: (id: bigint) => Promise<void>
     statusUrl: string | null
     reviews?: ReviewService
   },
   api: AdminApi,
 ) {
-  const { prisma, tg, staff, settings, vpn, transfer, achievements, status } = deps
+  const { prisma, tg, staff, settings, vpn, transfer, achievements, status, halloween } = deps
   const { show, ask, fsm } = api
   const reviewsAdmin = deps.reviews ? createReviewsAdmin({ prisma, reviews: deps.reviews, staff, settings: deps.settings }, show) : null
 
@@ -61,6 +63,7 @@ export function createAdminFeatures(
     tr: 'tr', trl: 'tr', trc: 'tr', tra: 'tr', trs: 'tr', trp: 'tr', trpc: 'tr', trx: 'tr',
     ach: 'ach', achc: 'ach', achs: 'ach', acha: 'ach', achr: 'ach', achx: 'ach', achg: 'ach',
     st: 'st', stn: 'st', stx: 'st', stp: 'st', stpok: 'st', sth: 'st', std: 'st', stdok: 'st',
+    hw: 'hw', hwu: 'hw', hww: 'hw', hwc: 'hw', hwd: 'hw', hwx: 'hw',
     ud: 'users', udx: 'users', udh: 'users', ub: 'users', ubg: 'users',
     ...(reviewsAdmin?.sections ?? {}),
   }
@@ -340,6 +343,153 @@ export function createAdminFeatures(
     return { text, kb }
   }
 
+  // ── Хэллоуин-розыгрыш ─────────────────────────────────────────────────────
+
+  const PHASE_NAMES: Record<string, string> = {
+    off: '⚪️ выключено',
+    before: '🕓 до старта',
+    live: '🟢 идёт приём билетов',
+    closed: '🔒 приём закрыт',
+    published: '🏁 результаты опубликованы',
+  }
+
+  async function halloweenMenu(): Promise<View> {
+    const d = await halloween.dashboard()
+    const c = d.config
+    const text =
+      header('🎃', 'Хэллоуин-розыгрыш', `${PHASE_NAMES[d.phase]} · ${day(new Date(c.startAt))} — ${day(new Date(c.ticketsUntil))}`) +
+      `<b>Билетов в пуле:</b> ${num(d.pool)}\n` +
+      `<b>Участников:</b> ${num(d.participants)}\n` +
+      `За присоединившихся: <b>${num(d.join)}</b> · за оплативших: <b>${num(d.paid)}</b>\n` +
+      `С колеса: <b>${num(d.wheel)}</b> · вручную: <b>${num(d.admin)}</b> · аннулировано: <b>${num(d.revoked)}</b>\n` +
+      `<b>Спинов:</b> ${num(d.spins)} · средний результат: <b>${d.avgSpin.toFixed(2)}</b> билета\n` +
+      (d.draw ? `\n<b>Розыгрыш:</b> ${dt(d.draw.createdAt)}, победителей ${d.draw.winners.length}${d.draw.publishedAt ? ' · опубликован' : ' · не опубликован'}` : '')
+    return {
+      text,
+      kb: [
+        [btn('🏆 Топ-10', 'adm:hw:top'), btn('🔎 Поиск участника', 'adm:hw:search')],
+        [btn('🎡 Колесо', 'adm:hww'), btn('🎁 Розыгрыш', 'adm:hwd')],
+        [btn('🚩 Аномалии', 'adm:hw:anom'), btn('📄 Билеты CSV', 'adm:hwx:tickets'), btn('📗 XLSX', 'adm:hwx:tickets:xlsx')],
+        [btn('🗓 Даты', 'adm:hwc'), btn(c.enabled ? '⏸ Выключить событие' : '▶️ Включить событие', 'adm:hw:toggle')],
+        back(),
+      ],
+    }
+  }
+
+  async function halloweenTop(): Promise<View> {
+    const rows = await halloween.topUsers(10)
+    return {
+      text:
+        header('🏆', 'Топ-10 по билетам') +
+        (rows.map((r, i) => `${i + 1}. ${who(r.user)} · <b>${r.tickets}</b>`).join('\n') || '<i>билетов пока нет</i>'),
+      kb: [...rows.map((r) => [btn(`🎟 ${r.user.username ? '@' + r.user.username : r.user.tgId} · ${r.tickets}`, `adm:hwu:${r.user.id}`)]), back('adm:hw')],
+    }
+  }
+
+  async function halloweenUser(userId: bigint, role: StaffRole): Promise<View> {
+    const u = await prisma.user.findUnique({ where: { id: userId } })
+    if (!u) return { text: 'Пользователь не найден', kb: [back('adm:hw')] }
+    const [total, rows, spins, status] = await Promise.all([
+      halloween.ticketsOf(userId),
+      halloween.history(userId, 10),
+      halloween.wheelHistory(userId, 5),
+      halloween.wheelStatus(u),
+    ])
+    const text =
+      header('🎃', `Билеты ${u.username ? '@' + esc(u.username) : u.tgId}`, `всего ${total}`) +
+      `${rows.map((r) => `${dt(new Date(r.at))} · ${r.title}${r.friend ? ` (@${esc(r.friend)})` : ''} → ${r.amount ? `+${r.amount}` : 'пусто'}${r.revoked ? ' · аннулирован' : ''}${r.holdUntil ? ' · холд' : ''}`).join('\n') || '<i>билетов нет</i>'}\n\n` +
+      `<b>Спины:</b> ${spins.map((s) => `${dt(new Date(s.at))} → ${s.tickets || 'пусто'}`).join('\n') || 'нет'}\n` +
+      `<b>Колесо сейчас:</b> ${status.available ? 'доступно' : `недоступно (${status.reason})`}`
+    const kb: InlineKeyboard = []
+    if (role !== 'support') {
+      kb.push([btn('➕ Начислить билеты', `adm:hwu:${userId}:grant`), btn('🚫 Аннулировать все', `adm:hwu:${userId}:revoke`)])
+      kb.push([btn('🔄 Сбросить лимит спина', `adm:hwu:${userId}:spin`)])
+    }
+    kb.push([btn('‹ К пользователю', `adm:u:${userId}`), btn('‹ Хэллоуин', 'adm:hw')])
+    return { text, kb }
+  }
+
+  async function halloweenWheel(): Promise<View> {
+    const c = await halloween.config()
+    const w = c.wheel
+    const sum = w.sectors.reduce((a, s) => a + s.chance, 0)
+    const avg = w.sectors.reduce((a, s) => a + (s.chance / (sum || 1)) * s.tickets, 0)
+    return {
+      text:
+        header('🎡', 'Колесо фортуны', w.enabled ? 'включено' : 'выключено') +
+        `${w.sectors.map((s) => `${s.tickets ? `+${s.tickets} ${s.tickets === 1 ? 'билет' : 'билета'}` : 'Пусто'} · <b>${s.chance}%</b>`).join('\n')}\n` +
+        `Сумма шансов: <b>${sum}%</b> · ожидание <b>${avg.toFixed(2)}</b> билета за спин\n\n` +
+        `Спинов в сутки: <b>${w.spinsPerDay}</b>\nМин. остаток подписки: <b>${w.minSubDays} дн</b>\nПервый спин через: <b>${w.firstSpinAfterHours} ч</b> после активации\nПотолок билетов с колеса: <b>${c.maxWheelTickets}</b>`,
+      kb: [
+        [btn('🎲 Шансы', 'adm:hww:chances'), btn('🔁 Спинов в сутки', 'adm:hww:spins')],
+        [btn('📆 Мин. дней подписки', 'adm:hww:minsub'), btn('🎟 Потолок билетов', 'adm:hww:cap')],
+        [btn(w.enabled ? '⏸ Выключить колесо' : '▶️ Включить колесо', 'adm:hww:toggle')],
+        back('adm:hw'),
+      ],
+    }
+  }
+
+  async function halloweenDraw(): Promise<View> {
+    const c = await halloween.config()
+    const draw = await halloween.lastDraw()
+    const stats = await halloween.stats()
+    const prizes = c.prizes.slice().sort((a, b) => a.place - b.place)
+    const text =
+      header('🎁', 'Розыгрыш', `${prizes.reduce((a, p) => a + p.count, 0)} призов`) +
+      `${prizes.map((p) => `${p.place} место · ${esc(p.title)} × ${p.count}${p.reward ? '' : ' (выдаёт администрация)'}`).join('\n')}\n\n` +
+      `<b>Пул:</b> ${num(stats.tickets)} билетов от ${num(stats.participants)} участников\n` +
+      `<b>Приём билетов:</b> ${c.intakeClosed ? '🔒 закрыт' : '🟢 открыт'} (до ${dt(new Date(c.ticketsUntil))})\n` +
+      (draw
+        ? `\n<b>Последний розыгрыш:</b> ${dt(draw.createdAt)}\nПобедителей: ${draw.winners.filter((w) => !w.replacedAt).length}\nПубликация: ${draw.publishedAt ? dt(draw.publishedAt) : 'не опубликован'}`
+        : '\n<i>Розыгрыш ещё не проводился.</i>')
+    const kb: InlineKeyboard = [
+      [btn(c.intakeClosed ? '🔓 Открыть приём' : '🔒 Закрыть приём', 'adm:hwd:intake')],
+      [btn('🎲 Провести розыгрыш', 'adm:hwd:run')],
+    ]
+    if (draw) {
+      kb.push([btn('👀 Победители', 'adm:hwd:list')])
+      if (!draw.publishedAt) kb.push([btn('📣 Опубликовать и начислить', 'adm:hwd:pub')])
+      kb.push([btn('📄 Протокол CSV', 'adm:hwx:draw'), btn('📗 XLSX', 'adm:hwx:draw:xlsx')])
+    }
+    kb.push(back('adm:hw'))
+    return { text, kb }
+  }
+
+  async function halloweenWinners(): Promise<View> {
+    const draw = await halloween.lastDraw()
+    if (!draw) return { text: 'Розыгрыш ещё не проводился', kb: [back('adm:hwd')] }
+    const live = draw.winners.filter((w) => !w.replacedAt)
+    return {
+      text:
+        header('🏅', 'Победители', `розыгрыш ${dt(draw.createdAt)} · зерно ${draw.seed.slice(0, 8)}`) +
+        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · билетов ${w.tickets}${w.grantedAt ? ' · выдано' : ''}`).join('\n'),
+      kb: [
+        ...live.map((w) => [btn(`🔄 Заменить ${w.user.username ? '@' + w.user.username : w.user.tgId}`, `adm:hwd:rep:${w.id}`)]),
+        back('adm:hwd'),
+      ],
+    }
+  }
+
+  async function halloweenDates(): Promise<View> {
+    const c = await halloween.config()
+    return {
+      text:
+        header('🗓', 'Даты мероприятия', 'время московское') +
+        `Старт: <b>${dt(new Date(c.startAt))}</b>\nПриём билетов до: <b>${dt(new Date(c.ticketsUntil))}</b>\nРозыгрыш: <b>${dt(new Date(c.drawAt))}</b>`,
+      kb: [[btn('Старт', 'adm:hwc:start'), btn('Приём до', 'adm:hwc:until'), btn('Розыгрыш', 'adm:hwc:draw')], back('adm:hw')],
+    }
+  }
+
+  async function halloweenAnomalies(): Promise<View> {
+    const rows = await halloween.anomalies(10)
+    return {
+      text:
+        header('🚩', 'Аномалии', 'один IP, несколько аккаунтов') +
+        (rows.map((r) => `<code>${esc(r.ip)}</code> · аккаунтов: <b>${r.accounts}</b>`).join('\n') || '<i>подозрительных IP нет</i>'),
+      kb: [back('adm:hw')],
+    }
+  }
+
   // ── Статус сервиса ────────────────────────────────────────────────────────
 
   async function statusView(): Promise<View> {
@@ -554,6 +704,132 @@ export function createAdminFeatures(
       case 'achg':
         return void (await ask(ctx, 'ach_grant', b ? `Кому выдать «${ACH_BY_CODE.get(b)?.title.ru}»? Введите tg_id или @username.` : 'Введите tg_id или @username и код бейджа через пробел.\nКоды: ' + ACHIEVEMENTS.map((x) => x.code).join(', '), { code: b ?? null }, b ? `adm:achc:${b}` : 'adm:ach'))
 
+      case 'hw': {
+        if (b === 'top') return show(ctx, await halloweenTop())
+        if (b === 'search') return void (await ask(ctx, 'hw_search', 'Введите tg_id или @username участника.', {}, 'adm:hw'))
+        if (b === 'anom') return show(ctx, await halloweenAnomalies())
+        if (b === 'toggle') {
+          if (!isOwner) return 'Только владелец'
+          const c = await halloween.config()
+          await halloween.save({ enabled: !c.enabled })
+          await staff.audit(ctx.tgId, 'halloween_toggle', 'event', { enabled: !c.enabled })
+          await show(ctx, await halloweenMenu())
+          return c.enabled ? 'Событие выключено' : 'Событие включено'
+        }
+        return show(ctx, await halloweenMenu())
+      }
+      case 'hwu': {
+        const userId = BigInt(b)
+        if (c === 'grant') return void (await ask(ctx, 'hw_grant', 'Сколько билетов начислить? (1–50)', { id: b }, `adm:hwu:${b}`))
+        if (c === 'revoke') return show(ctx, confirmView('Аннулировать <b>все</b> билеты участника? Он выбывает из розыгрыша.', `adm:hwu:${b}:revok`, `adm:hwu:${b}`))
+        if (c === 'revok') {
+          const n = await halloween.adminRevoke(userId, 'Решение администрации', BigInt(ctx.tgId))
+          await staff.audit(ctx.tgId, 'halloween_revoke', `user:${userId}`, { tickets: n })
+          await show(ctx, await halloweenUser(userId, ctx.role))
+          return `Аннулировано билетов: ${n}`
+        }
+        if (c === 'spin') {
+          const n = await halloween.resetSpin(userId)
+          await staff.audit(ctx.tgId, 'halloween_spin_reset', `user:${userId}`)
+          await show(ctx, await halloweenUser(userId, ctx.role))
+          return n ? 'Лимит спина сброшен' : 'Сегодня пользователь ещё не крутил'
+        }
+        return show(ctx, await halloweenUser(userId, ctx.role))
+      }
+      case 'hww': {
+        if (b === 'toggle') {
+          const cfg = await halloween.config()
+          await halloween.save({ wheel: { ...cfg.wheel, enabled: !cfg.wheel.enabled } })
+          await staff.audit(ctx.tgId, 'halloween_wheel', 'wheel', { enabled: !cfg.wheel.enabled })
+          await show(ctx, await halloweenWheel())
+          return cfg.wheel.enabled ? 'Колесо выключено' : 'Колесо включено'
+        }
+        if (b === 'chances')
+          return void (await ask(ctx, 'hw_chances', 'Шансы секторов через пробел: билеты=шанс.\nНапример: <code>0=55 1=25 2=13 3=5 5=2</code>', {}, 'adm:hww'))
+        if (b === 'spins') return void (await ask(ctx, 'hw_spins', 'Сколько спинов в сутки? (1–10)', {}, 'adm:hww'))
+        if (b === 'minsub') return void (await ask(ctx, 'hw_minsub', 'Минимальный остаток подписки для спина, дней (0–30).', {}, 'adm:hww'))
+        if (b === 'cap') return void (await ask(ctx, 'hw_cap', 'Потолок билетов с колеса за всё мероприятие (1–100).', {}, 'adm:hww'))
+        return show(ctx, await halloweenWheel())
+      }
+      case 'hwc': {
+        const field = ({ start: 'startAt', until: 'ticketsUntil', draw: 'drawAt' } as Record<string, string>)[b ?? '']
+        if (field) return void (await ask(ctx, 'hw_date', 'Введите дату и время по Москве: <code>ДД.ММ ЧЧ:ММ</code>', { field }, 'adm:hwc'))
+        return show(ctx, await halloweenDates())
+      }
+      case 'hwd': {
+        if (b === 'intake') {
+          const cfg = await halloween.config()
+          await halloween.save({ intakeClosed: !cfg.intakeClosed })
+          await staff.audit(ctx.tgId, 'halloween_intake', 'draw', { closed: !cfg.intakeClosed })
+          await show(ctx, await halloweenDraw())
+          return cfg.intakeClosed ? 'Приём билетов открыт' : 'Приём билетов закрыт'
+        }
+        if (b === 'list') return show(ctx, await halloweenWinners())
+        if (b === 'run') {
+          if (!isOwner) return 'Только владелец'
+          const stats = await halloween.stats()
+          return show(
+            ctx,
+            confirmView(
+              `Провести розыгрыш по <b>${num(stats.tickets)}</b> билетам от <b>${num(stats.participants)}</b> участников?\nПобедители сохранятся, но призы начислятся только после публикации.`,
+              'adm:hwd:runok',
+              'adm:hwd',
+            ),
+          )
+        }
+        if (b === 'runok') {
+          if (!isOwner) return 'Только владелец'
+          const row = await halloween.draw(BigInt(ctx.tgId))
+          await staff.audit(ctx.tgId, 'halloween_draw', `draw:${row.id}`, { winners: row.winners.length, tickets: row.totalTickets })
+          await show(ctx, await halloweenWinners())
+          return `Розыгрыш проведён: победителей ${row.winners.length}`
+        }
+        if (b === 'pub') {
+          if (!isOwner) return 'Только владелец'
+          return show(ctx, confirmView('Опубликовать результаты? Победителям начислятся подписки и уйдут уведомления, участникам — утешительная скидка.', 'adm:hwd:pubok', 'adm:hwd'))
+        }
+        if (b === 'pubok') {
+          if (!isOwner) return 'Только владелец'
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const r = await halloween.publish(draw.id, BigInt(ctx.tgId))
+          await staff.audit(ctx.tgId, 'halloween_publish', `draw:${draw.id}`, r)
+          await show(ctx, await halloweenDraw())
+          return r.already ? 'Уже опубликован' : `Опубликовано: подписок начислено ${r.granted}, скидок ${r.consolation}`
+        }
+        if (b === 'rep') {
+          const next = await halloween.replaceWinner(BigInt(c))
+          await staff.audit(ctx.tgId, 'halloween_replace', `winner:${c}`)
+          await show(ctx, await halloweenWinners())
+          return next ? `Новый победитель: ${next.user.username ? '@' + next.user.username : next.user.tgId}` : 'Некем заменить: свободных билетов нет'
+        }
+        return show(ctx, await halloweenDraw())
+      }
+      case 'hwx': {
+        if (b === 'draw') {
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const rows = [
+            ['Розыгрыш', dt(draw.createdAt), 'зерно', draw.seed],
+            ['Билетов', draw.totalTickets, 'Участников', draw.participants],
+            [],
+            ['Место', 'Приз', 'tg_id', 'username', 'Билетов', 'Выигравший билет', 'Статус'],
+            ...draw.winners.map((w) => [w.place, w.prizeTitle, String(w.user.tgId), w.user.username ?? '', w.tickets, String(w.ticketId), w.replacedAt ? 'заменён' : w.grantedAt ? 'приз выдан' : 'ожидает']),
+          ]
+          if (c === 'xlsx') await tg.sendDocument(ctx.chatId, `halloween_draw_${Date.now()}.xlsx`, xlsx(rows, 'Розыгрыш'), 'Протокол розыгрыша', XLSX_MIME)
+          else await tg.sendDocument(ctx.chatId, `halloween_draw_${Date.now()}.csv`, csv(rows), 'Протокол розыгрыша')
+          return 'Файл отправлен'
+        }
+        const tickets = await halloween.exportTickets()
+        const rows = [
+          ['ID билета', 'tg_id', 'username', 'Источник', 'Друг', 'Выдан', 'Аннулирован', 'Причина'],
+          ...tickets.map((t) => [t.id, t.tgId, t.username, t.source, t.friend, dt(t.createdAt), t.revoked, t.reason]),
+        ]
+        if (c === 'xlsx') await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.xlsx`, xlsx(rows, 'Билеты'), 'Все билеты мероприятия', XLSX_MIME)
+        else await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.csv`, csv(rows), 'Все билеты мероприятия')
+        return 'Файл отправлен'
+      }
+
       case 'st':
         return show(ctx, await statusView())
       case 'sth': {
@@ -760,6 +1036,85 @@ export function createAdminFeatures(
         await tg.send(ctx.chatId, ok ? `🎖 «${ACH_BY_CODE.get(code)!.title.ru}» выдан ${who(u)}, награда начислена.` : 'У пользователя уже есть этот бейдж.', { keyboard: [back(`adm:ub:${u.id}`, '‹ Бейджи пользователя')] })
         return true
       }
+      case 'hw_search': {
+        done()
+        const u = await findUser(v)
+        if (!u) {
+          await tg.send(ctx.chatId, '⚠️ Пользователь не найден', { keyboard: [back('adm:hw')] })
+          return true
+        }
+        await show(fresh, await halloweenUser(u.id, ctx.role))
+        return true
+      }
+      case 'hw_grant': {
+        if (!Number.isInteger(n) || n < 1 || n > 50) {
+          await retry('Целое число от 1 до 50')
+          return true
+        }
+        const userId = BigInt(String(data.id))
+        done()
+        const given = await halloween.adminGrant(userId, n, BigInt(ctx.tgId))
+        await staff.audit(ctx.tgId, 'halloween_grant', `user:${userId}`, { tickets: given })
+        await tg.send(ctx.chatId, given === n ? `🎟 Начислено билетов: ${given}` : `🎟 Начислено ${given} из ${n}: сработал лимит билетов на аккаунт.`)
+        await show(fresh, await halloweenUser(userId, ctx.role))
+        return true
+      }
+      case 'hw_chances': {
+        const sectors: { tickets: number; chance: number }[] = []
+        for (const part of v.split(/[\s,;]+/).filter(Boolean)) {
+          const m = /^(\d+)=(\d+(?:\.\d+)?)$/.exec(part)
+          if (!m) {
+            await retry(`Не понял «${part}». Формат: 0=55 1=25 2=13 3=5 5=2`)
+            return true
+          }
+          sectors.push({ tickets: Number(m[1]), chance: Number(m[2]) })
+        }
+        if (sectors.length < 2) {
+          await retry('Нужно хотя бы два сектора')
+          return true
+        }
+        const sum = sectors.reduce((a, x) => a + x.chance, 0)
+        if (Math.round(sum) !== 100) {
+          await retry(`Сумма шансов должна быть 100%, сейчас ${sum}%`)
+          return true
+        }
+        done()
+        const cfg = await halloween.config()
+        await halloween.save({ wheel: { ...cfg.wheel, sectors } })
+        await staff.audit(ctx.tgId, 'halloween_wheel', 'sectors', { sectors })
+        await show(fresh, await halloweenWheel())
+        return true
+      }
+      case 'hw_spins':
+      case 'hw_minsub':
+      case 'hw_cap': {
+        const max = state.kind === 'hw_spins' ? 10 : state.kind === 'hw_minsub' ? 30 : 100
+        const min = state.kind === 'hw_minsub' ? 0 : 1
+        if (!Number.isInteger(n) || n < min || n > max) {
+          await retry(`Целое число от ${min} до ${max}`)
+          return true
+        }
+        done()
+        const cfg = await halloween.config()
+        if (state.kind === 'hw_cap') await halloween.save({ maxWheelTickets: n })
+        else await halloween.save({ wheel: { ...cfg.wheel, ...(state.kind === 'hw_spins' ? { spinsPerDay: n } : { minSubDays: n }) } })
+        await staff.audit(ctx.tgId, 'halloween_wheel', state.kind, { value: n })
+        await show(fresh, await halloweenWheel())
+        return true
+      }
+      case 'hw_date': {
+        const date = parseMsk(v)
+        if (!date) {
+          await retry('Формат: ДД.ММ ЧЧ:ММ, например 24.10 00:00')
+          return true
+        }
+        done()
+        const field = String(data.field) as 'startAt' | 'ticketsUntil' | 'drawAt'
+        await halloween.save({ [field]: date.toISOString() })
+        await staff.audit(ctx.tgId, 'halloween_date', field, { at: date.toISOString() })
+        await show(fresh, await halloweenDates())
+        return true
+      }
       case 'st_title': {
         if (v.length < 3 || v.length > 120) {
           await retry('Заголовок от 3 до 120 символов')
@@ -790,13 +1145,14 @@ export function createAdminFeatures(
       ['tr', '🔁 Переносы', 'adm:tr'],
       ['ach', '🏆 Достижения', 'adm:ach'],
       ['st', '📶 Статус', 'adm:st'],
+      ['hw', '🎃 Хэллоуин', 'adm:hw'],
       ...(reviewsAdmin ? [reviewsAdmin.homeItem] : []),
     ] as [string, string, string][],
     handles: (a: string) => a in SECTIONS,
     section: (a: string) => SECTIONS[a] ?? 'owner',
     onCallback,
     onText,
-    userRows: (userId: bigint, _role: StaffRole): InlineKeyboard => [[btn('📱 Устройства', `adm:ud:${userId}`), btn('🏆 Бейджи', `adm:ub:${userId}`)]],
+    userRows: (userId: bigint, _role: StaffRole): InlineKeyboard => [[btn('📱 Устройства', `adm:ud:${userId}`), btn('🏆 Бейджи', `adm:ub:${userId}`), btn('🎃 Билеты', `adm:hwu:${userId}`)]],
   }
 }
 

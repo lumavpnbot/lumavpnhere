@@ -122,6 +122,12 @@ export interface NotificationPrefs {
   promo: boolean
 }
 
+/** Хэллоуин-розыгрыш: показываем баннер и экран, пока мероприятие не выключено. */
+export interface HalloweenState {
+  phase: 'before' | 'live' | 'closed' | 'published'
+  tickets: number
+}
+
 interface AppState {
   lang: Lang
   profile: Profile
@@ -133,6 +139,7 @@ interface AppState {
   status: StatusSnapshot | null
   prices: Prices
   maintenance: boolean
+  halloween: HalloweenState | null
   /** Пробный период, дней (с сервера, меняется в /admin → Настройки). */
   trial: { days: number; referralDays: number }
   prefs: NotificationPrefs
@@ -264,6 +271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   status: null,
   prices: PRICES_RUB,
   maintenance: false,
+  halloween: null,
   trial: { days: 3, referralDays: 4 },
   prefs: load('lynk.prefs', DEFAULT_PREFS),
   demo: !apiEnabled,
@@ -297,6 +305,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         devices: d.devices,
         transactions: d.transactions,
         profile: { ...s.profile, ...d.profile },
+        halloween: { phase: 'live', tickets: 12 },
         loaded: true,
       }))
       return Promise.resolve()
@@ -373,6 +382,7 @@ async function loadMe() {
       countries?: CountryCode[]
       prices?: Prices
       maintenance?: boolean
+      halloween?: HalloweenState | null
       trial?: { days: number; referralDays: number }
     }>('/me')
     const provisionError = (me.profile as { provisionError?: string | null }).provisionError ?? null
@@ -386,6 +396,7 @@ async function loadMe() {
       prices: me.prices ?? s.prices,
       trial: me.trial ?? s.trial,
       maintenance: Boolean(me.maintenance),
+      halloween: me.halloween ?? null,
       loaded: true,
     }))
   } catch (err) {

@@ -75,8 +75,10 @@ export function createBillingService(
   notify: Notifier,
   notifyStaff: (text: string) => Promise<void>,
   achievements?: AchievementService,
-  /** После выдачи оплаченного заказа (чек «Мой налог»). Ошибки внутри не должны ломать оплату. */
+  /** После выдачи оплаченного заказа (чек «Мой налог», билеты Хэллоуина). Ошибки внутри не должны ломать оплату. */
   onPaid?: (paymentId: bigint) => void,
+  /** Платёж отменён или возвращён: отзываем то, что начислили за него (билеты Хэллоуина). */
+  onRefund?: (paymentId: bigint) => void,
 ) {
   async function findPromo(code: string, userId: bigint) {
     const normalized = code.trim().toUpperCase()
@@ -450,16 +452,21 @@ export function createBillingService(
 
   /** Возврат на внутренний баланс (админ). Начисление рефереру на холде отменяется. */
   async function refundToBalance(paymentId: bigint, adminNote: string) {
-    return prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } })
-      if (payment.status !== 'paid') throw new BillingError('Возврат возможен только для оплаченного платежа')
-      const amount = Number(payment.amountRub) + Number(payment.balanceUsedRub)
-      await tx.payment.update({ where: { id: paymentId }, data: { status: 'refunded' } })
-      await tx.user.update({ where: { id: payment.userId }, data: { balanceRub: { increment: amount } } })
-      await tx.balanceTx.create({ data: { userId: payment.userId, amountRub: amount, kind: 'refund', paymentId, note: adminNote } })
-      await tx.referralPayout.updateMany({ where: { paymentId, status: 'hold' }, data: { status: 'cancelled' } })
-      return amount
-    })
+    return prisma
+      .$transaction(async (tx) => {
+        const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } })
+        if (payment.status !== 'paid') throw new BillingError('Возврат возможен только для оплаченного платежа')
+        const amount = Number(payment.amountRub) + Number(payment.balanceUsedRub)
+        await tx.payment.update({ where: { id: paymentId }, data: { status: 'refunded' } })
+        await tx.user.update({ where: { id: payment.userId }, data: { balanceRub: { increment: amount } } })
+        await tx.balanceTx.create({ data: { userId: payment.userId, amountRub: amount, kind: 'refund', paymentId, note: adminNote } })
+        await tx.referralPayout.updateMany({ where: { paymentId, status: 'hold' }, data: { status: 'cancelled' } })
+        return amount
+      })
+      .then((amount) => {
+        onRefund?.(paymentId)
+        return amount
+      })
   }
 
   /** Снятие холда: начисления, у которых прошло 7 дней, уходят на баланс. */

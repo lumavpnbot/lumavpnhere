@@ -7,6 +7,9 @@ const DAY = 24 * 60 * 60 * 1000
 /** Тема тикета с отзывом: по ней засчитывается бейдж «Обратная связь». */
 const FEEDBACK_SUBJECT = 'Отзыв о сервисе'
 
+/** Награды не от бейджей: откуда взялась скидка, если это не достижение. */
+const EXTRA_REWARD_TITLES: Record<string, string> = { halloween: 'Хэллоуин-розыгрыш' }
+
 export type AchCategory = 'social' | 'loyalty' | 'special' | 'secret'
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
 
@@ -463,7 +466,7 @@ export function createAchievementService(deps: {
       prisma.userReward.findMany({ where: { userId: user.id, kind: 'device', revokedAt: null } }),
       discountFor(user.id),
     ])
-    const title = (code: string | null) => (code ? (ACH_BY_CODE.get(code)?.title.ru ?? code) : 'LYNK')
+    const title = (code: string | null) => (code ? (ACH_BY_CODE.get(code)?.title.ru ?? EXTRA_REWARD_TITLES[code] ?? code) : 'LYNK')
     return {
       daysGranted: days._sum.value ?? 0,
       discounts: discounts.map((r: UserReward) => ({

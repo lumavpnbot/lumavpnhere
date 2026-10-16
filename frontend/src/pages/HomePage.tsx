@@ -24,6 +24,7 @@ export default function HomePage() {
   const subscription = useAppStore((s) => s.subscription)
   const profile = useAppStore((s) => s.profile)
   const devices = useAppStore((s) => s.devices)
+  const halloween = useAppStore((s) => s.halloween)
 
   const plan = PLANS.find((p) => p.id === subscription.plan)
   const active = subscription.status === 'active' || subscription.status === 'trial'
@@ -118,6 +119,21 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      {/* ── Хэллоуин-розыгрыш: баннер, пока идёт мероприятие ── */}
+      {halloween && (
+        <button
+          onClick={() => go('/halloween')}
+          className="press relative mt-3 flex w-full items-center gap-3 overflow-hidden rounded-card border border-[#f97316]/25 bg-gradient-to-r from-[#f97316]/15 to-[#a855f7]/10 p-4 text-left"
+        >
+          <span className="text-[26px] leading-none">🎃</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold">{t('hw.banner')}</span>
+            <span className="block truncate text-[12px] text-dim">{t('hw.bannerHint', { n: halloween.tickets })}</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
+        </button>
+      )}
 
       {/* ── Баланс и друзья ── */}
       <div className="mt-3 grid grid-cols-2 gap-3">

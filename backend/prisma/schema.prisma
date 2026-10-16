@@ -101,6 +101,14 @@ enum RewardKind {
   device
 }
 
+// ── Хэллоуин-розыгрыш: откуда билет ──
+enum HalloweenSource {
+  referral_join // друг запустил бота по ссылке
+  referral_paid // друг оплатил подписку
+  wheel         // колесо фортуны
+  admin         // ручное начисление
+}
+
 // ── ТЗ v6.3: статус сервиса ──
 enum IncidentSeverity {
   minor
@@ -154,6 +162,11 @@ model User {
 
   transfers    TransferRequest[]
   achievements UserAchievement[]
+  // Хэллоуин: свои билеты, билеты друзей за меня, спины и выигрыши.
+  halloweenTickets HalloweenTicket[] @relation("TicketOwner")
+  halloweenInvites HalloweenTicket[] @relation("TicketFriend")
+  halloweenSpins   HalloweenSpin[]
+  halloweenWins    HalloweenWinner[]
   rewards      UserReward[]
   review       Review?
   addons       Addon[]
@@ -611,4 +624,88 @@ model Addon {
   @@index([userId])
   @@index([expiresAt])
   @@map("addons")
+}
+
+// ── Хэллоуин-розыгрыш · 24 октября — 1 ноября ─────────────────────────────
+// Билет = одна запись = одна строка в лотерейном пуле. Билеты, выданные за одно
+// событие (3 за оплату друга, 5 с джекпота), делят batch: по нему строится история.
+model HalloweenTicket {
+  id           BigInt          @id @default(autoincrement())
+  userId       BigInt          @map("user_id")
+  source       HalloweenSource
+  batch        String // uuid события выдачи
+  // Друг, за которого начислен билет (для рефералов), и платёж (билеты за оплату).
+  friendId     BigInt?         @map("friend_id")
+  paymentId    BigInt?         @map("payment_id")
+  spinId       BigInt?         @map("spin_id")
+  // Холд 7 дней на билеты за оплату: до этой даты платёж ещё может отмениться.
+  holdUntil    DateTime?       @map("hold_until")
+  // Аннулирован: отменённый платёж, абуз или решение админа. Такие билеты не участвуют в розыгрыше.
+  revokedAt    DateTime?       @map("revoked_at")
+  revokeReason String?         @map("revoke_reason")
+  byTgId       BigInt?         @map("by_tg_id") // кто начислил вручную
+  ip           String?
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  user   User  @relation("TicketOwner", fields: [userId], references: [id])
+  friend User? @relation("TicketFriend", fields: [friendId], references: [id])
+
+  @@index([userId, revokedAt])
+  @@index([batch])
+  @@index([createdAt])
+  @@map("halloween_tickets")
+}
+
+model HalloweenSpin {
+  id      BigInt   @id @default(autoincrement())
+  userId  BigInt   @map("user_id")
+  tickets Int // 0 = пусто
+  // Начало суток по Москве: уникальный ключ, через него лимит «1 спин в сутки».
+  day     DateTime @db.Date
+  ip      String?
+  device  String?
+  at      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, day])
+  @@index([at])
+  @@map("halloween_spins")
+}
+
+model HalloweenDraw {
+  id           BigInt    @id @default(autoincrement())
+  seed         String // случайное зерно: по нему розыгрыш воспроизводится
+  totalTickets Int       @map("total_tickets")
+  participants Int
+  publishedAt  DateTime? @map("published_at")
+  byTgId       BigInt?   @map("by_tg_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  winners HalloweenWinner[]
+
+  @@map("halloween_draws")
+}
+
+model HalloweenWinner {
+  id         BigInt    @id @default(autoincrement())
+  drawId     BigInt    @map("draw_id")
+  userId     BigInt    @map("user_id")
+  prizeCode  String    @map("prize_code")
+  prizeTitle String    @map("prize_title")
+  place      Int // 1 главный приз … 5
+  // Выигравший билет и сколько билетов было у победителя на момент розыгрыша.
+  ticketId   BigInt    @map("ticket_id")
+  tickets    Int
+  // Приз выдан (подписка начислена или посылка отправлена) / победитель заменён.
+  grantedAt  DateTime? @map("granted_at")
+  replacedAt DateTime? @map("replaced_at")
+  notifiedAt DateTime? @map("notified_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  draw HalloweenDraw @relation(fields: [drawId], references: [id])
+  user User          @relation(fields: [userId], references: [id])
+
+  @@index([drawId])
+  @@map("halloween_winners")
 }

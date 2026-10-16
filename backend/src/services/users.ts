@@ -14,7 +14,12 @@ function randomCode(len = 6) {
  * Реферальная ссылка: t.me/lynkorobot?start=REF_<код> (старый формат ref_<tg_id> тоже понимаем).
  * Реферер привязывается только при первой регистрации, себя пригласить нельзя.
  */
-export function createUserService(prisma: PrismaClient, onSuspicious: (text: string) => Promise<void>) {
+export function createUserService(
+  prisma: PrismaClient,
+  onSuspicious: (text: string) => Promise<void>,
+  /** Друг пришёл по ссылке: билет Хэллоуина пригласившему. Ошибки сюда не поднимаются. */
+  onReferralJoin?: (referrerId: bigint, referredId: bigint, referredUsername: string | null) => Promise<unknown>,
+) {
   async function referrerFrom(payload: string | null | undefined, selfTgId: bigint): Promise<User | null> {
     const m = /^ref_?([A-Za-z0-9]+)$/i.exec(payload ?? '')
     if (!m) return null
@@ -59,6 +64,7 @@ export function createUserService(prisma: PrismaClient, onSuspicious: (text: str
       if (created && referrer) {
         attached = true
         await prisma.referral.create({ data: { referrerId: referrer.id, referredId: user.id, levelAtTime: referrer.referralLevel } }).catch(() => undefined)
+        await onReferralJoin?.(referrer.id, user.id, user.username).catch(() => undefined)
         // Антифрод из ТЗ: больше 10 приглашений за сутки отправляем на ручную проверку.
         const today = await prisma.referral.count({ where: { referrerId: referrer.id, createdAt: { gte: new Date(Date.now() - DAY) } } })
         if (today === 11) {
@@ -73,6 +79,7 @@ export function createUserService(prisma: PrismaClient, onSuspicious: (text: str
       if (referrer && !paid) {
         user = await prisma.user.update({ where: { id: user.id }, data: { referrerId: referrer.id } })
         await prisma.referral.create({ data: { referrerId: referrer.id, referredId: user.id, levelAtTime: referrer.referralLevel } }).catch(() => undefined)
+        await onReferralJoin?.(referrer.id, user.id, user.username).catch(() => undefined)
         attached = true
       }
     }

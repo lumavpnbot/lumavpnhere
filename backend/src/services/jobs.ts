@@ -7,6 +7,7 @@ import { recordError } from '@/lib/errors'
 import type { AchievementService } from './achievements'
 import type { BillingService } from './billing'
 import type { NpdReceipts } from './npdReceipts'
+import type { HalloweenService } from './halloween'
 import type { StatusService } from './status'
 import type { VpnService } from './vpn'
 
@@ -27,8 +28,9 @@ export function createJobs(deps: {
   status?: StatusService
   achievements?: AchievementService
   receipts?: NpdReceipts
+  halloween?: HalloweenService
 }) {
-  const { prisma, tg, billing, vpn, log, webAppUrl, status, achievements, receipts } = deps
+  const { prisma, tg, billing, vpn, log, webAppUrl, status, achievements, receipts, halloween } = deps
 
   /** Достижения за лояльность (6/12/24 месяца) наступают со временем: проверяем всех, кто платил. */
   async function achievementsSweep() {
@@ -107,6 +109,63 @@ export function createJobs(deps: {
     for (const bc of due) await sendBroadcast(bc.id)
   }
 
+  /**
+   * Пуши мероприятия: напоминание про колесо в 10:00 МСК, предупреждение за сутки
+   * до закрытия приёма билетов и итоговое сообщение участникам. Что уже отправлено,
+   * помним в настройках: перезапуск не рассылает повторно.
+   */
+  async function halloweenPings() {
+    if (!halloween || !tg.enabled) return
+    const c = await halloween.config()
+    if (!c.enabled) return
+    const now = new Date()
+    const phase = halloween.phaseOf(c, now.getTime())
+    const row = await prisma.setting.findUnique({ where: { key: 'halloweenPings' } })
+    const sent = (row?.value as { daily?: string; closing?: boolean; thanks?: boolean } | undefined) ?? {}
+    const mskHour = (now.getUTCHours() + 3) % 24
+    const today = new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const save = async (patch: Record<string, unknown>) => {
+      const value = { ...sent, ...patch }
+      await prisma.setting.upsert({ where: { key: 'halloweenPings' }, create: { key: 'halloweenPings', value }, update: { value } })
+    }
+    const keyboard = [[{ text: '🎃 Открыть розыгрыш', web_app: { url: webAppUrl } }]]
+    const blast = async (tgIds: bigint[], text: string) => {
+      for (const tgId of tgIds) {
+        await tg.send(tgId, text, { keyboard }).catch(() => undefined)
+        await sleep(40)
+      }
+      return tgIds.length
+    }
+
+    if (phase === 'live' && c.wheel.enabled && mskHour === 10 && sent.daily !== today) {
+      await save({ daily: today })
+      // Только тем, у кого есть платная подписка: колесо доступно именно им.
+      const subs = await prisma.subscription.findMany({
+        where: { status: 'active', expiresAt: { gt: new Date(now.getTime() + c.wheel.minSubDays * DAY) } },
+        distinct: ['userId'],
+        select: { userId: true, user: { select: { tgId: true, botStarted: true, banned: true } } },
+      })
+      const skip = await halloween.spinnersToday()
+      const ids = subs.filter((x) => x.user.botStarted && !x.user.banned && !skip.has(String(x.userId))).map((x) => x.user.tgId)
+      log.info({ sent: await blast(ids, '🎃 <b>Колесо фортуны ждёт</b>\nСегодняшний спин ещё не использован: крутите и забирайте билеты в розыгрыш AirPods.') }, 'halloween daily push')
+      return
+    }
+
+    const closeAt = Date.parse(c.ticketsUntil)
+    if (phase === 'live' && !sent.closing && closeAt - now.getTime() < DAY) {
+      await save({ closing: true })
+      const players = await prisma.halloweenTicket.findMany({ where: { revokedAt: null }, distinct: ['userId'], select: { userId: true, user: { select: { tgId: true, botStarted: true } } } })
+      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '⏳ <b>Сутки до закрытия приёма билетов</b>\nУспейте позвать друзей и крутнуть колесо: после 31 октября 23:59 МСК билеты не начисляются.')
+      return
+    }
+
+    if ((phase === 'closed' || phase === 'off') && sent.closing && !sent.thanks) {
+      await save({ thanks: true })
+      const players = await prisma.halloweenTicket.findMany({ where: { revokedAt: null }, distinct: ['userId'], select: { userId: true, user: { select: { tgId: true, botStarted: true } } } })
+      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '🎃 <b>Спасибо за участие</b>\nПриём билетов закрыт. Результаты розыгрыша опубликуем в канале, победителям напишем в боте.')
+    }
+  }
+
   const safe = (name: string, fn: () => Promise<unknown>) => () =>
     fn().catch((err) => {
       recordError(`job:${name}`, err)
@@ -128,6 +187,7 @@ export function createJobs(deps: {
       await step('activations', () => billing.retryFailedActivations())
       if (receipts) await step('receipts', () => receipts.retryMissing())
       await step('remind', remind)
+      if (halloween) await step('halloween', halloweenPings)
     }
     setInterval(safe('ten-minutes', every10), 10 * 60 * 1000)
     setInterval(safe('broadcasts', dueBroadcasts), 60 * 1000)

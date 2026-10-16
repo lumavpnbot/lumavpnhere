@@ -21,6 +21,55 @@ export interface RewardSpec {
   forever?: boolean
 }
 
+/** Сектор колеса фортуны: сколько билетов даёт и с каким шансом (%). */
+export interface WheelSector {
+  tickets: number
+  chance: number
+}
+
+/**
+ * Приз розыгрыша. reward = что начисляем победителю автоматически (подписка),
+ * null = физический приз, его выдаёт администрация вручную.
+ */
+export interface HalloweenPrize {
+  code: string
+  title: string
+  place: number
+  count: number
+  reward: { plan: PaidPlan; days: number } | null
+}
+
+/** Хэллоуин-розыгрыш: даты, билеты, колесо, призы. Всё меняется из админ-меню. */
+export interface HalloweenSettings {
+  enabled: boolean
+  /** ISO-даты: старт, конец приёма билетов, розыгрыш. */
+  startAt: string
+  ticketsUntil: string
+  drawAt: string
+  /** Приём билетов закрыт досрочно кнопкой в админке. */
+  intakeClosed: boolean
+  ticketsForJoin: number
+  ticketsForPaid: number
+  /** Холд на билеты за оплату друга: отменённый платёж аннулирует их. */
+  holdDays: number
+  maxTickets: number
+  maxReferralTickets: number
+  maxWheelTickets: number
+  wheel: {
+    enabled: boolean
+    sectors: WheelSector[]
+    spinsPerDay: number
+    /** Сколько дней подписки должно оставаться на момент спина. */
+    minSubDays: number
+    /** Через сколько часов после активации подписки доступен первый спин. */
+    firstSpinAfterHours: number
+  }
+  prizes: HalloweenPrize[]
+  /** Утешительная скидка всем участникам с билетами: % и срок действия. */
+  consolationPercent: number
+  consolationDays: number
+}
+
 /** Пакет трафика «на месяц»: сколько ГБ и за сколько рублей. */
 export interface TrafficPack {
   gb: number
@@ -73,6 +122,44 @@ export interface AppSettings {
   maxExtraDevices: number
   /** Доплата за переход Старт → Премиум за каждые 30 оставшихся дней. null = разница месячных цен. */
   upgradePer30d: number | null
+  halloween: HalloweenSettings
+}
+
+/** Хэллоуин: 21 приз в пяти категориях (главный выдаёт администрация, подписки начисляются сами). */
+export const DEFAULT_HALLOWEEN: HalloweenSettings = {
+  enabled: true,
+  startAt: '2026-10-24T00:00:00+03:00',
+  ticketsUntil: '2026-10-31T23:59:00+03:00',
+  drawAt: '2026-11-01T12:00:00+03:00',
+  intakeClosed: false,
+  ticketsForJoin: 1,
+  ticketsForPaid: 3,
+  holdDays: 7,
+  maxTickets: 100,
+  maxReferralTickets: 30,
+  maxWheelTickets: 30,
+  wheel: {
+    enabled: true,
+    sectors: [
+      { tickets: 0, chance: 55 },
+      { tickets: 1, chance: 25 },
+      { tickets: 2, chance: 13 },
+      { tickets: 3, chance: 5 },
+      { tickets: 5, chance: 2 },
+    ],
+    spinsPerDay: 1,
+    minSubDays: 3,
+    firstSpinAfterHours: 24,
+  },
+  prizes: [
+    { code: 'airpods', title: 'AirPods 3 Pro', place: 1, count: 1, reward: null },
+    { code: 'pro_year', title: '1 год Премиум', place: 2, count: 2, reward: { plan: 'pro', days: 365 } },
+    { code: 'pro_6m', title: '6 месяцев Премиум', place: 3, count: 3, reward: { plan: 'pro', days: 183 } },
+    { code: 'start_3m', title: '3 месяца Старт', place: 4, count: 5, reward: { plan: 'start', days: 92 } },
+    { code: 'start_1m', title: '1 месяц Старт', place: 5, count: 10, reward: { plan: 'start', days: 30 } },
+  ],
+  consolationPercent: 20,
+  consolationDays: 30,
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -110,6 +197,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   devicePrice: 20,
   maxExtraDevices: 5,
   upgradePer30d: null,
+  halloween: DEFAULT_HALLOWEEN,
 }
 
 export const LEVEL_NAMES = ['Базовый', 'Серебро', 'Золото', 'Платина'] as const
@@ -138,6 +226,13 @@ export function createSettingsService(prisma: PrismaClient) {
 }
 
 export type SettingsService = ReturnType<typeof createSettingsService>
+
+/** Настройки Хэллоуина поверх значений по умолчанию: в сохранённом из админки JSON может не быть новых полей. */
+export const halloweenOf = (s: AppSettings): HalloweenSettings => ({
+  ...DEFAULT_HALLOWEEN,
+  ...s.halloween,
+  wheel: { ...DEFAULT_HALLOWEEN.wheel, ...s.halloween?.wheel },
+})
 
 /** Доплата за 30 дней при переходе Старт → Премиум (из настроек или разница месячных цен). */
 export const upgradeRate = (s: AppSettings) => s.upgradePer30d ?? Math.max(0, s.prices.pro.month - s.prices.start.month)

@@ -23,6 +23,8 @@ import { registerReviewRoutes } from '@/routes/reviews'
 import { createReviewService } from '@/services/reviews'
 import { createReviewAsk } from '@/services/reviewAsk'
 import { createAchievementService } from '@/services/achievements'
+import { createHalloweenService } from '@/services/halloween'
+import { registerHalloweenRoutes } from '@/routes/halloween'
 import { createTransferService } from '@/services/transfer'
 import { createStatusService } from '@/services/status'
 import { createNpdReceipts } from '@/services/npdReceipts'
@@ -129,6 +131,9 @@ const panel = createPanelProvider(env)
 const owners = ownerIds(env)
 const vpn = createVpnService(prisma, panel, (tgId) => owners.has(tgId))
 const achievements = createAchievementService({ prisma, settings, vpn, notify: staff.notify })
+// Хэллоуин-розыгрыш: билеты за друзей, колесо фортуны, розыгрыш призов.
+// notifyStaff вызывается только в работе, когда notifyAdmins ниже уже объявлен.
+const halloween = createHalloweenService({ prisma, settings, vpn, notify: staff.notify, notifyStaff: (text) => notifyAdmins(text) })
 // Чеки самозанятого в «Мой налог» после оплаты рублями: ключ доступа по SMS из админки
 // (хранится в БД, шифруется токеном бота) или MOY_NALOG_INN / MOY_NALOG_PASSWORD.
 const receipts = createNpdReceipts({
@@ -140,10 +145,25 @@ const receipts = createNpdReceipts({
   notifyStaff: (t) => staff.notifyStaff(t, 'admin'),
 })
 await receipts.init().catch((err) => app.log.error({ err }, 'npd init failed'))
-const billing = createBillingService(prisma, settings, vpn, payments, staff.notify, (t) => staff.notifyStaff(t, 'admin'), achievements, (id) => {
-  void receipts.issue(id)
-})
-const users = createUserService(prisma, (t) => staff.notifyStaff(t, 'owner'))
+const billing = createBillingService(
+  prisma,
+  settings,
+  vpn,
+  payments,
+  staff.notify,
+  (t) => staff.notifyStaff(t, 'admin'),
+  achievements,
+  (id) => {
+    void receipts.issue(id)
+    void halloween.onPayment(id).catch((err) => app.log.warn({ err }, 'halloween tickets failed'))
+  },
+  (id) => void halloween.revokeByPayment(id).catch(() => undefined),
+)
+const users = createUserService(
+  prisma,
+  (t) => staff.notifyStaff(t, 'owner'),
+  (referrerId, referredId, username) => halloween.onReferralJoin(referrerId, referredId, username),
+)
 const servers = createServerStatus(env)
 /** Сообщение команде (админам и владельцам) с кнопками, например «Открыть заявку». */
 const notifyAdmins = async (text: string, keyboard?: InlineKeyboard) => {
@@ -171,7 +191,7 @@ const webAppUrl = env.WEBAPP_URL || 'https://lumavpnbot.github.io/lumavpnhere/'
 // Просьба оценить сервис в боте: раз на аккаунт, проверка раз в 10 минут (вкл/выкл в /admin → ⭐ Отзывы).
 const reviewAsk = createReviewAsk({ prisma, tg, settings, reviews, webAppUrl })
 setInterval(() => void reviewAsk.tick().catch((err) => app.log.error({ err }, 'review ask failed')), 10 * 60 * 1000)
-const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements, receipts })
+const jobs = createJobs({ prisma, tg, billing, vpn, log: app.log, webAppUrl, status, achievements, receipts, halloween })
 const admin = createAdmin({
   prisma,
   tg,
@@ -184,11 +204,14 @@ const admin = createAdmin({
   receipts,
   sendBroadcast: jobs.sendBroadcast,
   features: (api) =>
-    createAdminFeatures({ prisma, tg, staff, settings, vpn, transfer, achievements, status, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env), reviews }, api),
+    createAdminFeatures(
+      { prisma, tg, staff, settings, vpn, transfer, achievements, status, halloween, sendBroadcast: jobs.sendBroadcast, statusUrl: statusPageUrl(env), reviews },
+      api,
+    ),
 })
 app.log.info(`panel mode: ${panel.kind}`)
 
-registerMeRoutes(app, { prisma, panel, vpn, users, settings, achievements, env })
+registerMeRoutes(app, { prisma, panel, vpn, users, settings, achievements, halloween, env })
 registerPaymentRoutes(app, prisma, payments, billing)
 registerSubscriptionRoutes(app, prisma, panel, vpn, env)
 registerApiRoutes(app, { prisma, settings, servers, staff, vpn, env })
@@ -197,6 +220,7 @@ registerTransferRoutes(app, { transfer, settings, users })
 registerAchievementRoutes(app, { achievements, users, tg, env })
 registerStatusRoutes(app, status)
 registerReviewRoutes(app, { reviews, users })
+registerHalloweenRoutes(app, { halloween, users })
 let botSetup = 'ещё не запускалась'
 const bot = registerBot(app, { prisma, tg, botToken, staff, admin, settings, billing, users, vpn, achievements, reviews, env })
 

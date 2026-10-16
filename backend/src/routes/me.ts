@@ -4,6 +4,7 @@ import type { PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
 import { rateLimit } from '@/plugins/rateLimit'
 import type { AchievementService } from '@/services/achievements'
+import type { HalloweenService } from '@/services/halloween'
 import { LEVEL_NAMES, type SettingsService } from '@/services/settings'
 import type { UserService } from '@/services/users'
 import { LATEST_FIRST, type VpnService } from '@/services/vpn'
@@ -24,10 +25,11 @@ export function registerMeRoutes(
     users: UserService
     settings: SettingsService
     achievements?: AchievementService
+    halloween?: HalloweenService
     env: NodeJS.ProcessEnv
   },
 ) {
-  const { prisma, panel, vpn, users, settings, achievements, env } = deps
+  const { prisma, panel, vpn, users, settings, achievements, halloween, env } = deps
   const botUsername = (env.BOT_USERNAME || 'lynkorobot').replace(/^@/, '')
 
   /**
@@ -149,6 +151,13 @@ export function registerMeRoutes(
       achievements ? achievements.showcase(user) : Promise.resolve([]),
       prisma.userAchievement.count({ where: { userId: user.id } }),
     ])
+    // Хэллоуин: главная показывает баннер, пока мероприятие идёт.
+    const event = halloween
+      ? await Promise.all([halloween.phase(), halloween.ticketsOf(user.id)]).then(
+          ([phase, tickets]) => (phase === 'off' ? null : { phase, tickets }),
+          () => null,
+        )
+      : null
     const promoUsed = s.defaultPromo
       ? await prisma.promoUse.count({ where: { userId: user.id, promo: { code: s.defaultPromo } } })
       : 1
@@ -156,6 +165,7 @@ export function registerMeRoutes(
     return {
       countries: panel.countries,
       maintenance: s.maintenance,
+      halloween: event,
       // Длительность пробного периода для текстов в приложении (меняется в /admin → Настройки).
       trial: { days: s.trialDays, referralDays: s.trialDaysReferral },
       prices: s.prices,
