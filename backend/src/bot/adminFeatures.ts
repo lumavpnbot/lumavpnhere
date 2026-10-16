@@ -434,13 +434,17 @@ export function createAdminFeatures(
     const draw = await halloween.lastDraw()
     const stats = await halloween.stats()
     const prizes = c.prizes.slice().sort((a, b) => a.place - b.place)
+    const live = draw?.winners.filter((w) => !w.replacedAt) ?? []
     const text =
       header('🎁', 'Розыгрыш', `${prizes.reduce((a, p) => a + p.count, 0)} призов`) +
       `${prizes.map((p) => `${p.place} место · ${esc(p.title)} × ${p.count}${p.reward ? '' : ' (выдаёт администрация)'}`).join('\n')}\n\n` +
       `<b>Пул:</b> ${num(stats.tickets)} билетов от ${num(stats.participants)} участников\n` +
       `<b>Приём билетов:</b> ${c.intakeClosed ? '🔒 закрыт' : '🟢 открыт'} (до ${dt(new Date(c.ticketsUntil))})\n` +
       (draw
-        ? `\n<b>Последний розыгрыш:</b> ${dt(draw.createdAt)}\nПобедителей: ${draw.winners.filter((w) => !w.replacedAt).length}\nПубликация: ${draw.publishedAt ? dt(draw.publishedAt) : 'не опубликован'}`
+        ? `\n<b>Последний розыгрыш:</b> ${dt(draw.createdAt)}\n` +
+          `Победителей: ${live.length} · призы выданы: ${live.filter((w) => w.grantedAt).length} · уведомлены: ${live.filter((w) => w.notifiedAt).length}\n` +
+          `Публикация: ${draw.publishedAt ? dt(draw.publishedAt) : 'не опубликован'}\n` +
+          '<i>Публикация только показывает список в приложении. Призы, уведомления и скидки начисляются кнопками ниже.</i>'
         : '\n<i>Розыгрыш ещё не проводился.</i>')
     const kb: InlineKeyboard = [
       [btn(c.intakeClosed ? '🔓 Открыть приём' : '🔒 Закрыть приём', 'adm:hwd:intake')],
@@ -448,7 +452,10 @@ export function createAdminFeatures(
     ]
     if (draw) {
       kb.push([btn('👀 Победители', 'adm:hwd:list')])
-      if (!draw.publishedAt) kb.push([btn('📣 Опубликовать и начислить', 'adm:hwd:pub')])
+      if (!draw.publishedAt) kb.push([btn('📣 Опубликовать результаты', 'adm:hwd:pub')])
+      // Призы, уведомления и скидки выдаются отдельно: публикация сама ничего не начисляет.
+      kb.push([btn('💸 Начислить призы', 'adm:hwd:prizes'), btn('🔔 Уведомить победителей', 'adm:hwd:notify')])
+      kb.push([btn('🎟 Утешительные скидки', 'adm:hwd:cons')])
       kb.push([btn('📄 Протокол CSV', 'adm:hwx:draw'), btn('📗 XLSX', 'adm:hwx:draw:xlsx')])
     }
     kb.push(back('adm:hw'))
@@ -462,9 +469,14 @@ export function createAdminFeatures(
     return {
       text:
         header('🏅', 'Победители', `розыгрыш ${dt(draw.createdAt)} · зерно ${draw.seed.slice(0, 8)}`) +
-        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · билетов ${w.tickets}${w.grantedAt ? ' · выдано' : ''}`).join('\n'),
+        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · билетов ${w.tickets}${w.grantedAt ? ' · приз выдан' : ''}${w.notifiedAt ? ' · уведомлён' : ''}`).join('\n') +
+        '\n\n<i>💸 выдать приз · 🔔 написать победителю · 🔄 заменить</i>',
       kb: [
-        ...live.map((w) => [btn(`🔄 Заменить ${w.user.username ? '@' + w.user.username : w.user.tgId}`, `adm:hwd:rep:${w.id}`)]),
+        ...live.map((w) => [
+          btn(`${w.grantedAt ? '✅' : '💸'} ${w.user.username ? '@' + w.user.username : w.user.tgId}`, `adm:hwd:one:${w.id}`),
+          btn(w.notifiedAt ? '🔕' : '🔔', `adm:hwd:note:${w.id}`),
+          btn('🔄', `adm:hwd:rep:${w.id}`),
+        ]),
         back('adm:hwd'),
       ],
     }
@@ -786,7 +798,7 @@ export function createAdminFeatures(
         }
         if (b === 'pub') {
           if (!isOwner) return 'Только владелец'
-          return show(ctx, confirmView('Опубликовать результаты? Победителям начислятся подписки и уйдут уведомления, участникам — утешительная скидка.', 'adm:hwd:pubok', 'adm:hwd'))
+          return show(ctx, confirmView('Опубликовать результаты? Список победителей станет виден в приложении. Призы и уведомления останутся за вами.', 'adm:hwd:pubok', 'adm:hwd'))
         }
         if (b === 'pubok') {
           if (!isOwner) return 'Только владелец'
@@ -795,7 +807,64 @@ export function createAdminFeatures(
           const r = await halloween.publish(draw.id, BigInt(ctx.tgId))
           await staff.audit(ctx.tgId, 'halloween_publish', `draw:${draw.id}`, r)
           await show(ctx, await halloweenDraw())
-          return r.already ? 'Уже опубликован' : `Опубликовано: подписок начислено ${r.granted}, скидок ${r.consolation}`
+          return r.already ? 'Уже опубликован' : 'Результаты опубликованы'
+        }
+        if (b === 'prizes') {
+          if (!isOwner) return 'Только владелец'
+          return show(ctx, confirmView('Начислить подписки всем победителям, которым приз ещё не выдан?', 'adm:hwd:prizesok', 'adm:hwd'))
+        }
+        if (b === 'prizesok') {
+          if (!isOwner) return 'Только владелец'
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const r = await halloween.grantPrizes(draw.id)
+          await staff.audit(ctx.tgId, 'halloween_prizes', `draw:${draw.id}`, r)
+          await show(ctx, await halloweenWinners())
+          return `Начислено подписок: ${r.granted}${r.manual ? ` · ${r.manual} приз выдаёт администрация` : ''}`
+        }
+        if (b === 'one') {
+          if (!isOwner) return 'Только владелец'
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const r = await halloween.grantPrizes(draw.id, BigInt(c))
+          if (r.manual) await halloween.markGranted(BigInt(c))
+          await staff.audit(ctx.tgId, 'halloween_prize', `winner:${c}`, r)
+          await show(ctx, await halloweenWinners())
+          return r.granted ? 'Подписка начислена' : r.manual ? 'Отмечено: приз выдан вручную' : 'Приз уже был выдан'
+        }
+        if (b === 'note') {
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const sent = await halloween.notifyWinners(draw.id, BigInt(c))
+          await staff.audit(ctx.tgId, 'halloween_notify', `winner:${c}`, { sent })
+          await show(ctx, await halloweenWinners())
+          return sent ? 'Уведомление отправлено' : 'Уже уведомлён или бот не может ему написать'
+        }
+        if (b === 'notify') {
+          if (!isOwner) return 'Только владелец'
+          return show(ctx, confirmView('Отправить уведомления всем победителям, которым ещё не писали?', 'adm:hwd:notifyok', 'adm:hwd'))
+        }
+        if (b === 'notifyok') {
+          if (!isOwner) return 'Только владелец'
+          const draw = await halloween.lastDraw()
+          if (!draw) return 'Розыгрыш ещё не проводился'
+          const sent = await halloween.notifyWinners(draw.id)
+          await staff.audit(ctx.tgId, 'halloween_notify', `draw:${draw.id}`, { sent })
+          await show(ctx, await halloweenWinners())
+          return `Уведомлений отправлено: ${sent}`
+        }
+        if (b === 'cons') {
+          if (!isOwner) return 'Только владелец'
+          const cfg = await halloween.config()
+          return show(ctx, confirmView(`Начислить скидку <b>${cfg.consolationPercent}%</b> всем участникам с билетами, кроме победителей?`, 'adm:hwd:consok', 'adm:hwd'))
+        }
+        if (b === 'consok') {
+          if (!isOwner) return 'Только владелец'
+          const draw = await halloween.lastDraw()
+          const n = await halloween.consolation(draw?.id)
+          await staff.audit(ctx.tgId, 'halloween_consolation', draw ? `draw:${draw.id}` : 'event', { granted: n })
+          await show(ctx, await halloweenDraw())
+          return `Скидок начислено: ${n}`
         }
         if (b === 'rep') {
           const next = await halloween.replaceWinner(BigInt(c))

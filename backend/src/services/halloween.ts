@@ -445,33 +445,75 @@ export function createHalloweenService(deps: {
   }
 
   /**
-   * Публикация результатов: подписки победителям начисляются автоматически,
-   * всем участникам с билетами — утешительная скидка, победителям уходит push.
+   * Публикация результатов: список победителей становится виден в приложении.
+   * Ничего не начисляет и не рассылает: призы, уведомления и утешительные скидки
+   * выдаются отдельными кнопками в админке, когда администрация к этому готова.
    */
   async function publish(drawId: bigint, byTgId?: bigint) {
-    const c = await config()
-    const row = await prisma.halloweenDraw.findUniqueOrThrow({ where: { id: drawId }, include: { winners: { include: { user: true } } } })
-    if (row.publishedAt) return { already: true, granted: 0, consolation: 0 }
+    const row = await prisma.halloweenDraw.findUniqueOrThrow({ where: { id: drawId } })
+    if (row.publishedAt) return { already: true }
+    await prisma.halloweenDraw.update({ where: { id: row.id }, data: { publishedAt: new Date(), byTgId: byTgId ?? row.byTgId } })
+    return { already: false }
+  }
 
+  /** Победители, которым ещё не выдан приз или не отправлено уведомление. */
+  async function winnersOf(drawId: bigint) {
+    const row = await prisma.halloweenDraw.findUniqueOrThrow({ where: { id: drawId }, include: { winners: { include: { user: true } } } })
+    return row.winners.filter((w) => !w.replacedAt)
+  }
+
+  /** Начисление призов-подписок: по кнопке в админке, одному победителю или всем сразу. */
+  async function grantPrizes(drawId: bigint, winnerId?: bigint) {
+    const c = await config()
+    const list = (await winnersOf(drawId)).filter((w) => !w.grantedAt && (!winnerId || w.id === winnerId))
     let granted = 0
-    for (const w of row.winners.filter((x) => !x.replacedAt)) {
+    let manual = 0
+    for (const w of list) {
       const prize = c.prizes.find((p) => p.code === w.prizeCode)
-      if (prize?.reward) {
-        await vpn.grant(w.user, prize.reward.plan, prize.reward.days, 'gift').catch(() => undefined)
-        granted++
-        await prisma.halloweenWinner.update({ where: { id: w.id }, data: { grantedAt: new Date() } })
+      // Приз без подписки (AirPods) отправляет администрация: отмечаем его выданным вручную.
+      if (!prize?.reward) {
+        manual++
+        continue
       }
-      await notify(
+      await vpn.grant(w.user, prize.reward.plan, prize.reward.days, 'gift')
+      await prisma.halloweenWinner.update({ where: { id: w.id }, data: { grantedAt: new Date() } })
+      granted++
+    }
+    return { granted, manual }
+  }
+
+  /** Приз выдан руками (посылка отправлена): отметка в карточке победителя. */
+  async function markGranted(winnerId: bigint) {
+    await prisma.halloweenWinner.update({ where: { id: winnerId }, data: { grantedAt: new Date() } })
+  }
+
+  /** Уведомления победителям: по кнопке в админке, повторно одному и тому же не уходят. */
+  async function notifyWinners(drawId: bigint, winnerId?: bigint) {
+    const c = await config()
+    const list = (await winnersOf(drawId)).filter((w) => !w.notifiedAt && (!winnerId || w.id === winnerId))
+    let sent = 0
+    for (const w of list) {
+      const prize = c.prizes.find((p) => p.code === w.prizeCode)
+      const ok = await notify(
         w.user.tgId,
         `🎃 <b>Вы выиграли!</b>\nПриз: <b>${w.prizeTitle}</b>.\n` +
-          (prize?.reward ? 'Подписка уже продлена, проверьте приложение.' : 'С вами свяжется администрация в течение 24 часов для отправки приза.'),
-      ).catch(() => undefined)
-      await prisma.halloweenWinner.update({ where: { id: w.id }, data: { notifiedAt: new Date() } }).catch(() => undefined)
+          (prize?.reward ? 'Подписку начислим в ближайшее время, следите за приложением.' : 'С вами свяжется администрация в течение 24 часов для отправки приза.'),
+      ).then(
+        () => true,
+        () => false,
+      )
+      if (!ok) continue
+      await prisma.halloweenWinner.update({ where: { id: w.id }, data: { notifiedAt: new Date() } })
+      sent++
     }
+    return sent
+  }
 
-    const consolation = await grantConsolation(c, new Set(row.winners.map((w) => w.userId)))
-    await prisma.halloweenDraw.update({ where: { id: row.id }, data: { publishedAt: new Date(), byTgId: byTgId ?? row.byTgId } })
-    return { already: false, granted, consolation }
+  /** Утешительные скидки участникам: тоже по кнопке, а не вместе с публикацией. */
+  async function consolation(drawId?: bigint) {
+    const c = await config()
+    const skip = drawId ? new Set((await winnersOf(drawId)).map((w) => w.userId)) : new Set<bigint>()
+    return grantConsolation(c, skip)
   }
 
   /** Утешительная скидка 20% всем участникам с билетами (кроме победителей). */
@@ -637,6 +679,10 @@ export function createHalloweenService(deps: {
     lastDraw,
     draw,
     publish,
+    grantPrizes,
+    markGranted,
+    notifyWinners,
+    consolation,
     replaceWinner,
     adminGrant,
     adminRevoke,
