@@ -111,7 +111,7 @@ export function createJobs(deps: {
 
   /**
    * Пуши мероприятия: напоминание про колесо в 10:00 МСК, предупреждение за сутки
-   * до закрытия приёма билетов и итоговое сообщение участникам. Что уже отправлено,
+   * до закрытия сбора конфет и итоговое сообщение участникам. Что уже отправлено,
    * помним в настройках: перезапуск не рассылает повторно.
    */
   async function halloweenPings() {
@@ -147,7 +147,7 @@ export function createJobs(deps: {
       })
       const skip = await halloween.spinnersToday()
       const ids = subs.filter((x) => x.user.botStarted && !x.user.banned && !skip.has(String(x.userId))).map((x) => x.user.tgId)
-      log.info({ sent: await blast(ids, '🎃 <b>Колесо фортуны ждёт</b>\nСегодняшний спин ещё не использован: крутите и забирайте билеты в розыгрыш AirPods.') }, 'halloween daily push')
+      log.info({ sent: await blast(ids, '🎃 <b>Колесо фортуны ждёт</b>\nСегодняшний спин ещё не использован: крутите и забирайте конфеты в розыгрыш AirPods.') }, 'halloween daily push')
       return
     }
 
@@ -155,14 +155,14 @@ export function createJobs(deps: {
     if (phase === 'live' && !sent.closing && closeAt - now.getTime() < DAY) {
       await save({ closing: true })
       const players = await prisma.halloweenTicket.findMany({ where: { revokedAt: null }, distinct: ['userId'], select: { userId: true, user: { select: { tgId: true, botStarted: true } } } })
-      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '⏳ <b>Сутки до закрытия приёма билетов</b>\nУспейте позвать друзей и крутнуть колесо: после 31 октября 23:59 МСК билеты не начисляются.')
+      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '⏳ <b>Сутки до закрытия сбора конфет</b>\nУспейте позвать друзей и крутнуть колесо: после 31 октября 23:59 МСК конфеты не начисляются.')
       return
     }
 
     if ((phase === 'closed' || phase === 'off') && sent.closing && !sent.thanks) {
       await save({ thanks: true })
       const players = await prisma.halloweenTicket.findMany({ where: { revokedAt: null }, distinct: ['userId'], select: { userId: true, user: { select: { tgId: true, botStarted: true } } } })
-      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '🎃 <b>Спасибо за участие</b>\nПриём билетов закрыт. Результаты розыгрыша опубликуем в канале, победителям напишем в боте.')
+      await blast(players.filter((p) => p.user.botStarted).map((p) => p.user.tgId), '🎃 <b>Спасибо за участие</b>\nСбор конфет закрыт. Результаты розыгрыша опубликуем в канале, победителям напишем в боте.')
     }
   }
 

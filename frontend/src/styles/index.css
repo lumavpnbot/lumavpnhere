@@ -372,12 +372,45 @@ body {
       transparent 100%);
 }
 
-/* Летучие мыши: силуэты в фоне, очень тихо и медленно. */
-.season-bats {
+/* Декорации сезона: паутина по верхним углам, тыквы и летучие мыши в фоне. */
+.season-decor {
   position: absolute;
   inset: 0;
-  opacity: 0.5;
   pointer-events: none;
+}
+
+.season-web {
+  position: absolute;
+  top: 0;
+  width: 132px;
+  height: 132px;
+  color: rgba(236, 228, 255, 0.5);
+  opacity: 0.22;
+}
+
+.season-web--l { left: 0; }
+.season-web--r { right: 0; transform: scaleX(-1); }
+
+@media (min-width: 420px) {
+  .season-web { width: 160px; height: 160px; }
+}
+
+.season-pumpkin {
+  position: absolute;
+  width: 54px;
+  height: 48px;
+  color: #f97316;
+  opacity: 0.13;
+  filter: drop-shadow(0 0 16px rgba(249, 115, 22, 0.45));
+  animation: season-bob 14s var(--ease) infinite alternate;
+}
+
+.season-pumpkin--1 { bottom: 12%; left: 3%; }
+.season-pumpkin--2 { top: 21%; right: 2%; width: 38px; height: 34px; animation-duration: 18s; animation-delay: -5s; }
+
+@keyframes season-bob {
+  0%   { transform: translate3d(0, 0, 0) rotate(-3deg); }
+  100% { transform: translate3d(0, -10px, 0) rotate(3deg); }
 }
 
 .season-bat {
@@ -391,9 +424,9 @@ body {
   animation: season-drift 26s var(--ease) infinite alternate;
 }
 
-.season-bat:nth-child(1) { top: 14%; left: 12%; animation-duration: 29s; }
-.season-bat:nth-child(2) { top: 28%; right: 16%; width: 24px; height: 24px; animation-duration: 35s; animation-delay: -6s; }
-.season-bat:nth-child(3) { bottom: 22%; left: 24%; width: 28px; height: 28px; animation-duration: 41s; animation-delay: -14s; }
+.season-bat--1 { top: 16%; left: 12%; animation-duration: 29s; }
+.season-bat--2 { top: 28%; right: 16%; width: 24px; height: 24px; animation-duration: 35s; animation-delay: -6s; }
+.season-bat--3 { bottom: 26%; left: 26%; width: 28px; height: 28px; animation-duration: 41s; animation-delay: -14s; }
 
 @keyframes season-drift {
   0%   { transform: translate3d(0, 0, 0) rotate(-4deg); }
@@ -402,7 +435,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .season-bat { animation: none; }
+  .season-bat,
+  .season-pumpkin {
+    animation: none;
+  }
 }
 
 /* Карточки и кнопки: тёплая подсветка вместо серебряной. */

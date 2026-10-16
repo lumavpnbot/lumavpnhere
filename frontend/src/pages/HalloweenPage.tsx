@@ -208,7 +208,7 @@ export default function HalloweenPage() {
     await shareReferral(link, t('hw.shareText'))
   }
 
-  const ticketWord = (n: number) => plural(lang, n, { ru: ['билет', 'билета', 'билетов'], en: ['ticket', 'tickets'] })
+  const candyWord = (n: number) => plural(lang, n, { ru: ['конфета', 'конфеты', 'конфет'], en: ['candy', 'candy'] })
   const phase = summary?.phase ?? 'off'
   const closed = phase === 'closed' || phase === 'published'
 
@@ -234,7 +234,7 @@ export default function HalloweenPage() {
         <span className="label">{t('hw.yourTickets')}</span>
         <div className="mt-2 flex items-end gap-2">
           <span className="text-[44px] font-bold leading-none tabular-nums">{summary?.tickets ?? 0}</span>
-          <span className="pb-1 text-[15px] text-dim">{ticketWord(summary?.tickets ?? 0)}</span>
+          <span className="pb-1 text-[15px] text-dim">{candyWord(summary?.tickets ?? 0)}</span>
         </div>
         {!!summary?.hold && <div className="mt-2 text-[12px] text-faint">{t('hw.hold', { n: summary.hold })}</div>}
         <div className="mt-4 text-[13px] text-dim">{t('hw.pool', { tickets: stats.tickets, people: stats.participants })}</div>
@@ -287,7 +287,7 @@ export default function HalloweenPage() {
               {sectors.map((s, i) => (
                 <span key={i} className="rounded-xl bg-white/[0.05] px-1 py-2 text-center">
                   <span className="block text-[12px] font-semibold" style={{ color: SECTOR_COLORS[i % SECTOR_COLORS.length] }}>
-                    {s.tickets ? `+${s.tickets}` : '—'}
+                    {s.tickets ? `+${s.tickets} 🍬` : '—'}
                   </span>
                   <span className="block text-[10px] text-faint tabular-nums">{s.chance}%</span>
                 </span>
@@ -380,6 +380,24 @@ export default function HalloweenPage() {
           ) : (
             <div className="px-4 py-6 text-center text-[13px] text-faint">{t('hw.historyEmpty')}</div>
           )}
+        </div>
+      </Section>
+
+      {/* ── Инструкция: как всё устроено от первой конфеты до призов ── */}
+      <Section title={t('hw.how')}>
+        <div className="glass p-5">
+          <p className="text-[13px] text-dim">{t('hw.howHint')}</p>
+          <ol className="mt-4 space-y-3.5">
+            {([1, 2, 3, 4, 5, 6] as const).map((i) => (
+              <li key={i} className="flex gap-3">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#f97316]/15 text-[11px] font-semibold text-[#f97316] tabular-nums">
+                  {i}
+                </span>
+                <span className="text-[13px] leading-relaxed text-dim">{t(`hw.how${i}` as 'hw.how1')}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 border-t border-white/[0.06] pt-3 text-[12px] leading-relaxed text-faint">{t('hw.howQuestions')}</p>
         </div>
       </Section>
 

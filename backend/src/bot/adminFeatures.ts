@@ -348,7 +348,7 @@ export function createAdminFeatures(
   const PHASE_NAMES: Record<string, string> = {
     off: '⚪️ выключено',
     before: '🕓 до старта',
-    live: '🟢 идёт приём билетов',
+    live: '🟢 идёт сбор конфет',
     closed: '🔒 приём закрыт',
     published: '🏁 результаты опубликованы',
   }
@@ -358,18 +358,18 @@ export function createAdminFeatures(
     const c = d.config
     const text =
       header('🎃', 'Хэллоуин-розыгрыш', `${PHASE_NAMES[d.phase]} · ${day(new Date(c.startAt))} — ${day(new Date(c.ticketsUntil))}`) +
-      `<b>Билетов в пуле:</b> ${num(d.pool)}\n` +
+      `<b>Конфет в котле:</b> ${num(d.pool)}\n` +
       `<b>Участников:</b> ${num(d.participants)}\n` +
       `За присоединившихся: <b>${num(d.join)}</b> · за оплативших: <b>${num(d.paid)}</b>\n` +
       `С колеса: <b>${num(d.wheel)}</b> · вручную: <b>${num(d.admin)}</b> · аннулировано: <b>${num(d.revoked)}</b>\n` +
-      `<b>Спинов:</b> ${num(d.spins)} · средний результат: <b>${d.avgSpin.toFixed(2)}</b> билета\n` +
+      `<b>Спинов:</b> ${num(d.spins)} · средний результат: <b>${d.avgSpin.toFixed(2)}</b> конфеты\n` +
       (d.draw ? `\n<b>Розыгрыш:</b> ${dt(d.draw.createdAt)}, победителей ${d.draw.winners.length}${d.draw.publishedAt ? ' · опубликован' : ' · не опубликован'}` : '')
     return {
       text,
       kb: [
         [btn('🏆 Топ-10', 'adm:hw:top'), btn('🔎 Поиск участника', 'adm:hw:search')],
         [btn('🎡 Колесо', 'adm:hww'), btn('🎁 Розыгрыш', 'adm:hwd')],
-        [btn('🚩 Аномалии', 'adm:hw:anom'), btn('📄 Билеты CSV', 'adm:hwx:tickets'), btn('📗 XLSX', 'adm:hwx:tickets:xlsx')],
+        [btn('🚩 Аномалии', 'adm:hw:anom'), btn('📄 Конфеты CSV', 'adm:hwx:tickets'), btn('📗 XLSX', 'adm:hwx:tickets:xlsx')],
         [btn('🗓 Даты', 'adm:hwc'), btn(c.enabled ? '⏸ Выключить событие' : '▶️ Включить событие', 'adm:hw:toggle')],
         back(),
       ],
@@ -380,8 +380,8 @@ export function createAdminFeatures(
     const rows = await halloween.topUsers(10)
     return {
       text:
-        header('🏆', 'Топ-10 по билетам') +
-        (rows.map((r, i) => `${i + 1}. ${who(r.user)} · <b>${r.tickets}</b>`).join('\n') || '<i>билетов пока нет</i>'),
+        header('🏆', 'Топ-10 по конфетам') +
+        (rows.map((r, i) => `${i + 1}. ${who(r.user)} · <b>${r.tickets}</b>`).join('\n') || '<i>конфет пока нет</i>'),
       kb: [...rows.map((r) => [btn(`🎟 ${r.user.username ? '@' + r.user.username : r.user.tgId} · ${r.tickets}`, `adm:hwu:${r.user.id}`)]), back('adm:hw')],
     }
   }
@@ -396,13 +396,13 @@ export function createAdminFeatures(
       halloween.wheelStatus(u),
     ])
     const text =
-      header('🎃', `Билеты ${u.username ? '@' + esc(u.username) : u.tgId}`, `всего ${total}`) +
-      `${rows.map((r) => `${dt(new Date(r.at))} · ${r.title}${r.friend ? ` (@${esc(r.friend)})` : ''} → ${r.amount ? `+${r.amount}` : 'пусто'}${r.revoked ? ' · аннулирован' : ''}${r.holdUntil ? ' · холд' : ''}`).join('\n') || '<i>билетов нет</i>'}\n\n` +
+      header('🍬', `Конфеты ${u.username ? '@' + esc(u.username) : u.tgId}`, `всего ${total}`) +
+      `${rows.map((r) => `${dt(new Date(r.at))} · ${r.title}${r.friend ? ` (@${esc(r.friend)})` : ''} → ${r.amount ? `+${r.amount}` : 'пусто'}${r.revoked ? ' · аннулирован' : ''}${r.holdUntil ? ' · холд' : ''}`).join('\n') || '<i>конфет нет</i>'}\n\n` +
       `<b>Спины:</b> ${spins.map((s) => `${dt(new Date(s.at))} → ${s.tickets || 'пусто'}`).join('\n') || 'нет'}\n` +
       `<b>Колесо сейчас:</b> ${status.available ? 'доступно' : `недоступно (${status.reason})`}`
     const kb: InlineKeyboard = []
     if (role !== 'support') {
-      kb.push([btn('➕ Начислить билеты', `adm:hwu:${userId}:grant`), btn('🚫 Аннулировать все', `adm:hwu:${userId}:revoke`)])
+      kb.push([btn('➕ Начислить конфеты', `adm:hwu:${userId}:grant`), btn('🚫 Аннулировать все', `adm:hwu:${userId}:revoke`)])
       kb.push([btn('🔄 Сбросить лимит спина', `adm:hwu:${userId}:spin`)])
     }
     kb.push([btn('‹ К пользователю', `adm:u:${userId}`), btn('‹ Хэллоуин', 'adm:hw')])
@@ -417,12 +417,12 @@ export function createAdminFeatures(
     return {
       text:
         header('🎡', 'Колесо фортуны', w.enabled ? 'включено' : 'выключено') +
-        `${w.sectors.map((s) => `${s.tickets ? `+${s.tickets} ${s.tickets === 1 ? 'билет' : 'билета'}` : 'Пусто'} · <b>${s.chance}%</b>`).join('\n')}\n` +
-        `Сумма шансов: <b>${sum}%</b> · ожидание <b>${avg.toFixed(2)}</b> билета за спин\n\n` +
-        `Спинов в сутки: <b>${w.spinsPerDay}</b>\nМин. остаток подписки: <b>${w.minSubDays} дн</b>\nПервый спин через: <b>${w.firstSpinAfterHours} ч</b> после активации\nПотолок билетов с колеса: <b>${c.maxWheelTickets}</b>`,
+        `${w.sectors.map((s) => `${s.tickets ? `+${s.tickets} ${s.tickets === 1 ? 'конфета' : 'конфеты'}` : 'Пусто'} · <b>${s.chance}%</b>`).join('\n')}\n` +
+        `Сумма шансов: <b>${sum}%</b> · ожидание <b>${avg.toFixed(2)}</b> конфеты за спин\n\n` +
+        `Спинов в сутки: <b>${w.spinsPerDay}</b>\nМин. остаток подписки: <b>${w.minSubDays} дн</b>\nПервый спин через: <b>${w.firstSpinAfterHours} ч</b> после активации\nПотолок конфет с колеса: <b>${c.maxWheelTickets}</b>`,
       kb: [
         [btn('🎲 Шансы', 'adm:hww:chances'), btn('🔁 Спинов в сутки', 'adm:hww:spins')],
-        [btn('📆 Мин. дней подписки', 'adm:hww:minsub'), btn('🎟 Потолок билетов', 'adm:hww:cap')],
+        [btn('📆 Мин. дней подписки', 'adm:hww:minsub'), btn('🍬 Потолок конфет', 'adm:hww:cap')],
         [btn(w.enabled ? '⏸ Выключить колесо' : '▶️ Включить колесо', 'adm:hww:toggle')],
         back('adm:hw'),
       ],
@@ -438,8 +438,8 @@ export function createAdminFeatures(
     const text =
       header('🎁', 'Розыгрыш', `${prizes.reduce((a, p) => a + p.count, 0)} призов`) +
       `${prizes.map((p) => `${p.place} место · ${esc(p.title)} × ${p.count}${p.reward ? '' : ' (выдаёт администрация)'}`).join('\n')}\n\n` +
-      `<b>Пул:</b> ${num(stats.tickets)} билетов от ${num(stats.participants)} участников\n` +
-      `<b>Приём билетов:</b> ${c.intakeClosed ? '🔒 закрыт' : '🟢 открыт'} (до ${dt(new Date(c.ticketsUntil))})\n` +
+      `<b>Котёл:</b> ${num(stats.tickets)} конфет от ${num(stats.participants)} участников\n` +
+      `<b>Сбор конфет:</b> ${c.intakeClosed ? '🔒 закрыт' : '🟢 открыт'} (до ${dt(new Date(c.ticketsUntil))})\n` +
       (draw
         ? `\n<b>Последний розыгрыш:</b> ${dt(draw.createdAt)}\n` +
           `Победителей: ${live.length} · призы выданы: ${live.filter((w) => w.grantedAt).length} · уведомлены: ${live.filter((w) => w.notifiedAt).length}\n` +
@@ -447,7 +447,7 @@ export function createAdminFeatures(
           '<i>Публикация только показывает список в приложении. Призы, уведомления и скидки начисляются кнопками ниже.</i>'
         : '\n<i>Розыгрыш ещё не проводился.</i>')
     const kb: InlineKeyboard = [
-      [btn(c.intakeClosed ? '🔓 Открыть приём' : '🔒 Закрыть приём', 'adm:hwd:intake')],
+      [btn(c.intakeClosed ? '🔓 Открыть сбор' : '🔒 Закрыть сбор', 'adm:hwd:intake')],
       [btn('🎲 Провести розыгрыш', 'adm:hwd:run')],
     ]
     if (draw) {
@@ -469,7 +469,7 @@ export function createAdminFeatures(
     return {
       text:
         header('🏅', 'Победители', `розыгрыш ${dt(draw.createdAt)} · зерно ${draw.seed.slice(0, 8)}`) +
-        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · билетов ${w.tickets}${w.grantedAt ? ' · приз выдан' : ''}${w.notifiedAt ? ' · уведомлён' : ''}`).join('\n') +
+        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · конфет ${w.tickets}${w.grantedAt ? ' · приз выдан' : ''}${w.notifiedAt ? ' · уведомлён' : ''}`).join('\n') +
         '\n\n<i>💸 выдать приз · 🔔 написать победителю · 🔄 заменить</i>',
       kb: [
         ...live.map((w) => [
@@ -487,7 +487,7 @@ export function createAdminFeatures(
     return {
       text:
         header('🗓', 'Даты мероприятия', 'время московское') +
-        `Старт: <b>${dt(new Date(c.startAt))}</b>\nПриём билетов до: <b>${dt(new Date(c.ticketsUntil))}</b>\nРозыгрыш: <b>${dt(new Date(c.drawAt))}</b>`,
+        `Старт: <b>${dt(new Date(c.startAt))}</b>\nСбор конфет до: <b>${dt(new Date(c.ticketsUntil))}</b>\nРозыгрыш: <b>${dt(new Date(c.drawAt))}</b>`,
       kb: [[btn('Старт', 'adm:hwc:start'), btn('Приём до', 'adm:hwc:until'), btn('Розыгрыш', 'adm:hwc:draw')], back('adm:hw')],
     }
   }
@@ -732,13 +732,13 @@ export function createAdminFeatures(
       }
       case 'hwu': {
         const userId = BigInt(b)
-        if (c === 'grant') return void (await ask(ctx, 'hw_grant', 'Сколько билетов начислить? (1–50)', { id: b }, `adm:hwu:${b}`))
-        if (c === 'revoke') return show(ctx, confirmView('Аннулировать <b>все</b> билеты участника? Он выбывает из розыгрыша.', `adm:hwu:${b}:revok`, `adm:hwu:${b}`))
+        if (c === 'grant') return void (await ask(ctx, 'hw_grant', 'Сколько конфет начислить? (1–50)', { id: b }, `adm:hwu:${b}`))
+        if (c === 'revoke') return show(ctx, confirmView('Аннулировать <b>все</b> конфеты участника? Он выбывает из розыгрыша.', `adm:hwu:${b}:revok`, `adm:hwu:${b}`))
         if (c === 'revok') {
           const n = await halloween.adminRevoke(userId, 'Решение администрации', BigInt(ctx.tgId))
           await staff.audit(ctx.tgId, 'halloween_revoke', `user:${userId}`, { tickets: n })
           await show(ctx, await halloweenUser(userId, ctx.role))
-          return `Аннулировано билетов: ${n}`
+          return `Аннулировано конфет: ${n}`
         }
         if (c === 'spin') {
           const n = await halloween.resetSpin(userId)
@@ -757,10 +757,10 @@ export function createAdminFeatures(
           return cfg.wheel.enabled ? 'Колесо выключено' : 'Колесо включено'
         }
         if (b === 'chances')
-          return void (await ask(ctx, 'hw_chances', 'Шансы секторов через пробел: билеты=шанс.\nНапример: <code>0=55 1=25 2=13 3=5 5=2</code>', {}, 'adm:hww'))
+          return void (await ask(ctx, 'hw_chances', 'Шансы секторов через пробел: конфеты=шанс.\nНапример: <code>0=55 1=25 2=13 3=5 5=2</code>', {}, 'adm:hww'))
         if (b === 'spins') return void (await ask(ctx, 'hw_spins', 'Сколько спинов в сутки? (1–10)', {}, 'adm:hww'))
         if (b === 'minsub') return void (await ask(ctx, 'hw_minsub', 'Минимальный остаток подписки для спина, дней (0–30).', {}, 'adm:hww'))
-        if (b === 'cap') return void (await ask(ctx, 'hw_cap', 'Потолок билетов с колеса за всё мероприятие (1–100).', {}, 'adm:hww'))
+        if (b === 'cap') return void (await ask(ctx, 'hw_cap', 'Потолок конфет с колеса за всё мероприятие (1–100).', {}, 'adm:hww'))
         return show(ctx, await halloweenWheel())
       }
       case 'hwc': {
@@ -774,7 +774,7 @@ export function createAdminFeatures(
           await halloween.save({ intakeClosed: !cfg.intakeClosed })
           await staff.audit(ctx.tgId, 'halloween_intake', 'draw', { closed: !cfg.intakeClosed })
           await show(ctx, await halloweenDraw())
-          return cfg.intakeClosed ? 'Приём билетов открыт' : 'Приём билетов закрыт'
+          return cfg.intakeClosed ? 'Сбор конфет открыт' : 'Сбор конфет закрыт'
         }
         if (b === 'list') return show(ctx, await halloweenWinners())
         if (b === 'run') {
@@ -783,7 +783,7 @@ export function createAdminFeatures(
           return show(
             ctx,
             confirmView(
-              `Провести розыгрыш по <b>${num(stats.tickets)}</b> билетам от <b>${num(stats.participants)}</b> участников?\nПобедители сохранятся, но призы начислятся только после публикации.`,
+              `Провести розыгрыш по <b>${num(stats.tickets)}</b> конфетам от <b>${num(stats.participants)}</b> участников?\nПобедители сохранятся, но призы начислятся только после публикации.`,
               'adm:hwd:runok',
               'adm:hwd',
             ),
@@ -856,7 +856,7 @@ export function createAdminFeatures(
         if (b === 'cons') {
           if (!isOwner) return 'Только владелец'
           const cfg = await halloween.config()
-          return show(ctx, confirmView(`Начислить скидку <b>${cfg.consolationPercent}%</b> всем участникам с билетами, кроме победителей?`, 'adm:hwd:consok', 'adm:hwd'))
+          return show(ctx, confirmView(`Начислить скидку <b>${cfg.consolationPercent}%</b> всем участникам с конфетами, кроме победителей?`, 'adm:hwd:consok', 'adm:hwd'))
         }
         if (b === 'consok') {
           if (!isOwner) return 'Только владелец'
@@ -870,7 +870,7 @@ export function createAdminFeatures(
           const next = await halloween.replaceWinner(BigInt(c))
           await staff.audit(ctx.tgId, 'halloween_replace', `winner:${c}`)
           await show(ctx, await halloweenWinners())
-          return next ? `Новый победитель: ${next.user.username ? '@' + next.user.username : next.user.tgId}` : 'Некем заменить: свободных билетов нет'
+          return next ? `Новый победитель: ${next.user.username ? '@' + next.user.username : next.user.tgId}` : 'Некем заменить: свободных конфет нет'
         }
         return show(ctx, await halloweenDraw())
       }
@@ -880,9 +880,9 @@ export function createAdminFeatures(
           if (!draw) return 'Розыгрыш ещё не проводился'
           const rows = [
             ['Розыгрыш', dt(draw.createdAt), 'зерно', draw.seed],
-            ['Билетов', draw.totalTickets, 'Участников', draw.participants],
+            ['Конфет', draw.totalTickets, 'Участников', draw.participants],
             [],
-            ['Место', 'Приз', 'tg_id', 'username', 'Билетов', 'Выигравший билет', 'Статус'],
+            ['Место', 'Приз', 'tg_id', 'username', 'Конфет', 'Выигравшая конфета', 'Статус'],
             ...draw.winners.map((w) => [w.place, w.prizeTitle, String(w.user.tgId), w.user.username ?? '', w.tickets, String(w.ticketId), w.replacedAt ? 'заменён' : w.grantedAt ? 'приз выдан' : 'ожидает']),
           ]
           if (c === 'xlsx') await tg.sendDocument(ctx.chatId, `halloween_draw_${Date.now()}.xlsx`, xlsx(rows, 'Розыгрыш'), 'Протокол розыгрыша', XLSX_MIME)
@@ -891,11 +891,11 @@ export function createAdminFeatures(
         }
         const tickets = await halloween.exportTickets()
         const rows = [
-          ['ID билета', 'tg_id', 'username', 'Источник', 'Друг', 'Выдан', 'Аннулирован', 'Причина'],
+          ['ID конфеты', 'tg_id', 'username', 'Источник', 'Друг', 'Выдана', 'Аннулирована', 'Причина'],
           ...tickets.map((t) => [t.id, t.tgId, t.username, t.source, t.friend, dt(t.createdAt), t.revoked, t.reason]),
         ]
-        if (c === 'xlsx') await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.xlsx`, xlsx(rows, 'Билеты'), 'Все билеты мероприятия', XLSX_MIME)
-        else await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.csv`, csv(rows), 'Все билеты мероприятия')
+        if (c === 'xlsx') await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.xlsx`, xlsx(rows, 'Конфеты'), 'Все конфеты мероприятия', XLSX_MIME)
+        else await tg.sendDocument(ctx.chatId, `halloween_tickets_${Date.now()}.csv`, csv(rows), 'Все конфеты мероприятия')
         return 'Файл отправлен'
       }
 
@@ -1124,7 +1124,7 @@ export function createAdminFeatures(
         done()
         const given = await halloween.adminGrant(userId, n, BigInt(ctx.tgId))
         await staff.audit(ctx.tgId, 'halloween_grant', `user:${userId}`, { tickets: given })
-        await tg.send(ctx.chatId, given === n ? `🎟 Начислено билетов: ${given}` : `🎟 Начислено ${given} из ${n}: сработал лимит билетов на аккаунт.`)
+        await tg.send(ctx.chatId, given === n ? `🍬 Начислено конфет: ${given}` : `🍬 Начислено ${given} из ${n}: сработал лимит конфет на аккаунт.`)
         await show(fresh, await halloweenUser(userId, ctx.role))
         return true
       }
@@ -1221,7 +1221,7 @@ export function createAdminFeatures(
     section: (a: string) => SECTIONS[a] ?? 'owner',
     onCallback,
     onText,
-    userRows: (userId: bigint, _role: StaffRole): InlineKeyboard => [[btn('📱 Устройства', `adm:ud:${userId}`), btn('🏆 Бейджи', `adm:ub:${userId}`), btn('🎃 Билеты', `adm:hwu:${userId}`)]],
+    userRows: (userId: bigint, _role: StaffRole): InlineKeyboard => [[btn('📱 Устройства', `adm:ud:${userId}`), btn('🏆 Бейджи', `adm:ub:${userId}`), btn('🍬 Конфеты', `adm:hwu:${userId}`)]],
   }
 }
 

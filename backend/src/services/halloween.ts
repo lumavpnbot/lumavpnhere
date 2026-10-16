@@ -139,7 +139,8 @@ export function createHalloweenService(deps: {
     return give
   }
 
-  const ticketWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'билет' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'билета' : 'билетов')
+  /** В интерфейсе билет называется конфетой: «+3 конфеты», «всего 12 конфет». */
+  const candyWord = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'конфета' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'конфеты' : 'конфет')
 
   /** Друг запустил бота по ссылке: +1 билет пригласившему. */
   async function onReferralJoin(referrerId: bigint, friendId: bigint, friendName: string | null) {
@@ -152,7 +153,7 @@ export function createHalloweenService(deps: {
       const total = await countTickets(referrerId)
       await notify(
         referrer.tgId,
-        `🎃 <b>+${given} ${ticketWord(given)}</b> за ${friendName ? '@' + friendName : 'нового друга'}!\nВсего у вас <b>${total}</b> ${ticketWord(total)} в розыгрыше.`,
+        `🍬 <b>+${given} ${candyWord(given)}</b> за ${friendName ? '@' + friendName : 'нового друга'}!\nВсего у вас <b>${total}</b> ${candyWord(total)} в розыгрыше.`,
       ).catch(() => undefined)
     }
     return given
@@ -176,7 +177,7 @@ export function createHalloweenService(deps: {
       const total = await countTickets(referrerId)
       await notify(
         referrer.tgId,
-        `🎃 <b>+${given} ${ticketWord(given)}</b>: ${friend?.username ? '@' + friend.username : 'ваш друг'} оплатил подписку!\nВсего у вас <b>${total}</b> ${ticketWord(total)}.`,
+        `🍬 <b>+${given} ${candyWord(given)}</b>: ${friend?.username ? '@' + friend.username : 'ваш друг'} оплатил подписку!\nВсего у вас <b>${total}</b> ${candyWord(total)}.`,
       ).catch(() => undefined)
     }
     return given
@@ -389,7 +390,7 @@ export function createHalloweenService(deps: {
   async function draw(byTgId?: bigint) {
     const c = await config()
     const tickets = await prisma.halloweenTicket.findMany({ where: liveWhere, select: { id: true, userId: true }, orderBy: { id: 'asc' } })
-    if (!tickets.length) throw new Error('В пуле нет билетов')
+    if (!tickets.length) throw new Error('В котле нет конфет')
     const perUser = new Map<bigint, number>()
     for (const t of tickets) perUser.set(t.userId, (perUser.get(t.userId) ?? 0) + 1)
 
