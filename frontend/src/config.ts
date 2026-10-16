@@ -5,7 +5,7 @@ export const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'lynkorobot'
 
 export const LINKS = {
   support: 'https://t.me/lynkvpnsupportbot',
-  channel: 'https://t.me/lumaVPN_service',
+  channel: 'https://t.me/lynkproject',
 }
 
 /** Документы лежат рядом с Mini App (frontend/public/*.html). */
@@ -43,7 +43,7 @@ export type PlanId = (typeof PLANS)[number]['id']
 
 export const REFERRAL = { percent: 30, holdDays: 7 }
 
-export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'gb' | 'tr' | 'kz' | 'jp'
+export type CountryCode = 'fi' | 'nl' | 'de' | 'ru' | 'se' | 'pl' | 'gb' | 'tr' | 'kz' | 'jp' | 'us'
 
 /*
  * Все страны, которые показываем. Какие из них реально работают, приходит

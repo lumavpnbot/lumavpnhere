@@ -1,5 +1,5 @@
 import net from 'node:net'
-import { disabledCountries } from '@/lib/countries'
+import { disabledCountries, h1DisabledCountries } from '@/lib/countries'
 
 export interface ServerStatus {
   country: string
@@ -18,7 +18,6 @@ interface Entry {
  * Страны из DISABLED_COUNTRIES пропускаем.
  */
 export function entries(env: NodeJS.ProcessEnv): Entry[] {
-  const off = disabledCountries(env)
   let list: Entry[] = []
   if (env.H1_PANELS) {
     try {
@@ -29,15 +28,19 @@ export function entries(env: NodeJS.ProcessEnv): Entry[] {
   } else if (env.H1_PANEL_URL) {
     list = [{ country: env.H1_COUNTRY ?? 'fi', url: env.H1_PANEL_URL }]
   }
+  const h1Off = h1DisabledCountries(env)
+  list = list.filter((e) => !h1Off.has(String(e.country).toLowerCase()))
   // Свои серверы с 3x-ui (XUI_PANELS).
   if (env.XUI_PANELS) {
+    const off = disabledCountries(env)
     try {
-      list = [...list, ...(JSON.parse(env.XUI_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))]
+      const own = (JSON.parse(env.XUI_PANELS) as Entry[]).map((e) => ({ country: e.country, url: e.url }))
+      list = [...list, ...own.filter((e) => !off.has(String(e.country).toLowerCase()))]
     } catch {
       /* неверный JSON: ошибку покажет createPanelProvider */
     }
   }
-  return list.filter((e) => !off.has(String(e.country).toLowerCase()))
+  return list
 }
 
 /** Время TCP-подключения к серверу с нашего бэкенда (не пинг пользователя, но показывает, жив ли узел). */

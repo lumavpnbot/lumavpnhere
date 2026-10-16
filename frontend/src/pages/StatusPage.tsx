@@ -104,6 +104,9 @@ export default function StatusPage() {
 function NodeRow({ node }: { node: StatusNode }) {
   const t = useT()
   const known = node.country && /^[a-z]{2}$/.test(node.country)
+  // Новый узел: за сутки меньше 12 часов проверок. Процент за 30 дней по такой истории (и по старым
+  // проверкам умершего узла) только пугает, поэтому вместо него короткая пометка.
+  const isNew = node.hourly.filter((h) => h != null).length < 12
   return (
     <div className="px-4 py-3.5">
       <div className="flex items-center gap-3.5">
@@ -111,7 +114,7 @@ function NodeRow({ node }: { node: StatusNode }) {
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-medium">{known ? t(`country.${node.country}` as TKey) : node.id}</div>
           <div className="text-[12.5px] text-faint">
-            {t('status.uptime30')}: {node.uptime30d != null ? `${node.uptime30d}%` : '—'} · {t('status.uptime24')}: {node.uptime24h != null ? `${node.uptime24h}%` : '—'}
+            {isNew ? t('status.newNode') : `${t('status.uptime30')}: ${node.uptime30d != null ? `${node.uptime30d}%` : '—'}`} · {t('status.uptime24')}: {node.uptime24h != null ? `${node.uptime24h}%` : '—'}
           </div>
         </div>
         <StatusPill tone={node.online ? (node.pingMs != null && node.pingMs > 250 ? 'warn' : 'ok') : 'bad'}>
@@ -123,7 +126,7 @@ function NodeRow({ node }: { node: StatusNode }) {
           <span
             key={i}
             title={h == null ? t('status.noData') : `${h}%`}
-            className={`h-full flex-1 rounded-[3px] ${h == null ? 'bg-white/[0.07]' : h >= 99 ? 'bg-ok/70' : h >= 90 ? 'bg-warn/80' : 'bg-bad/80'}`}
+            className={`h-full flex-1 rounded-[3px] ${h == null ? 'bg-white/[0.04]' : h >= 99 ? 'bg-ok/70' : h >= 90 ? 'bg-warn/80' : 'bg-bad/80'}`}
           />
         ))}
       </div>

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import type { PanelClient, PanelProvider } from '@/panel'
 import { ownerIds } from '@/bot/staff'
-import { disabledCountries } from '@/lib/countries'
+import { disabledCountries, h1DisabledCountries } from '@/lib/countries'
 import { recordError, recordSubRequest, type SubRequest } from '@/lib/errors'
 import type { VpnService } from '@/services/vpn'
 
@@ -173,6 +173,27 @@ export function renameLinks(links: string[], off: Set<string> = new Set()): stri
 }
 
 /**
+ * Дополняет свежий список конфигов странами из прошлого удачного списка (cached), которых в нём нет.
+ * Берём страны из expected (панели сервиса), а если подписка H1 не ответила (upstreamFailed),
+ * то любые недостающие: связанные панели H1 приносят страны, которых нет в expected.
+ * Страны из off не возвращаем. Конфиги без определимой страны из кэша не берём.
+ */
+export function fillMissingCountries(
+  links: string[],
+  cached: string[],
+  expected: string[],
+  off: Set<string>,
+  upstreamFailed: boolean,
+): { links: string[]; restored: string[] } {
+  const fresh = new Set(links.map(linkCountry).filter((c): c is string => !!c))
+  const want = (c: string | null): c is string =>
+    !!c && !fresh.has(c) && !off.has(c) && (upstreamFailed || expected.includes(c))
+  const extra = cached.filter((l) => want(linkCountry(l)))
+  if (!extra.length) return { links, restored: [] }
+  return { links: [...links, ...extra], restored: [...new Set(extra.map((l) => linkCountry(l)!))] }
+}
+
+/**
  * Публичная ссылка подписки: https://<наш домен>/sub/<subToken>.
  *
  * Зачем прокси, а не ссылка панели:
@@ -318,10 +339,13 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
     // Страна есть на своём сервере (3x-ui): её старые конфиги из связанных панелей H1 не берём
     // (так из подписки ушла умершая Германия H1, пришедшая через Финляндию).
     const ownCountries = new Set(direct.map(linkCountry).filter((c): c is string => !!c))
+    // Убранные страны H1 (США) не берём из подписок H1, даже когда есть свой сервер этой страны.
+    const h1Off = h1DisabledCountries(env)
     const upstreamLinks = ok.flatMap((r) => decodeList(r.body.toString('utf8'))).filter((l) => {
       const c = linkCountry(l)
-      return !c || !ownCountries.has(c)
+      return !c || (!ownCountries.has(c) && !h1Off.has(c))
     })
+    const off = disabledCountries(env)
     let links = renameLinks(
       [...upstreamLinks, ...direct].filter((l) => {
         const key = l.split('#')[0]
@@ -329,8 +353,19 @@ export function registerSubscriptionRoutes(app: FastifyInstance, prisma: PrismaC
         seen.add(key)
         return true
       }),
-      disabledCountries(env),
+      off,
     )
+    // Часть стран не пришла (подписка H1 не ответила за UPSTREAM_WAIT_MS, панель лежит), а другие
+    // пришли: недостающие берём из прошлого удачного списка. Иначе пользователь получал только США
+    // (их ссылки приходят напрямую из 3x-ui), и этот урезанный список ещё и затирал кэш.
+    if (links.length && user.subCache) {
+      const upstreamFailed = urls.length === 0 || responses.some((r) => r.status === 'rejected')
+      const filled = fillMissingCountries(links, user.subCache.split('\n').filter(Boolean), panel.countries, off, upstreamFailed)
+      if (filled.restored.length) {
+        links = renameLinks(filled.links, off)
+        log.note = `не пришли ${filled.restored.join(', ')}: взяты из сохранённых конфигов`
+      }
+    }
     if (links.length) {
       // Запоминаем удачный список: пригодится, если в следующий раз панель не ответит.
       const text = links.join('\n')

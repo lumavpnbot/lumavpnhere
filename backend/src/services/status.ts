@@ -1,10 +1,16 @@
 import type { Incident, PrismaClient } from '@prisma/client'
 import { disabledCountries, isDisabledNode } from '@/lib/countries'
 import { recordError } from '@/lib/errors'
+import { linkCountry } from '@/routes/subscription'
 import { entries, tcpPing } from './servers'
 
 const HOUR = 3600_000
 const DAY = 24 * HOUR
+
+/** Сколько проверок подряд (раз в минуту) узел должен не отвечать, чтобы открыть инцидент и написать. */
+const FAILS_TO_OPEN = 5
+/** Сколько удачных проверок подряд нужно, чтобы закрыть инцидент (без «мигания»). */
+const OKS_TO_CLOSE = 2
 
 export type Overall = 'ok' | 'degraded' | 'down'
 
@@ -21,7 +27,13 @@ interface Node {
  *  - встроенный мониторинг: TCP-проверка узлов из H1_PANELS / STATUS_NODES раз в минуту;
  *  - или Uptime Kuma (UPTIME_KUMA_URL + UPTIME_KUMA_SLUG): берём его публичную страницу статуса.
  * Проверки пишутся в status_checks (30 дней), по ним считаются uptime и почасовой график.
- * Узел не отвечает 3 проверки подряд → инцидент открывается сам и сам закрывается при восстановлении.
+ * Узел не отвечает 5 проверок подряд → инцидент открывается сам и закрывается после 2 удачных подряд.
+ *
+ * Раньше проверялся адрес панели (API H1 / 3x-ui) одной попыткой с таймаутом 3 с, инцидент
+ * открывался после 3 неудач и закрывался после первой удачи. Панель отвечает медленно чаще,
+ * чем падает VPN, плюс сетевые сбои у самого Railway: за день набегало 60+ ложных тревог.
+ * Теперь проверяется сам VPN-адрес (из конфигов подписки), две попытки по 5 с, и если не
+ * отвечают сразу все узлы, это считается сбоем сети у нас, а не у серверов.
  */
 export function createStatusService(deps: {
   prisma: PrismaClient
@@ -36,6 +48,9 @@ export function createStatusService(deps: {
   /** Инциденты узлов убранных стран тоже не показываем (ручные инциденты без узла остаются). */
   const visibleIncident = { OR: [{ node: null }, { node: { notIn: [...off] } }] }
   const fails = new Map<string, number>()
+  const oks = new Map<string, number>()
+  /** Сколько тиков подряд не отвечали все узлы сразу (скорее сеть Railway, чем серверы). */
+  let allDownStreak = 0
   /** Когда менялись инциденты: по нему сбрасываются кэши статуса. */
   let changedAt = Date.now()
   const touch = () => {
@@ -86,12 +101,63 @@ export function createStatusService(deps: {
     })
   }
 
+  /**
+   * Адреса самих VPN-серверов по странам, из последних выданных подписок (user.subCache):
+   * их и проверяем, а не панель. Кэш на 10 минут.
+   */
+  let vpnCache: { at: number; map: Map<string, { host: string; port: number }> } | null = null
+  async function vpnEndpoints() {
+    if (vpnCache && Date.now() - vpnCache.at < 10 * 60_000) return vpnCache.map
+    const map = new Map<string, { host: string; port: number }>()
+    const rows = await prisma.user.findMany({ where: { subCache: { not: null } }, orderBy: { subCacheAt: 'desc' }, take: 20, select: { subCache: true } })
+    for (const row of rows) {
+      for (const link of (row.subCache ?? '').split('\n')) {
+        try {
+          const u = new URL(link.split('#')[0])
+          // TCP-проверка имеет смысл для TCP-протоколов (VLESS/Trojan), не для Hysteria (UDP).
+          if (!/^(vless|trojan|vmess|ss):$/i.test(u.protocol) || !u.hostname || !u.port) continue
+          const c = linkCountry(link)
+          if (c && !map.has(c)) map.set(c, { host: u.hostname, port: Number(u.port) })
+        } catch {
+          /* не URL */
+        }
+      }
+    }
+    vpnCache = { at: Date.now(), map }
+    return map
+  }
+
+  /** Проверка узла: две попытки по 5 с, жив, если ответил хотя бы раз. */
+  async function probe(host: string, port: number) {
+    const first = await tcpPing(host, port, 5000)
+    if (first != null) return first
+    await new Promise((r) => setTimeout(r, 1500))
+    return tcpPing(host, port, 5000)
+  }
+
   /** Одна итерация мониторинга (джоба раз в минуту). */
   async function tick() {
-    const results = kuma()
-      ? await kumaResults()
-      : await Promise.all(builtinNodes().map(async (n) => ({ id: n.id, ...(await tcpPing(n.host, n.port).then((ms) => ({ ok: ms != null, pingMs: ms }))) })))
+    let results: { id: string; ok: boolean; pingMs: number | null }[]
+    if (kuma()) {
+      results = await kumaResults()
+    } else {
+      const vpn = await vpnEndpoints().catch(() => new Map<string, { host: string; port: number }>())
+      results = await Promise.all(
+        builtinNodes().map(async (n) => {
+          const target = (n.country && vpn.get(n.country)) || { host: n.host, port: n.port }
+          const ms = await probe(target.host, target.port)
+          return { id: n.id, ok: ms != null, pingMs: ms }
+        }),
+      )
+    }
     if (!results.length) return results
+
+    // Не ответил никто сразу: почти наверняка сбой сети на нашей стороне (Railway), а не всех серверов.
+    // Не пишем это в историю и не считаем неудачей, пока это не длится 10 минут подряд.
+    const allDown = results.every((r) => !r.ok)
+    allDownStreak = allDown ? allDownStreak + 1 : 0
+    if (allDown && results.length > 1 && allDownStreak < 10) return results
+
     await prisma.statusCheck.createMany({ data: results.map((r) => ({ node: r.id, ok: r.ok, pingMs: r.pingMs })) })
 
     // Узел убрали из мониторинга (страну отключили, панель удалили): его авто-инцидент
@@ -102,12 +168,13 @@ export function createStatusService(deps: {
     })
     if (orphaned.count) touch()
 
-    const allDown = results.every((r) => !r.ok)
     for (const r of results) {
       const open = await prisma.incident.findFirst({ where: { node: r.id, auto: true, status: 'open' } })
       if (r.ok) {
         fails.set(r.id, 0)
-        if (open) {
+        const okRun = (oks.get(r.id) ?? 0) + 1
+        oks.set(r.id, okRun)
+        if (open && okRun >= OKS_TO_CLOSE) {
           // Автозакрытие инцидента при восстановлении.
           await prisma.incident.update({ where: { id: open.id }, data: { status: 'resolved', resolvedAt: new Date() } })
           touch()
@@ -115,9 +182,10 @@ export function createStatusService(deps: {
         }
         continue
       }
+      oks.set(r.id, 0)
       const n = (fails.get(r.id) ?? 0) + 1
       fails.set(r.id, n)
-      if (n >= 3 && !open) {
+      if (n >= FAILS_TO_OPEN && !open) {
         const inc = await prisma.incident.create({
           data: { title: `${r.id.toUpperCase()}: узел не отвечает`, severity: allDown ? 'major' : 'minor', node: r.id, auto: true, text: 'Обнаружено мониторингом. Уже разбираемся.' },
         })
