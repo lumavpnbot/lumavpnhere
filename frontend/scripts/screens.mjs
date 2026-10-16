@@ -15,6 +15,7 @@ const ROUTES = [
   ['logins', '#/account/logins'],
   ['support', '#/support'],
   ['reviews', '#/reviews'],
+  ['halloween', '#/halloween'],
   ['doc-terms', '#/docs/terms'],
 ]
 

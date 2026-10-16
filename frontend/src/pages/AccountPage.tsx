@@ -18,6 +18,7 @@ export default function AccountPage() {
   const navigate = useNavigate()
   const profile = useAppStore((s) => s.profile)
   const subscription = useAppStore((s) => s.subscription)
+  const halloween = useAppStore((s) => s.halloween)
   const name = useDisplayName()
   const [langOpen, setLangOpen] = useState(false)
   const plan = PLANS.find((p) => p.id === subscription.plan)
@@ -73,6 +74,12 @@ export default function AccountPage() {
           />
           <Divider />
           <ListRow icon={<TransferIcon className="h-[18px] w-[18px]" />} title={t('transfer.row')} hint={t('transfer.rowHint')} onClick={() => navigate('/account/transfer')} />
+          {halloween && (
+            <>
+              <Divider />
+              <ListRow icon={<span className="text-[16px] leading-none">🎃</span>} title={t('hw.row')} hint={t('hw.rowHint')} onClick={() => navigate('/halloween')} />
+            </>
+          )}
         </div>
       </Section>
 

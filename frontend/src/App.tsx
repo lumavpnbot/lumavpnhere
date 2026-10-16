@@ -42,6 +42,7 @@ const LAZY_PAGES = {
   status: () => import('@/pages/StatusPage'),
   transfer: () => import('@/pages/TransferPage'),
   achievements: () => import('@/pages/AchievementsPage'),
+  halloween: () => import('@/pages/HalloweenPage'),
 }
 const ConnectPage = page(LAZY_PAGES.connect)
 const BalancePage = page(LAZY_PAGES.balance)
@@ -52,6 +53,7 @@ const DocPage = page(LAZY_PAGES.doc)
 const StatusPage = page(LAZY_PAGES.status)
 const TransferPage = page(LAZY_PAGES.transfer)
 const AchievementsPage = page(LAZY_PAGES.achievements)
+const HalloweenPage = page(LAZY_PAGES.halloween)
 
 const loadMotionFeatures = () => import('@/lib/motionFeatures').then((r) => r.default, reloadOnce)
 
@@ -146,6 +148,7 @@ export default function App() {
               <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/account/transfer" element={<TransferPage />} />
               <Route path="/account/achievements" element={<AchievementsPage />} />
+              <Route path="/halloween" element={<HalloweenPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
