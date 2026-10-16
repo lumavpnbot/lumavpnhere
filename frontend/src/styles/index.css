@@ -327,86 +327,43 @@ body {
   }
 }
 
-/* ───────────── Сезонная тема: Хэллоуин ─────────────
- * Включается, пока мероприятие активно: App.tsx ставит <html data-season="halloween">
- * по данным /me. Выключили событие в админке — атрибут пропадает, приложение
- * возвращается к обычному серебру. Никаких правок базовых стилей, только перекрытия.
+/* ───────────── Декор экрана «Хэллоуин» ─────────────
+ * Живёт только на своей странице (.hw-decor внутри HalloweenPage) и лежит
+ * под контентом. Общий стиль приложения не трогаем: фон, кнопки, таб-бар
+ * и логотип остаются такими же, как всегда.
  */
-:root[data-season='halloween'] {
-  --season-1: 249, 115, 22; /* тыквенный */
-  --season-2: 168, 85, 247; /* фиолетовый */
-  --season-3: 251, 191, 36; /* свечной */
-}
-
-:root[data-season='halloween'] .ambient {
-  background: radial-gradient(140% 90% at 50% -10%, #1d1418 0%, #0f0b0d 45%, #060405 80%);
-}
-
-:root[data-season='halloween'] .ambient__layer--a {
-  background:
-    radial-gradient(38% 32% at 22% 18%,
-      rgba(var(--season-1), 0.22) 0%,
-      rgba(var(--season-1), 0.14) 20%,
-      rgba(var(--season-1), 0.07) 42%,
-      rgba(var(--season-1), 0.02) 68%,
-      transparent 100%),
-    radial-gradient(34% 30% at 82% 62%,
-      rgba(var(--season-2), 0.2) 0%,
-      rgba(var(--season-2), 0.12) 24%,
-      rgba(var(--season-2), 0.05) 48%,
-      rgba(var(--season-2), 0.015) 72%,
-      transparent 100%);
-}
-
-:root[data-season='halloween'] .ambient__layer--b {
-  background:
-    radial-gradient(30% 26% at 70% 20%,
-      rgba(var(--season-3), 0.12) 0%,
-      rgba(var(--season-3), 0.07) 28%,
-      rgba(var(--season-3), 0.03) 52%,
-      transparent 100%),
-    radial-gradient(40% 30% at 25% 80%,
-      rgba(var(--season-2), 0.16) 0%,
-      rgba(var(--season-2), 0.09) 28%,
-      rgba(var(--season-2), 0.04) 52%,
-      transparent 100%);
-}
-
-/* Декорации сезона: паутина по верхним углам, тыквы и летучие мыши в фоне. */
-.season-decor {
+.hw-decor {
   position: absolute;
   inset: 0;
+  z-index: -1;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .season-web {
   position: absolute;
   top: 0;
-  width: 132px;
-  height: 132px;
+  width: 128px;
+  height: 128px;
   color: rgba(236, 228, 255, 0.5);
-  opacity: 0.22;
+  opacity: 0.2;
 }
 
-.season-web--l { left: 0; }
-.season-web--r { right: 0; transform: scaleX(-1); }
-
-@media (min-width: 420px) {
-  .season-web { width: 160px; height: 160px; }
-}
+.season-web--l { left: -10px; }
+.season-web--r { right: -10px; transform: scaleX(-1); }
 
 .season-pumpkin {
   position: absolute;
-  width: 54px;
-  height: 48px;
+  width: 48px;
+  height: 42px;
   color: #f97316;
-  opacity: 0.13;
+  opacity: 0.16;
   filter: drop-shadow(0 0 16px rgba(249, 115, 22, 0.45));
   animation: season-bob 14s var(--ease) infinite alternate;
 }
 
-.season-pumpkin--1 { bottom: 12%; left: 3%; }
-.season-pumpkin--2 { top: 21%; right: 2%; width: 38px; height: 34px; animation-duration: 18s; animation-delay: -5s; }
+.season-pumpkin--1 { top: 32%; left: -6px; }
+.season-pumpkin--2 { top: 62%; right: -4px; width: 36px; height: 32px; animation-duration: 18s; animation-delay: -5s; }
 
 @keyframes season-bob {
   0%   { transform: translate3d(0, 0, 0) rotate(-3deg); }
@@ -415,18 +372,17 @@ body {
 
 .season-bat {
   position: absolute;
-  width: 34px;
-  height: 34px;
-  /* Светлый силуэт: на тёмном фоне чёрная мышь не читается. */
-  opacity: 0.1;
+  width: 30px;
+  height: 30px;
+  opacity: 0.12;
   color: #e7d8ff;
   filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.35));
   animation: season-drift 26s var(--ease) infinite alternate;
 }
 
-.season-bat--1 { top: 16%; left: 12%; animation-duration: 29s; }
-.season-bat--2 { top: 28%; right: 16%; width: 24px; height: 24px; animation-duration: 35s; animation-delay: -6s; }
-.season-bat--3 { bottom: 26%; left: 26%; width: 28px; height: 28px; animation-duration: 41s; animation-delay: -14s; }
+.season-bat--1 { top: 18%; right: 8%; animation-duration: 29s; }
+.season-bat--2 { top: 48%; left: 6%; width: 22px; height: 22px; animation-duration: 35s; animation-delay: -6s; }
+.season-bat--3 { top: 80%; right: 12%; width: 26px; height: 26px; animation-duration: 41s; animation-delay: -14s; }
 
 @keyframes season-drift {
   0%   { transform: translate3d(0, 0, 0) rotate(-4deg); }
@@ -439,48 +395,4 @@ body {
   .season-pumpkin {
     animation: none;
   }
-}
-
-/* Карточки и кнопки: тёплая подсветка вместо серебряной. */
-:root[data-season='halloween'] .glass-hero {
-  background:
-    radial-gradient(120% 90% at 0% 0%, rgba(var(--season-1), 0.16), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
-}
-
-:root[data-season='halloween'] .btn-glass-strong {
-  background: linear-gradient(180deg, rgba(var(--season-1), 0.42), rgba(var(--season-1), 0.2));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 220, 190, 0.35),
-    0 8px 26px -14px rgba(var(--season-1), 0.75);
-}
-
-:root[data-season='halloween'] .tile {
-  background: linear-gradient(160deg, rgba(var(--season-1), 0.24), rgba(var(--season-2), 0.1));
-}
-
-:root[data-season='halloween'] .edge-card {
-  background:
-    radial-gradient(90% 120% at 100% 0%, rgba(var(--season-1), 0.22), transparent 58%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 65%);
-  box-shadow: 0 18px 50px -24px rgba(var(--season-1), 0.4);
-}
-
-:root[data-season='halloween'] .glass-nav {
-  background: linear-gradient(180deg, rgba(34, 24, 28, 0.84), rgba(16, 11, 13, 0.92));
-}
-
-/* Активная вкладка таб-бара. */
-:root[data-season='halloween'] .nav-pill {
-  background: linear-gradient(180deg, rgba(var(--season-1), 0.34), rgba(var(--season-2), 0.22));
-}
-
-:root[data-season='halloween'] .wordmark {
-  /* Только background-image: шорткат background сбросил бы background-clip: text,
-     и вместо слова LYNK получался залитый прямоугольник. */
-  background-image: linear-gradient(180deg, #ffd9b0 0%, #f97316 100%);
-}
-
-:root[data-season='halloween'] .sheet-panel {
-  background: linear-gradient(180deg, #221a1e, #130f11 60%);
 }

@@ -37,7 +37,7 @@ export default function BottomNav() {
             className="absolute inset-y-0 left-0 w-1/5 transition-transform duration-300"
             style={{ transform: `translateX(${index * 100}%)`, transitionTimingFunction: 'var(--ease)' }}
           >
-            <span className="nav-pill block h-full w-full rounded-[22px] bg-white/[0.13]" />
+            <span className="block h-full w-full rounded-[22px] bg-white/[0.13]" />
           </span>
 
           {TABS.map(({ to, label, icon: Icon }, i) => {

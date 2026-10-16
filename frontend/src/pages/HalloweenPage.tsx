@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import SeasonDecor from '@/components/seasonDecor'
 import { PageTitle, Section, TopBar } from '@/components/ui'
 import { ClockIcon, GiftIcon, ReferralsIcon, ShareIcon, TrophyIcon } from '@/components/icons'
 import { BOT_USERNAME } from '@/config'
@@ -223,10 +224,12 @@ export default function HalloweenPage() {
 
   return (
     <>
+      {/* Паутина, тыквы и мыши: только на этом экране, общий фон приложения не меняем. */}
+      <SeasonDecor />
       <TopBar />
       <PageTitle title={t('hw.title')} subtitle={t('hw.subtitle')} />
 
-      {/* ── Счётчик билетов ── */}
+      {/* ── Счётчик конфет ── */}
       <div className="glass glass-hero relative overflow-hidden p-5">
         <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 text-[120px] leading-none opacity-[0.12]">
           🎃
