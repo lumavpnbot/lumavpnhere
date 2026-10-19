@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient, TransferRequest, TransferStatus, User } from '@prisma/client'
 import { xlsx } from '@/lib/xlsx'
 import { ACHIEVEMENTS, ACH_BY_CODE, RARITY_NAMES, rewardLabel, type AchievementService } from '@/services/achievements'
-import type { RewardSpec, SettingsService } from '@/services/settings'
+import type { HalloweenPrize, RewardSpec, SettingsService } from '@/services/settings'
 import type { HalloweenService } from '@/services/halloween'
 import type { StatusService } from '@/services/status'
 import { REJECT_REASONS, parseTransferCode, transferCode, type TransferCheck, type TransferService } from '@/services/transfer'
@@ -63,7 +63,7 @@ export function createAdminFeatures(
     tr: 'tr', trl: 'tr', trc: 'tr', tra: 'tr', trs: 'tr', trp: 'tr', trpc: 'tr', trx: 'tr',
     ach: 'ach', achc: 'ach', achs: 'ach', acha: 'ach', achr: 'ach', achx: 'ach', achg: 'ach',
     st: 'st', stn: 'st', stx: 'st', stp: 'st', stpok: 'st', sth: 'st', std: 'st', stdok: 'st',
-    hw: 'hw', hwu: 'hw', hww: 'hw', hwc: 'hw', hwd: 'hw', hwx: 'hw',
+    hw: 'hw', hwu: 'hw', hww: 'hw', hwc: 'hw', hwd: 'hw', hwx: 'hw', hwp: 'hw',
     ud: 'users', udx: 'users', udh: 'users', ub: 'users', ubg: 'users',
     ...(reviewsAdmin?.sections ?? {}),
   }
@@ -447,11 +447,11 @@ export function createAdminFeatures(
           '<i>Публикация только показывает список в приложении. Призы, уведомления и скидки начисляются кнопками ниже.</i>'
         : '\n<i>Розыгрыш ещё не проводился.</i>')
     const kb: InlineKeyboard = [
+      [btn('🎁 Призы', 'adm:hwp'), btn('🏅 Победители', 'adm:hwd:list')],
       [btn(c.intakeClosed ? '🔓 Открыть сбор' : '🔒 Закрыть сбор', 'adm:hwd:intake')],
       [btn('🎲 Провести розыгрыш', 'adm:hwd:run')],
     ]
     if (draw) {
-      kb.push([btn('👀 Победители', 'adm:hwd:list')])
       if (!draw.publishedAt) kb.push([btn('📣 Опубликовать результаты', 'adm:hwd:pub')])
       // Призы, уведомления и скидки выдаются отдельно: публикация сама ничего не начисляет.
       kb.push([btn('💸 Начислить призы', 'adm:hwd:prizes'), btn('🔔 Уведомить победителей', 'adm:hwd:notify')])
@@ -464,21 +464,74 @@ export function createAdminFeatures(
 
   async function halloweenWinners(): Promise<View> {
     const draw = await halloween.lastDraw()
-    if (!draw) return { text: 'Розыгрыш ещё не проводился', kb: [back('adm:hwd')] }
-    const live = draw.winners.filter((w) => !w.replacedAt)
+    const live = draw?.winners.filter((w) => !w.replacedAt) ?? []
     return {
       text:
-        header('🏅', 'Победители', `розыгрыш ${dt(draw.createdAt)} · зерно ${draw.seed.slice(0, 8)}`) +
-        live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · конфет ${w.tickets}${w.grantedAt ? ' · приз выдан' : ''}${w.notifiedAt ? ' · уведомлён' : ''}`).join('\n') +
-        '\n\n<i>💸 выдать приз · 🔔 написать победителю · 🔄 заменить</i>',
+        header('🏅', 'Победители', draw ? `розыгрыш ${dt(draw.createdAt)}${draw.seed === 'manual' ? ' · вручную' : ` · зерно ${draw.seed.slice(0, 8)}`}` : 'розыгрыша ещё не было') +
+        (live.map((w) => `${w.place} место · <b>${esc(w.prizeTitle)}</b>\n  ${who(w.user)} · конфет ${w.tickets}${w.grantedAt ? ' · приз выдан' : ''}${w.notifiedAt ? ' · уведомлён' : ''}`).join('\n') ||
+          '<i>Пока никого. Проведите розыгрыш или добавьте победителей вручную.</i>') +
+        '\n\n<i>Нажмите на победителя: выдать приз, написать, сменить место, заменить или убрать.</i>',
       kb: [
-        ...live.map((w) => [
-          btn(`${w.grantedAt ? '✅' : '💸'} ${w.user.username ? '@' + w.user.username : w.user.tgId}`, `adm:hwd:one:${w.id}`),
-          btn(w.notifiedAt ? '🔕' : '🔔', `adm:hwd:note:${w.id}`),
-          btn('🔄', `adm:hwd:rep:${w.id}`),
-        ]),
+        ...live.map((w) => [btn(`${w.place}. ${w.grantedAt ? '✅' : '⏳'} ${w.user.username ? '@' + w.user.username : w.user.tgId} · ${w.prizeTitle}`, `adm:hwd:w:${w.id}`)]),
+        [btn('➕ Добавить победителя', 'adm:hwd:wadd')],
         back('adm:hwd'),
       ],
+    }
+  }
+
+  const rewardText = (p: HalloweenPrize) => (p.reward ? `${p.reward.plan === 'pro' ? 'Премиум' : 'Старт'} на ${p.reward.days} дн. (начисляется сам)` : 'выдаёт администрация')
+
+  /** Призы розыгрыша: список, добавление, правка, удаление. */
+  async function halloweenPrizes(): Promise<View> {
+    const c = await halloween.config()
+    const list = c.prizes.slice().sort((a, b) => a.place - b.place)
+    return {
+      text:
+        header('🎁', 'Призы', `${list.reduce((a, p) => a + p.count, 0)} шт.`) +
+        (list.map((p) => `<b>${p.place} место</b> · ${esc(p.title)} × ${p.count}
+  ${rewardText(p)}`).join('\n') || '<i>Призов нет.</i>') +
+        '\n\n<i>Эти призы видят участники в приложении. Розыгрыш раздаёт их по местам: сначала 1 место, потом 2-е и т.д.</i>',
+      kb: [
+        ...list.map((p) => [btn(`✏️ ${p.place}. ${p.title} × ${p.count}`, `adm:hwp:e:${p.code}`)]),
+        [btn('➕ Добавить приз', 'adm:hwp:add')],
+        back('adm:hwd'),
+      ],
+    }
+  }
+
+  async function halloweenPrize(code: string): Promise<View> {
+    const c = await halloween.config()
+    const p = c.prizes.find((x) => x.code === code)
+    if (!p) return { text: 'Приз не найден', kb: [back('adm:hwp')] }
+    return {
+      text: header('🎁', esc(p.title), `${p.place} место`) + `Количество: <b>${p.count}</b>\nНаграда: ${rewardText(p)}\nКод: <code>${esc(p.code)}</code>`,
+      kb: [
+        [btn('Название', `adm:hwp:t:${code}`), btn('Место', `adm:hwp:p:${code}`), btn('Количество', `adm:hwp:n:${code}`)],
+        [btn('Награда', `adm:hwp:r:${code}`)],
+        [btn('🗑 Удалить приз', `adm:hwp:del:${code}`)],
+        back('adm:hwp'),
+      ],
+    }
+  }
+
+  async function halloweenWinner(id: bigint): Promise<View> {
+    const w = await prisma.halloweenWinner.findUnique({ where: { id }, include: { user: true } })
+    if (!w) return { text: 'Победитель не найден', kb: [back('adm:hwd:list')] }
+    return {
+      text:
+        header('🏅', `${w.place} место`, esc(w.prizeTitle)) +
+        `${who(w.user)} · <code>${w.user.tgId}</code>\nКонфет: ${w.tickets}\n` +
+        `Приз: ${w.grantedAt ? '✅ выдан ' + dt(w.grantedAt) : '⏳ не выдан'}\nУведомление: ${w.notifiedAt ? '✅ ' + dt(w.notifiedAt) : 'не отправлено'}` +
+        (w.replacedAt ? '\n\n<i>Убран из победителей.</i>' : ''),
+      kb: w.replacedAt
+        ? [back('adm:hwd:list')]
+        : [
+            [btn(w.grantedAt ? '✅ Приз выдан' : '💸 Выдать приз', `adm:hwd:one:${w.id}`), btn(w.notifiedAt ? '🔕 Уведомлён' : '🔔 Уведомить', `adm:hwd:note:${w.id}`)],
+            [btn('🔢 Сменить место', `adm:hwd:wp:${w.id}`), btn('🔄 Заменить случайным', `adm:hwd:rep:${w.id}`)],
+            [btn('🗑 Убрать из победителей', `adm:hwd:wdel:${w.id}`)],
+            [btn('👤 Пользователь', `adm:u:${w.userId}`)],
+            back('adm:hwd:list'),
+          ],
     }
   }
 
@@ -872,7 +925,57 @@ export function createAdminFeatures(
           await show(ctx, await halloweenWinners())
           return next ? `Новый победитель: ${next.user.username ? '@' + next.user.username : next.user.tgId}` : 'Некем заменить: свободных конфет нет'
         }
+        if (b === 'w') return show(ctx, await halloweenWinner(BigInt(c)))
+        if (b === 'wadd') {
+          if (!isOwner) return 'Только владелец'
+          const cfg = await halloween.config()
+          const places = [...new Set(cfg.prizes.map((p) => p.place))].sort((x, y) => x - y)
+          return void (await ask(ctx, 'hw_win_add', `Кого и на какое место? Отправьте tg_id или @username и место через пробел, например <code>@ivan 1</code>.\nМеста с призами: ${places.join(', ') || 'нет, сначала добавьте призы'}`, {}, 'adm:hwd:list'))
+        }
+        if (b === 'wp') {
+          if (!isOwner) return 'Только владелец'
+          return void (await ask(ctx, 'hw_win_place', 'Новое место (число). Приз сменится на приз этого места.', { id: c }, `adm:hwd:w:${c}`))
+        }
+        if (b === 'wdel') {
+          if (!isOwner) return 'Только владелец'
+          return show(ctx, confirmView('Убрать победителя из списка без замены? Если приз уже выдан, сам приз это не отменит.', `adm:hwd:wdelok:${c}`, `adm:hwd:w:${c}`))
+        }
+        if (b === 'wdelok') {
+          if (!isOwner) return 'Только владелец'
+          await halloween.removeWinner(BigInt(c))
+          await staff.audit(ctx.tgId, 'halloween_winner_remove', `winner:${c}`)
+          await show(ctx, await halloweenWinners())
+          return 'Убран из победителей'
+        }
         return show(ctx, await halloweenDraw())
+      }
+      case 'hwp': {
+        if (!b) return show(ctx, await halloweenPrizes())
+        if (!isOwner) return 'Только владелец'
+        if (b === 'e') return show(ctx, await halloweenPrize(c))
+        if (b === 'add') {
+          return void (await ask(
+            ctx,
+            'hw_prize_add',
+            'Новый приз одной строкой: <code>место | название | количество | награда</code>\n' +
+              'Награда: <code>pro 365</code> (Премиум на 365 дней), <code>start 30</code> (Старт на 30 дней) или <code>-</code>, если приз выдаёте вы сами.\n' +
+              'Например: <code>1 | AirPods 4 | 1 | -</code> или <code>3 | 3 месяца Премиум | 5 | pro 92</code>',
+            {},
+            'adm:hwp',
+          ))
+        }
+        if (b === 't') return void (await ask(ctx, 'hw_prize_title', 'Новое название приза:', { code: c }, `adm:hwp:e:${c}`))
+        if (b === 'p') return void (await ask(ctx, 'hw_prize_place', 'Место (1 — главный приз):', { code: c }, `adm:hwp:e:${c}`))
+        if (b === 'n') return void (await ask(ctx, 'hw_prize_count', 'Сколько таких призов (сколько победителей на этом месте)?', { code: c }, `adm:hwp:e:${c}`))
+        if (b === 'r') return void (await ask(ctx, 'hw_prize_reward', 'Награда: <code>pro 365</code>, <code>start 30</code> или <code>-</code> (выдаёте сами).', { code: c }, `adm:hwp:e:${c}`))
+        if (b === 'del') return show(ctx, confirmView('Удалить приз? Уже выбранные победители останутся в списке.', `adm:hwp:delok:${c}`, `adm:hwp:e:${c}`))
+        if (b === 'delok') {
+          await halloween.removePrize(c)
+          await staff.audit(ctx.tgId, 'halloween_prize_remove', c)
+          await show(ctx, await halloweenPrizes())
+          return 'Приз удалён'
+        }
+        return show(ctx, await halloweenPrizes())
       }
       case 'hwx': {
         if (b === 'draw') {
@@ -978,6 +1081,17 @@ export function createAdminFeatures(
   }
 
   // ── Пошаговый ввод ────────────────────────────────────────────────────────
+
+  /** «pro 365» / «премиум 365» / «start 30» / «старт 30» → подписка; «-» / «нет» → физический приз; иначе undefined. */
+  function parseReward(raw: string): HalloweenPrize['reward'] | undefined {
+    const t = raw.trim().toLowerCase()
+    if (!t || t === '-' || t === 'нет' || t === 'none') return null
+    const m = /^(pro|премиум|start|старт)\s+(\d{1,4})$/.exec(t)
+    if (!m) return undefined
+    const days = Number(m[2])
+    if (days < 1 || days > 3650) return undefined
+    return { plan: m[1] === 'pro' || m[1] === 'премиум' ? 'pro' : 'start', days }
+  }
 
   async function findUser(query: string) {
     const q = query.trim().replace(/^@/, '')
@@ -1113,6 +1227,78 @@ export function createAdminFeatures(
           return true
         }
         await show(fresh, await halloweenUser(u.id, ctx.role))
+        return true
+      }
+      case 'hw_prize_add': {
+        const parts = v.split('|').map((x) => x.trim())
+        const place = Number(parts[0])
+        const count = Number(parts[2] ?? 1)
+        const reward = parseReward(parts[3] ?? '-')
+        if (parts.length < 2 || !Number.isInteger(place) || place < 1 || place > 50 || !parts[1] || !Number.isInteger(count) || count < 1 || count > 100 || reward === undefined) {
+          await retry('Формат: место | название | количество | награда. Например: 1 | AirPods 4 | 1 | -')
+          return true
+        }
+        done()
+        const prize = await halloween.addPrize({ place, title: parts[1].slice(0, 60), count, reward })
+        await staff.audit(ctx.tgId, 'halloween_prize_add', prize.code, { place, count, reward })
+        await show(fresh, await halloweenPrizes())
+        return true
+      }
+      case 'hw_prize_title':
+      case 'hw_prize_place':
+      case 'hw_prize_count':
+      case 'hw_prize_reward': {
+        const code = String(data.code)
+        let patch: Partial<Omit<HalloweenPrize, 'code'>>
+        if (state.kind === 'hw_prize_title') {
+          if (!v || v.length > 60) { await retry('Название до 60 символов'); return true }
+          patch = { title: v }
+        } else if (state.kind === 'hw_prize_place') {
+          if (!Number.isInteger(n) || n < 1 || n > 50) { await retry('Целое число от 1 до 50'); return true }
+          patch = { place: n }
+        } else if (state.kind === 'hw_prize_count') {
+          if (!Number.isInteger(n) || n < 1 || n > 100) { await retry('Целое число от 1 до 100'); return true }
+          patch = { count: n }
+        } else {
+          const reward = parseReward(v)
+          if (reward === undefined) { await retry('pro 365, start 30 или -'); return true }
+          patch = { reward }
+        }
+        done()
+        await halloween.updatePrize(code, patch)
+        await staff.audit(ctx.tgId, 'halloween_prize_edit', code, patch)
+        await show(fresh, await halloweenPrize(code))
+        return true
+      }
+      case 'hw_win_add': {
+        const [q, placeRaw] = v.split(/\s+/)
+        const place = Number(placeRaw)
+        const u = q ? await findUser(q) : null
+        if (!u || !Number.isInteger(place) || place < 1) {
+          await retry(u ? 'Укажите место числом, например @ivan 1' : 'Пользователь не найден. Формат: @username 1 или 123456789 1')
+          return true
+        }
+        try {
+          const w = await halloween.addWinner(u.id, place, BigInt(ctx.tgId))
+          done()
+          await staff.audit(ctx.tgId, 'halloween_winner_add', `user:${u.id}`, { place })
+          await show(fresh, await halloweenWinner(w.id))
+        } catch (err) {
+          await retry((err as Error).message)
+        }
+        return true
+      }
+      case 'hw_win_place': {
+        if (!Number.isInteger(n) || n < 1) { await retry('Место числом'); return true }
+        const id = BigInt(String(data.id))
+        try {
+          await halloween.setWinnerPlace(id, n)
+          done()
+          await staff.audit(ctx.tgId, 'halloween_winner_place', `winner:${id}`, { place: n })
+          await show(fresh, await halloweenWinner(id))
+        } catch (err) {
+          await retry((err as Error).message)
+        }
         return true
       }
       case 'hw_grant': {

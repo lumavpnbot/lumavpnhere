@@ -125,6 +125,10 @@ export default function HalloweenPage() {
   const [wheel, setWheel] = useState<WheelStatus | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [prizes, setPrizes] = useState<Prize[]>([])
+  const event = useAppStore((s) => s.halloween)
+  // Главный приз и скидка из админки (список призов, а пока он грузится — из /me).
+  const main = prizes.slice().sort((a, b) => a.place - b.place)[0]?.title ?? event?.mainPrize ?? 'призы'
+  const pct = event?.consolationPercent ?? 20
   const [stats, setStats] = useState<{ tickets: number; participants: number }>({ tickets: 0, participants: 0 })
   const [winners, setWinners] = useState<Winner[]>([])
   const [spinning, setSpinning] = useState(false)
@@ -206,7 +210,7 @@ export default function HalloweenPage() {
   const share = async () => {
     haptic('light')
     const link = profile.referralLink ?? `https://t.me/${BOT_USERNAME}`
-    await shareReferral(link, t('hw.shareText'))
+    await shareReferral(link, t('hw.shareText', { main }))
   }
 
   const candyWord = (n: number) => plural(lang, n, { ru: ['конфета', 'конфеты', 'конфет'], en: ['candy', 'candy'] })
@@ -217,7 +221,7 @@ export default function HalloweenPage() {
     return (
       <>
         <TopBar />
-        <PageTitle title={t('hw.title')} subtitle={t('hw.subtitle')} />
+        <PageTitle title={t('hw.title')} subtitle={t('hw.subtitle', { main })} />
       </>
     )
   }
@@ -227,7 +231,7 @@ export default function HalloweenPage() {
       {/* Паутина, тыквы и мыши: только на этом экране, общий фон приложения не меняем. */}
       <SeasonDecor />
       <TopBar />
-      <PageTitle title={t('hw.title')} subtitle={t('hw.subtitle')} />
+      <PageTitle title={t('hw.title')} subtitle={t('hw.subtitle', { main })} />
 
       {/* ── Счётчик конфет ── */}
       <div className="glass glass-hero relative overflow-hidden p-5">
@@ -337,7 +341,7 @@ export default function HalloweenPage() {
             </div>
           ))}
         </div>
-        <p className="mt-2 px-1 text-[12px] leading-relaxed text-faint">{t('hw.consolation')}</p>
+        <p className="mt-2 px-1 text-[12px] leading-relaxed text-faint">{t('hw.consolation', { pct })}</p>
       </Section>
 
       {/* ── Победители: только после публикации ── */}

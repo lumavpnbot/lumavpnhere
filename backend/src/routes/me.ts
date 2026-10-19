@@ -153,8 +153,11 @@ export function registerMeRoutes(
     ])
     // Хэллоуин: главная показывает баннер, пока мероприятие идёт.
     const event = halloween
-      ? await Promise.all([halloween.phase(), halloween.ticketsOf(user.id)]).then(
-          ([phase, tickets]) => (phase === 'off' ? null : { phase, tickets }),
+      ? await Promise.all([halloween.phase(), halloween.ticketsOf(user.id), halloween.prizes()]).then(
+          ([phase, tickets, pr]) =>
+            phase === 'off'
+              ? null
+              : { phase, tickets, mainPrize: pr.prizes[0]?.title ?? null, consolationPercent: pr.consolationPercent },
           () => null,
         )
       : null

@@ -128,7 +128,7 @@ export default function HomePage() {
         >
           <span className="text-[26px] leading-none">🎃</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold">{t('hw.banner')}</span>
+            <span className="block truncate text-[15px] font-semibold">{t('hw.banner', { main: halloween.mainPrize ?? 'призы' })}</span>
             <span className="block truncate text-[12px] text-dim">
               {halloween.phase === 'before' ? t('hw.bannerSoon') : t('hw.bannerHint', { n: halloween.tickets })}
             </span>

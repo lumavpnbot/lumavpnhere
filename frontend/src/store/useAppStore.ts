@@ -126,6 +126,9 @@ export interface NotificationPrefs {
 export interface HalloweenState {
   phase: 'before' | 'live' | 'closed' | 'published'
   tickets: number
+  /** Главный приз (1 место) и утешительная скидка: меняются в админке. */
+  mainPrize?: string | null
+  consolationPercent?: number
 }
 
 interface AppState {

@@ -561,6 +561,87 @@ export function createHalloweenService(deps: {
     })
   }
 
+  // ── Призы и победители вручную (админ-меню) ───────────────────────────────
+
+  /** Новый код приза из названия: латиница/цифры, уникальный. */
+  function prizeCode(title: string, taken: string[]) {
+    const base =
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 20) || 'prize'
+    let code = base
+    for (let i = 2; taken.includes(code); i++) code = `${base}_${i}`
+    return code
+  }
+
+  async function addPrize(p: Omit<HalloweenPrize, 'code'>) {
+    const c = await config()
+    const prize: HalloweenPrize = { ...p, code: prizeCode(p.title, c.prizes.map((x) => x.code)) }
+    await save({ prizes: [...c.prizes, prize] })
+    return prize
+  }
+
+  async function updatePrize(code: string, patch: Partial<Omit<HalloweenPrize, 'code'>>) {
+    const c = await config()
+    if (!c.prizes.some((p) => p.code === code)) throw new Error('Приз не найден')
+    await save({ prizes: c.prizes.map((p) => (p.code === code ? { ...p, ...patch } : p)) })
+    // Победители этого приза в текущем розыгрыше видят новое название и место.
+    const draw = await lastDraw()
+    if (draw && (patch.title || patch.place)) {
+      await prisma.halloweenWinner.updateMany({
+        where: { drawId: draw.id, prizeCode: code },
+        data: { ...(patch.title ? { prizeTitle: patch.title } : {}), ...(patch.place ? { place: patch.place } : {}) },
+      })
+    }
+  }
+
+  async function removePrize(code: string) {
+    const c = await config()
+    await save({ prizes: c.prizes.filter((p) => p.code !== code) })
+  }
+
+  /** Розыгрыш для ручного списка победителей: если розыгрыша ещё не было, создаём пустой. */
+  async function ensureDraw(byTgId?: bigint) {
+    const d = await lastDraw()
+    if (d) return d
+    const [tickets, players] = await Promise.all([
+      prisma.halloweenTicket.count({ where: liveWhere }),
+      prisma.halloweenTicket.groupBy({ by: ['userId'], where: liveWhere }),
+    ])
+    await prisma.halloweenDraw.create({ data: { seed: 'manual', totalTickets: tickets, participants: players.length, byTgId: byTgId ?? null } })
+    return (await lastDraw())!
+  }
+
+  /** Добавить победителя вручную на место (приз берём из списка призов по месту). */
+  async function addWinner(userId: bigint, place: number, byTgId?: bigint) {
+    const c = await config()
+    const prize = c.prizes.find((p) => p.place === place)
+    if (!prize) throw new Error(`Нет приза на ${place} месте: сначала добавьте его в «Призы»`)
+    const draw = await ensureDraw(byTgId)
+    if (draw.winners.some((w) => !w.replacedAt && w.userId === userId)) throw new Error('Этот пользователь уже в списке победителей')
+    const ticket = await prisma.halloweenTicket.findFirst({ where: { userId, ...liveWhere }, orderBy: { id: 'desc' } })
+    const tickets = await prisma.halloweenTicket.count({ where: { userId, ...liveWhere } })
+    return prisma.halloweenWinner.create({
+      data: { drawId: draw.id, userId, prizeCode: prize.code, prizeTitle: prize.title, place, ticketId: ticket?.id ?? BigInt(0), tickets },
+      include: { user: true },
+    })
+  }
+
+  /** Перенести победителя на другое место: приз меняется на приз этого места. */
+  async function setWinnerPlace(winnerId: bigint, place: number) {
+    const c = await config()
+    const prize = c.prizes.find((p) => p.place === place)
+    if (!prize) throw new Error(`Нет приза на ${place} месте`)
+    await prisma.halloweenWinner.update({ where: { id: winnerId }, data: { place, prizeCode: prize.code, prizeTitle: prize.title } })
+  }
+
+  /** Убрать победителя без замены (остаётся в истории как заменённый). */
+  async function removeWinner(winnerId: bigint) {
+    await prisma.halloweenWinner.update({ where: { id: winnerId }, data: { replacedAt: new Date() } })
+  }
+
   // ── Админ-меню ────────────────────────────────────────────────────────────
 
   /** Ручное начисление билетов (компенсация за баг). */
@@ -687,6 +768,12 @@ export function createHalloweenService(deps: {
     notifyWinners,
     consolation,
     replaceWinner,
+    addPrize,
+    updatePrize,
+    removePrize,
+    addWinner,
+    setWinnerPlace,
+    removeWinner,
     adminGrant,
     adminRevoke,
     resetSpin,
