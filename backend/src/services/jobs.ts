@@ -147,7 +147,11 @@ export function createJobs(deps: {
       })
       const skip = await halloween.spinnersToday()
       const ids = subs.filter((x) => x.user.botStarted && !x.user.banned && !skip.has(String(x.userId))).map((x) => x.user.tgId)
-      log.info({ sent: await blast(ids, '🎃 <b>Колесо фортуны ждёт</b>\nСегодняшний спин ещё не использован: крутите и забирайте конфеты в розыгрыш AirPods.') }, 'halloween daily push')
+      const main = c.prizes.slice().sort((x, y) => x.place - y.place)[0]?.title
+      log.info(
+        { sent: await blast(ids, `🎃 <b>Колесо фортуны ждёт</b>\nСегодняшний спин ещё не использован: крутите и забирайте конфеты в розыгрыш${main ? ` (главный приз: ${main})` : ''}.`) },
+        'halloween daily push',
+      )
       return
     }
 
