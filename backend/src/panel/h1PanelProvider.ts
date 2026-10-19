@@ -147,10 +147,35 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     }
   }
 
-  async function getClient(tgId: number) {
-    const c = unwrap(await call('GET', `/clients/${encodeURIComponent(clientName(tgId))}`))
-    return c ? toPanelClient(c) : null
+  /**
+   * Имя клиента на этой панели. Обычно tg_<id>. Если такое имя уже занято «сырым» клиентом
+   * внутри инбаунда (его завели вручную в панели или он остался от старой выдачи), H1 не даёт
+   * создать клиента с этим именем (name_taken_by_inbound_client), и мы используем запасное tg_<id>_l.
+   */
+  const altName = (tgId: number) => `${clientName(tgId)}_l`
+  const nameCache = new Map<number, string>()
+
+  async function findClient(tgId: number): Promise<{ name: string; client: H1Client } | null> {
+    const cached = nameCache.get(tgId)
+    const names = cached ? [cached] : [clientName(tgId), altName(tgId)]
+    for (const name of names) {
+      const c = unwrap(await call('GET', `/clients/${encodeURIComponent(name)}`))
+      if (c) {
+        nameCache.set(tgId, name)
+        if (nameCache.size > 20_000) nameCache.delete(nameCache.keys().next().value!)
+        return { name, client: c }
+      }
+    }
+    if (cached) nameCache.delete(tgId)
+    return null
   }
+
+  async function getClient(tgId: number) {
+    const found = await findClient(tgId)
+    return found ? toPanelClient(found.client) : null
+  }
+
+  const nameOf = async (tgId: number) => (await findClient(tgId))?.name ?? clientName(tgId)
 
   return {
     kind: 'h1',
@@ -166,7 +191,8 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
     },
 
     async provision({ tgId, expiresAt, trafficLimitGb, deviceLimit }: ProvisionParams) {
-      const name = clientName(tgId)
+      const found = await findClient(tgId)
+      const name = found?.name ?? clientName(tgId)
       // Панель требует целое days > 0 даже вместе с expires_at (иначе bad_days).
       const days = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000))
       const limits = {
@@ -175,8 +201,7 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
         device_limit: deviceLimit ?? 0,
       }
 
-      const existing = await getClient(tgId)
-      if (existing) {
+      if (found) {
         // set_days: срок заново от сегодня (days в PATCH прибавил бы к текущему).
         // inbound_ids передаём всегда: так новые инбаунды (например hysteria2) добавятся и старым клиентам.
         await call('PATCH', `/clients/${encodeURIComponent(name)}`, {
@@ -187,27 +212,35 @@ export function createH1PanelProvider(cfg: H1Config): PanelProvider {
           ...(cfg.channels?.length ? { channels: cfg.channels } : {}),
         })
       } else {
-        await call('POST', '/clients', {
-          name,
-          days,
-          ...limits,
-          inbound_ids: await inboundIds(),
-          manual: true,
-          ...(cfg.channels?.length ? { channels: cfg.channels } : {}),
-        })
+        const create = async (n: string) =>
+          call('POST', '/clients', {
+            name: n,
+            days,
+            ...limits,
+            inbound_ids: await inboundIds(),
+            manual: true,
+            ...(cfg.channels?.length ? { channels: cfg.channels } : {}),
+          })
+        try {
+          await create(name)
+        } catch (err) {
+          if (!(err instanceof H1ApiError) || !/name_taken/i.test(err.message)) throw err
+          await create(altName(tgId))
+          nameCache.set(tgId, altName(tgId))
+        }
       }
 
       const fresh = await getClient(tgId)
-      if (!fresh) throw new Error(`H1: клиент ${name} не найден после создания`)
+      if (!fresh) throw new Error(`H1: клиент ${clientName(tgId)} не найден после создания`)
       return fresh
     },
 
     async disable(tgId) {
-      await call('PATCH', `/clients/${encodeURIComponent(clientName(tgId))}`, { enable: false })
+      await call('PATCH', `/clients/${encodeURIComponent(await nameOf(tgId))}`, { enable: false })
     },
 
     async remove(tgId) {
-      await call('DELETE', `/clients/${encodeURIComponent(clientName(tgId))}`)
+      await call('DELETE', `/clients/${encodeURIComponent(await nameOf(tgId))}`)
     },
   }
 }
